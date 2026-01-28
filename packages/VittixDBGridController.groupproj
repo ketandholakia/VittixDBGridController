@@ -1,0 +1,48 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{0F8DE765-CABD-41A9-8052-CB6498B2B3D6}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="VittixDBGridControllerD.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="VittixDBGridControllerR.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="VittixDBGridControllerD">
+        <MSBuild Projects="VittixDBGridControllerD.dproj"/>
+    </Target>
+    <Target Name="VittixDBGridControllerD:Clean">
+        <MSBuild Projects="VittixDBGridControllerD.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="VittixDBGridControllerD:Make">
+        <MSBuild Projects="VittixDBGridControllerD.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="VittixDBGridControllerR">
+        <MSBuild Projects="VittixDBGridControllerR.dproj"/>
+    </Target>
+    <Target Name="VittixDBGridControllerR:Clean">
+        <MSBuild Projects="VittixDBGridControllerR.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="VittixDBGridControllerR:Make">
+        <MSBuild Projects="VittixDBGridControllerR.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="VittixDBGridControllerD;VittixDBGridControllerR"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="VittixDBGridControllerD:Clean;VittixDBGridControllerR:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="VittixDBGridControllerD:Make;VittixDBGridControllerR:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>

@@ -1,0 +1,49 @@
+package VittixDBGridControllerR;
+
+{$R *.res}
+{$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
+{$ALIGN 8}
+{$ASSERTIONS ON}
+{$BOOLEVAL OFF}
+{$DEBUGINFO OFF}
+{$EXTENDEDSYNTAX ON}
+{$IMPORTEDDATA ON}
+{$IOCHECKS ON}
+{$LOCALSYMBOLS ON}
+{$LONGSTRINGS ON}
+{$OPENSTRINGS ON}
+{$OPTIMIZATION OFF}
+{$OVERFLOWCHECKS OFF}
+{$RANGECHECKS OFF}
+{$REFERENCEINFO ON}
+{$SAFEDIVIDE OFF}
+{$STACKFRAMES ON}
+{$TYPEDADDRESS OFF}
+{$VARSTRINGCHECKS ON}
+{$WRITEABLECONST OFF}
+{$MINENUMSIZE 1}
+{$IMAGEBASE $400000}
+{$DEFINE DEBUG}
+{$ENDIF IMPLICITBUILDING}
+{$IMPLICITBUILD ON}
+
+requires
+  rtl,
+  vcl,
+  dbrtl,
+  vcldb,
+  vclx;
+
+contains
+  Vittix.DBGrid in '..\source\Vittix.DBGrid.pas',
+  Vittix.DBGrid.Controller in '..\source\Vittix.DBGrid.Controller.pas',
+  Vittix.DBGrid.ColumnInfo in '..\source\Vittix.DBGrid.ColumnInfo.pas',
+  Vittix.DBGrid.Sort.Engine in '..\source\Vittix.DBGrid.Sort.Engine.pas',
+  Vittix.DBGrid.Filter.Engine in '..\source\Vittix.DBGrid.Filter.Engine.pas',
+  Vittix.DBGrid.Aggregation.Engine in '..\source\Vittix.DBGrid.Aggregation.Engine.pas',
+  Vittix.DBGrid.FooterPanel in '..\source\Vittix.DBGrid.FooterPanel.pas',
+  Vittix.DBGrid.ColumnChooser in '..\source\Vittix.DBGrid.ColumnChooser.pas',
+  Vittix.DBGrid.Editors in '..\source\Vittix.DBGrid.Editors.pas',
+  Vittix.DBGrid.Filter.Popup in '..\source\Vittix.DBGrid.Filter.Popup.pas';
+
+end.
