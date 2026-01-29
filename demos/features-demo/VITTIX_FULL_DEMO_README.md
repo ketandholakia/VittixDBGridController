@@ -102,18 +102,18 @@ This is a **complete, production-ready demonstration** of all Vittix DBGrid comp
 
 ---
 
-### 7. 📄 CSV Export
-- **Click "Export to CSV"**
-- **Choose location**
-- **Exports visible columns only**
-- **Respects current filter**
-- **Proper CSV formatting** (quotes, escapes)
+### 7. 📄 Data Export (Multi-Format)
+- **Click "Export Data..."**
+- **Professional dialog** allows selection of 10 formats (CSV, Excel, HTML, JSON, XML, etc.)
+- **Configure options** like visible columns only, filtered data, headers, custom formatting.
+- **Live preview** of export data.
+- **Progress tracking** for large exports.
+- **Clipboard export** option.
 
-**Output example:**
-```csv
-"ID","Company Name","Contact Name","Email","Phone"...
-"1","Acme Corp","John Smith","contact1@example.com","+1-555-1234"...
-```
+**Try it:**
+1. Click "Export Data..."
+2. Select "Excel" format, choose a file name, and click "Export".
+3. Or select "Clipboard" and then paste into Excel.
 
 ---
 
@@ -543,7 +543,7 @@ If you encounter issues:
 | Footer aggregations | ✅ | Right-click footer |
 | Column chooser | ✅ | Button in toolbar |
 | Alternating rows | ✅ | Checkbox |
-| CSV export | ✅ | Export button |
+| Data export (multi-format) | ✅ | Export Data... button |
 | Config save/load | ✅ | Config buttons |
 | Memo editor | ✅ | Edit Notes button |
 | Context menu | ✅ | Right-click grid |

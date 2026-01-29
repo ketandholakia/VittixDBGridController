@@ -26,7 +26,9 @@ uses
   // Vittix DBGrid
   Vittix.DBGrid,
   Vittix.DBGrid.Controller,
-  Vittix.DBGrid.ColumnInfo,
+  Vittix.DBGrid.ColumnInfo, // This unit is already included by Vittix.DBGrid.Controller, but explicit is fine.
+  Vittix.DBGrid.Export.Engine, // Add this unit
+  Vittix.DBGrid.Export.Dialog, // Add this unit
   Vittix.DBGrid.ColumnChooser,
   Vittix.DBGrid.Editors;
 
@@ -65,7 +67,7 @@ type
     btnColumnChooser: TButton;
 
     grpExport: TGroupBox;
-    btnExportCSV: TButton;
+    btnExportDialog: TButton; // Renamed from btnExportCSV
     btnSaveConfig: TButton;
     btnLoadConfig: TButton;
 
@@ -129,7 +131,7 @@ type
     procedure btnColumnChooserClick(Sender: TObject);
 
     // Export & Config
-    procedure btnExportCSVClick(Sender: TObject);
+    procedure btnExportDialogClick(Sender: TObject); // Renamed from btnExportCSVClick
     procedure btnSaveConfigClick(Sender: TObject);
     procedure btnLoadConfigClick(Sender: TObject);
 
@@ -153,7 +155,7 @@ type
     procedure InitializeDataset;
     procedure LoadSampleData;
     procedure UpdateStatusBar;
-    procedure ExportToCSV(const FileName: string);
+    // procedure ExportToCSV(const FileName: string); // This procedure is no longer needed
     procedure SaveColumnConfiguration(const FileName: string);
     procedure LoadColumnConfiguration(const FileName: string);
     procedure SetupAggregations;
@@ -509,70 +511,14 @@ end;
 
 { Export & Config }
 
-procedure TfrmVittixDemo.btnExportCSVClick(Sender: TObject);
+procedure TfrmVittixDemo.btnExportDialogClick(Sender: TObject);
 begin
-  SaveDialog1.Filter := 'CSV Files (*.csv)|*.csv|All Files (*.*)|*.*';
-  SaveDialog1.DefaultExt := 'csv';
-  SaveDialog1.FileName := 'export_' + FormatDateTime('yyyymmdd_hhnnss', Now) + '.csv';
-
-  if SaveDialog1.Execute then
+  // Show the professional export dialog
+  if TVittixExportDialog.Execute(VittixGrid) then
   begin
-    ExportToCSV(SaveDialog1.FileName);
-    ShowMessage('Data exported to: ' + SaveDialog1.FileName);
-  end;
-end;
-
-procedure TfrmVittixDemo.ExportToCSV(const FileName: string);
-var
-  CSV: TStringList;
-  Line: string;
-  I: Integer;
-begin
-  CSV := TStringList.Create;
-  try
-    // Header
-    Line := '';
-    for I := 0 to VittixGrid.Columns.Count - 1 do
-    begin
-      if VittixGrid.Columns[I].Visible then
-      begin
-        if Line <> '' then Line := Line + ',';
-        Line := Line + '"' + VittixGrid.Columns[I].Title.Caption + '"';
-      end;
-    end;
-    CSV.Add(Line);
-
-    // Data
-    ClientDataSet1.DisableControls;
-    try
-      ClientDataSet1.First;
-      while not ClientDataSet1.Eof do
-      begin
-        Line := '';
-        for I := 0 to VittixGrid.Columns.Count - 1 do
-        begin
-          if VittixGrid.Columns[I].Visible then
-          begin
-            if Line <> '' then Line := Line + ',';
-            Line := Line + '"' +
-              StringReplace(
-                VittixGrid.Columns[I].Field.DisplayText,
-                '"',
-                '""',
-                [rfReplaceAll]
-              ) + '"';
-          end;
-        end;
-        CSV.Add(Line);
-        ClientDataSet1.Next;
-      end;
-    finally
-      ClientDataSet1.EnableControls;
-    end;
-
-    CSV.SaveToFile(FileName);
-  finally
-    CSV.Free;
+    // The dialog handles messages and shows its own success/failure messages
+    // You might add a custom message here if the dialog doesn't provide one
+    // ShowMessage('Export operation completed via dialog!');
   end;
 end;
 

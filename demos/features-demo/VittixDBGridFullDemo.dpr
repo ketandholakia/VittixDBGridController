@@ -1,6 +1,11 @@
 program VittixDBGridFullDemo;
 
 uses
+  madExcept,
+  madLinkDisAsm,
+  madListHardware,
+  madListProcesses,
+  madListModules,
   Vcl.Forms,
   VittixDBGridForm in 'VittixDBGridForm.pas' {frmVittixDemo};
 

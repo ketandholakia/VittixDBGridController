@@ -195,14 +195,14 @@ object frmVittixDemo: TfrmVittixDemo
       Align = alLeft
       Caption = ' Export && Configuration '
       TabOrder = 3
-      object btnExportCSV: TButton
+      object btnExportDialog: TButton
         Left = 8
         Top = 20
         Width = 169
         Height = 25
-        Caption = 'Export to CSV...'
+        Caption = 'Export Data...'
         TabOrder = 0
-        OnClick = btnExportCSVClick
+        OnClick = btnExportDialogClick
       end
       object btnSaveConfig: TButton
         Left = 8
