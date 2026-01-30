@@ -37,6 +37,7 @@ type
     procedure Loaded; override;
     procedure LayoutChanged; override;
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
+    procedure BeforeDestruction; override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -105,26 +106,30 @@ begin
   Ctrl.AlternateRowColor := FAlternateRowColor;
 end;
 
+procedure TVittixDBGrid.BeforeDestruction;
+begin
+  if Assigned(FController) and (FController is TVittixDBGridController) then
+    TVittixDBGridController(FController).Detach;
+
+  inherited;
+end;
+
 destructor TVittixDBGrid.Destroy;
 begin
-  // 1. Destroy Controller FIRST.
-  // This ensures the Controller unhooks itself while the Grid is still valid.
-  if Assigned(FController) then
-  begin
-    FController.Free;
-    FController := nil;
-  end;
-
-  // 2. Destroy metadata.
-  FreeAndNil(FColumnsInfo);
-
-  // 3. Destroy VCL Grid (FDataLink will be freed here).
+  FController := nil;
   inherited;
 end;
 
 function TVittixDBGrid.GetDataSource: TDataSource;
 begin
-  Result := inherited DataSource;
+  if (csDestroying in ComponentState) then
+    Exit(nil);
+
+  if (inherited DataSource <> nil) and
+     not (csDestroying in inherited DataSource.ComponentState) then
+    Result := inherited DataSource
+  else
+    Result := nil;
 end;
 
 procedure TVittixDBGrid.SetDataSource(Value: TDataSource);
@@ -204,22 +209,19 @@ begin
     SyncColumnInfo;
 end;
 
-procedure TVittixDBGrid.Notification(AComponent: TComponent; Operation: TOperation);
+procedure TVittixDBGrid.Notification(AComponent: TComponent;
+  Operation: TOperation);
 begin
   inherited;
-  
-  // FIX: Access Violation on Close.
-  // During destruction, TCustomDBGrid frees FDataLink. 
-  // Accessing the 'DataSource' property calls GetDataSource, which reads FDataLink.
-  // If we are destroying, FDataLink might be nil, causing AV 00000004.
-  if csDestroying in ComponentState then Exit;
+
+  if csDestroying in ComponentState then
+    Exit;
 
   if (Operation = opRemove) and (AComponent = DataSource) then
   begin
-    // Notify controller BEFORE clearing
-    if Assigned(FController) and (FController is TVittixDBGridController) then
-      TVittixDBGridController(FController).DataSourceChanged;
-    DataSource := nil; 
+    // NEVER touch DataSource properties here
+    // Only clear references
+    FController := nil;
   end;
 end;
 

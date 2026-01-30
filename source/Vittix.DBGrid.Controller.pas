@@ -117,6 +117,8 @@ type
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
 
+    procedure Detach;
+
     procedure Refresh;
     procedure Clear;
     procedure ApplyState;
@@ -172,6 +174,11 @@ begin
   UnhookGrid;
   DestroyEngines;
   inherited;
+end;
+
+procedure TVittixDBGridController.Detach;
+begin
+  UnhookGrid;
 end;
 
 procedure TVittixDBGridController.Loaded;
