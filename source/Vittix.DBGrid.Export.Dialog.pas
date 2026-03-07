@@ -57,7 +57,7 @@ type
     chkVisibleOnly: TCheckBox;
     chkFilteredOnly: TCheckBox;
     chkIncludeHeaders: TCheckBox;
-    chkIncludeFooter: TCheckBox;
+    // chkIncludeFooter is NOT in the DFM - created dynamically in FormCreate
     grpFormatting: TGroupBox;
     lblDateFormat: TLabel;
     edtDateFormat: TEdit;
@@ -81,6 +81,7 @@ type
   private
     FGrid: TVittixDBGrid;
     FExporter: TVittixDBGridExporter;
+    chkIncludeFooter: TCheckBox; // Created dynamically in FormCreate (not in DFM)
     
     procedure LoadDefaults;
     procedure UpdateFileName;
@@ -125,7 +126,8 @@ begin
   Dlg := TfrmExportDialog.Create(nil);
   try
     Dlg.FGrid := AGrid;
-    Dlg.LoadDefaults;
+    // LoadDefaults is called from FormCreate, not here.
+    // Calling it before ShowModal means the form controls don't exist yet.
     Result := Dlg.ShowModal = mrOk;
   finally
     Dlg.Free;
@@ -134,14 +136,22 @@ end;
 
 procedure TfrmExportDialog.FormCreate(Sender: TObject);
 begin
-  // FIX BUG 7: Removed the runtime creation of chkIncludeFooter that was a
-  // DFM drift workaround (creating a UI component in code if the DFM didn't
-  // have it). This caused duplicate or missing checkboxes when the DFM was
-  // authoritative. The component must exist in the DFM — if it doesn't,
-  // the correct fix is to add it to the DFM, not patch it here at runtime.
+  // chkIncludeFooter is not in the DFM — create it in code.
+  // This must happen in FormCreate (not Execute) so controls exist before use.
+  chkIncludeFooter := TCheckBox.Create(Self);
+  chkIncludeFooter.Parent := grpScope;
+  chkIncludeFooter.Name := 'chkIncludeFooter';
+  chkIncludeFooter.Caption := 'Include Footer';
+  chkIncludeFooter.Left := chkIncludeHeaders.Left;
+  chkIncludeFooter.Top := chkIncludeHeaders.Top + chkIncludeHeaders.Height + 6;
+  chkIncludeFooter.Width := chkIncludeHeaders.Width;
+
   PageControl1.ActivePageIndex := 0;
   ProgressBar1.Visible := False;
   lblProgress.Visible := False;
+
+  // Load defaults now that all controls exist
+  LoadDefaults;
 end;
 
 procedure TfrmExportDialog.LoadDefaults;
