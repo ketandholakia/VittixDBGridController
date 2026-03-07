@@ -32,6 +32,9 @@ type
 
     FColumnInfo: TVittixDBGridColumnInfo;
     FOriginalText: string;
+    // FIX BUG 12: Scoped history key prevents two grids sharing history for
+    // same-named fields. Key is "OwnerClassName.FieldName".
+    FHistoryKey: string;
 
     procedure BtnClearClick(Sender: TObject);
     procedure ApplyChanges;
@@ -76,6 +79,13 @@ begin
 
   FColumnInfo := AColumnInfo;
   FOriginalText := '';
+
+  // FIX BUG 12: Build a scoped history key using owner's class name so that
+  // two grids on the same form don't share filter history for the same field.
+  if Assigned(AOwner) then
+    FHistoryKey := AOwner.ClassName + '.' + AColumnInfo.FieldName
+  else
+    FHistoryKey := AColumnInfo.FieldName;
 
   // Dialog Setup
   Caption := 'Filter Column';
@@ -156,7 +166,7 @@ begin
   FOriginalText := Trim(FColumnInfo.FilterText);
   FRecentCombo.Text := FOriginalText;
 
-  if GFilterHistory.TryGetValue(FColumnInfo.FieldName, LHistory) then
+  if GFilterHistory.TryGetValue(FHistoryKey, LHistory) then
     FRecentCombo.Items.Assign(LHistory);
   
   // Select all text so user can type to replace immediately
@@ -238,10 +248,10 @@ begin
   // Update history
   if NewText <> '' then
   begin
-    if not GFilterHistory.TryGetValue(FColumnInfo.FieldName, LHistory) then
+    if not GFilterHistory.TryGetValue(FHistoryKey, LHistory) then
     begin
       LHistory := TStringList.Create;
-      GFilterHistory.Add(FColumnInfo.FieldName, LHistory);
+      GFilterHistory.Add(FHistoryKey, LHistory);
     end;
 
     Idx := LHistory.IndexOf(NewText);

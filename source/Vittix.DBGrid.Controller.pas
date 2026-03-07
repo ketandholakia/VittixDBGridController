@@ -118,6 +118,7 @@ type
     destructor Destroy; override;
 
     procedure Detach;
+    procedure InstallWindowProc;
 
     procedure Refresh;
     procedure Clear;
@@ -181,9 +182,30 @@ begin
   UnhookGrid;
 end;
 
+procedure TVittixDBGridController.InstallWindowProc;
+begin
+  // Called from TVittixDBGrid.CreateWnd — only install if we're hooked
+  // but the WindowProc was skipped because no handle existed yet.
+  if not Assigned(FGrid) then Exit;
+  if csDesigning in FGrid.ComponentState then Exit;
+  if not FGrid.HandleAllocated then Exit;
+  if not FEnginesCreated then Exit; // Only install if fully hooked
+
+  // Only install if not already installed.
+  // Compare the stored old proc: if FOldWindowProc is nil we haven't hooked yet.
+  if not Assigned(FOldWindowProc) then
+  begin
+    FOldWindowProc := FGrid.WindowProc;
+    FGrid.WindowProc := GridWindowProc;
+  end;
+end;
+
 procedure TVittixDBGridController.Loaded;
 begin
   inherited;
+  // DESIGN-TIME SAFETY: Do not hook anything while the IDE is loading.
+  if csDesigning in ComponentState then Exit;
+
   if FActive and Assigned(FGrid) then
     HookGrid;
 end;
@@ -209,16 +231,17 @@ end;
 
 procedure TVittixDBGridController.DataSourceChanged;
 begin
-  // FIX: Add re-entrance guard
+  // DESIGN-TIME SAFETY: Never touch datasets or engines in the IDE.
+  if Assigned(FGrid) and (csDesigning in FGrid.ComponentState) then Exit;
+
+  // Re-entrance guard
   if FUpdating then Exit;
   FUpdating := True;
   try
-    // Fully reset the data connection and engines.
     DestroyEngines;
     UnhookDataSource;
     HookDataSource;
 
-    // If the new dataset is already active, force engine creation immediately.
     if Assigned(FDataset) and FDataset.Active then
     begin
       CreateEngines;
@@ -237,13 +260,17 @@ procedure TVittixDBGridController.SetGrid(const Value: TVittixDBGrid);
 begin
   if FGrid = Value then Exit;
 
-  // Detach from old grid
   UnhookGrid;
-
   FGrid := Value;
 
-  // Attach to new grid (if not nil)
-  if Assigned(FGrid) and FActive then
+  if not Assigned(FGrid) then Exit;
+
+  // PRIMARY GATE: csDesigning is set by Delphi 12.2 before any install
+  // callback fires. Also block during streaming (csLoading).
+  if csDesigning in FGrid.ComponentState then Exit;
+  if csLoading in FGrid.ComponentState then Exit;
+
+  if FActive then
     HookGrid;
 end;
 
@@ -251,6 +278,9 @@ procedure TVittixDBGridController.SetActive(const Value: Boolean);
 begin
   if FActive = Value then Exit;
   FActive := Value;
+
+  // DESIGN-TIME SAFETY
+  if Assigned(FGrid) and (csDesigning in FGrid.ComponentState) then Exit;
 
   if FActive then
     HookGrid
@@ -264,6 +294,9 @@ begin
   FShowFooter := Value;
 
   if not Assigned(FGrid) then Exit;
+
+  // DESIGN-TIME SAFETY: Never create visual controls at design time.
+  if csDesigning in FGrid.ComponentState then Exit;
 
   if FShowFooter then
   begin
@@ -281,6 +314,14 @@ procedure TVittixDBGridController.HookGrid;
 begin
   if not Assigned(FGrid) then Exit;
 
+  // PRIMARY GATE: In Delphi 12.2 the IDE sets csDesigning reliably before
+  // any component editor or package install callback fires. This is the
+  // correct check for all design-time protection.
+  if csDesigning in FGrid.ComponentState then Exit;
+
+  // Secondary runtime check: never hook events when not fully constructed.
+  if csLoading in FGrid.ComponentState then Exit;
+
   FOldTitleClick := FGrid.OnTitleClick;
   FGrid.OnTitleClick := GridTitleClick;
 
@@ -290,8 +331,13 @@ begin
   FOldMouseDown := FGrid.OnMouseDown;
   FGrid.OnMouseDown := GridMouseDown;
 
-  FOldWindowProc := FGrid.WindowProc;
-  FGrid.WindowProc := GridWindowProc;
+  // WindowProc hooking requires an actual Win32 handle.
+  // Only install it if one exists — it will be reinstalled via Loaded otherwise.
+  if FGrid.HandleAllocated then
+  begin
+    FOldWindowProc := FGrid.WindowProc;
+    FGrid.WindowProc := GridWindowProc;
+  end;
 
   HookDataSource;
   CreateEngines;

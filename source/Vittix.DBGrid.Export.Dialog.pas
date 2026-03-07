@@ -134,17 +134,11 @@ end;
 
 procedure TfrmExportDialog.FormCreate(Sender: TObject);
 begin
-  // Ensure chkIncludeFooter exists (handle potential DFM mismatch)
-  if (chkIncludeFooter = nil) and (chkIncludeHeaders <> nil) and (grpScope <> nil) then
-  begin
-    chkIncludeFooter := TCheckBox.Create(Self);
-    chkIncludeFooter.Parent := grpScope;
-    chkIncludeFooter.Name := 'chkIncludeFooter';
-    chkIncludeFooter.Caption := 'Include Footer';
-    chkIncludeFooter.Left := chkIncludeHeaders.Left;
-    chkIncludeFooter.Top := chkIncludeHeaders.Top + chkIncludeHeaders.Height + 6;
-  end;
-
+  // FIX BUG 7: Removed the runtime creation of chkIncludeFooter that was a
+  // DFM drift workaround (creating a UI component in code if the DFM didn't
+  // have it). This caused duplicate or missing checkboxes when the DFM was
+  // authoritative. The component must exist in the DFM — if it doesn't,
+  // the correct fix is to add it to the DFM, not patch it here at runtime.
   PageControl1.ActivePageIndex := 0;
   ProgressBar1.Visible := False;
   lblProgress.Visible := False;

@@ -1,4 +1,4 @@
-﻿unit Vittix.DBGrid;
+unit Vittix.DBGrid;
 
 interface
 
@@ -38,6 +38,7 @@ type
     procedure LayoutChanged; override;
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
     procedure BeforeDestruction; override;
+    procedure CreateWnd; override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -97,13 +98,23 @@ begin
   FAlternatingRowColors := True;
   FAlternateRowColor := $00F7F7F7;
 
+  // Create controller with Self as owner so it is freed automatically.
+  // We pass the property values directly — SetGrid is called inside but
+  // HookGrid is fully deferred to Loaded (where csDesigning is reliable).
   Ctrl := TVittixDBGridController.Create(Self);
   FController := Ctrl;
-  
-  Ctrl.Grid := Self;
-  Ctrl.ShowFooter := FFooterVisible;
+
+  // These property setters are safe: they only store values, no window access.
   Ctrl.AlternatingRowColors := FAlternatingRowColors;
   Ctrl.AlternateRowColor := FAlternateRowColor;
+
+  // SetGrid / SetShowFooter must NOT hook anything during construction.
+  // The guards inside those methods check csDesigning, but csDesigning is
+  // only set AFTER the constructor returns when placed in the IDE.
+  // We call them last so all other fields are initialised first,
+  // and Loaded will do the actual hooking at the right time.
+  Ctrl.ShowFooter := FFooterVisible;
+  Ctrl.Grid := Self;
 end;
 
 procedure TVittixDBGrid.BeforeDestruction;
@@ -137,7 +148,8 @@ begin
   if inherited DataSource <> Value then
   begin
     inherited DataSource := Value;
-    // Notify Controller of runtime changes
+    // DESIGN-TIME SAFETY: Object Inspector changes must not trigger engine init.
+    if csDesigning in ComponentState then Exit;
     if Assigned(FController) and (FController is TVittixDBGridController) then
       TVittixDBGridController(FController).DataSourceChanged;
   end;
@@ -192,12 +204,25 @@ begin
 end;
 // ------------------------
 
+procedure TVittixDBGrid.CreateWnd;
+begin
+  inherited;
+  // Now that a real Win32 window handle exists, install the WindowProc hook
+  // if the controller is ready but couldn't hook it earlier (e.g. when
+  // HookGrid ran before the handle was allocated at runtime).
+  if Assigned(FController) and (FController is TVittixDBGridController) then
+    TVittixDBGridController(FController).InstallWindowProc;
+end;
+
 procedure TVittixDBGrid.Loaded;
 begin
   inherited;
   SyncColumnInfo;
-  
-  // Initialize the controller connection if DataSource was set in DFM
+
+  // DESIGN-TIME SAFETY: Never trigger engine/dataset initialization while
+  // the IDE is streaming the DFM. Only do this at true runtime.
+  if csDesigning in ComponentState then Exit;
+
   if Assigned(FController) and (FController is TVittixDBGridController) then
     TVittixDBGridController(FController).DataSourceChanged;
 end;
@@ -219,9 +244,13 @@ begin
 
   if (Operation = opRemove) and (AComponent = DataSource) then
   begin
-    // NEVER touch DataSource properties here
-    // Only clear references
-    FController := nil;
+    // DESIGN-TIME SAFETY and BUG FIX: The original code set FController := nil
+    // here, which orphaned and leaked the controller. At runtime, notify the
+    // controller to unhook cleanly. At design time, do nothing at all.
+    if csDesigning in ComponentState then Exit;
+
+    if Assigned(FController) and (FController is TVittixDBGridController) then
+      TVittixDBGridController(FController).DataSourceChanged;
   end;
 end;
 
@@ -231,6 +260,9 @@ var
   Col: TColumn;
   Info: TVittixDBGridColumnInfo;
 begin
+  // CRITICAL: FColumnsInfo may be nil if LayoutChanged is called by
+  // TDBGrid.Create (via inherited) before we create FColumnsInfo.
+  if not Assigned(FColumnsInfo) then Exit;
   if Columns.Count = 0 then Exit;
 
   for I := 0 to Columns.Count - 1 do

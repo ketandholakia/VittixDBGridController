@@ -26,17 +26,19 @@ var
   Grid: TVittixDBGrid;
 begin
   Grid := Component as TVittixDBGrid;
+  if not Assigned(Grid) then Exit;
 
   case Index of
     0: begin
-         // Toggle footer visibility
+         // Toggle footer visibility - safe at design time (property only)
          Grid.FooterVisible := not Grid.FooterVisible;
          Designer.Modified;
        end;
 
     1: begin
-         // Force aggregation refresh (runtime-safe)
-         Grid.Refresh; // or Grid.Invalidate;
+         // Recalculate: only call Invalidate at design time (no engines exist).
+         // At runtime the Controller handles recalculation automatically.
+         Grid.Invalidate;
          Designer.Modified;
        end;
 

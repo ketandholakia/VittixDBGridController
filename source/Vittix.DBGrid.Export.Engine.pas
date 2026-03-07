@@ -571,9 +571,16 @@ var
   Writer: TStreamWriter;
   Columns: TList<TColumn>;
   Line: string;
-  I, RowCount: Integer;
+  I, J, RowCount: Integer;
   Col: TColumn;
   MaxLengths: TArray<Integer>;
+  // FIX BUG 6: Cache all formatted row data in the first pass so we never
+  // need to call Dataset.First between passes. The original code called
+  // Dataset.First outside of DisableControls which could trigger a costly
+  // re-query on server-side datasets (FireDAC, dbExpress). Now we scan
+  // once, cache, then write from the cache — zero second dataset traversal.
+  RowCache: TArray<TArray<string>>;
+  RowData: TArray<string>;
 begin
   if not Assigned(FDataset) or not FDataset.Active then
     raise Exception.Create('Dataset is not active');
@@ -582,58 +589,37 @@ begin
   try
     Columns := GetExportColumns;
     try
-      // Calculate max column widths for fixed-width text
       SetLength(MaxLengths, Columns.Count);
       for I := 0 to Columns.Count - 1 do
-        MaxLengths[I] := Length(Columns[I].Title.Caption); // Start with header length
+        MaxLengths[I] := Length(Columns[I].Title.Caption);
 
-      // Iterate dataset once to find max lengths (can be slow for very large datasets)
+      SetLength(RowCache, 0);
+
+      // Single pass: collect all data AND compute max widths simultaneously
       FDataset.DisableControls;
       try
         FDataset.First;
-        while not FDataset.Eof do
-        begin
-          for I := 0 to Columns.Count - 1 do
-          begin
-            Col := Columns[I];
-            if Assigned(Col.Field) then
-              MaxLengths[I] := Max(MaxLengths[I], Length(FormatFieldValue(Col.Field)));
-          end;
-          FDataset.Next;
-        end;
-      finally
-        FDataset.EnableControls;
-      end;
-      
-      // Reset dataset to first record for actual writing
-      FDataset.First;
-
-      // Write header
-      if FOptions.IncludeHeaders then
-      begin
-        Line := '';
-        for I := 0 to Columns.Count - 1 do
-          Line := Line + Format('%.*s', [MaxLengths[I], Columns[I].Title.Caption]);
-        Writer.WriteLine(Line);
-      end;
-
-      // Write data
-      FDataset.DisableControls;
-      try
         RowCount := 0;
+
         while not FDataset.Eof do
         begin
-          if FCancelled then
-            Break;
+          if FCancelled then Break;
 
-          Line := '';
+          SetLength(RowData, Columns.Count);
           for I := 0 to Columns.Count - 1 do
           begin
             Col := Columns[I];
             if Assigned(Col.Field) then
-              Line := Line + Format('%.*s', [MaxLengths[I], FormatFieldValue(Col.Field)]);
+              RowData[I] := FormatFieldValue(Col.Field)
+            else
+              RowData[I] := '';
+
+            if Length(RowData[I]) > MaxLengths[I] then
+              MaxLengths[I] := Length(RowData[I]);
           end;
-          Writer.WriteLine(Line);
+
+          SetLength(RowCache, Length(RowCache) + 1);
+          RowCache[High(RowCache)] := RowData;
 
           Inc(RowCount);
           if RowCount mod 100 = 0 then
@@ -644,6 +630,31 @@ begin
       finally
         FDataset.EnableControls;
       end;
+
+      // Write header from in-memory widths (no dataset access needed)
+      if FOptions.IncludeHeaders then
+      begin
+        Line := '';
+        for I := 0 to Columns.Count - 1 do
+          Line := Line + Format('%-*s', [MaxLengths[I] + 1, Columns[I].Title.Caption]);
+        Writer.WriteLine(Line);
+        // Separator line
+        Line := '';
+        for I := 0 to Columns.Count - 1 do
+          Line := Line + StringOfChar('-', MaxLengths[I]) + ' ';
+        Writer.WriteLine(Line);
+      end;
+
+      // Write data from cache — no second dataset traversal
+      for J := 0 to High(RowCache) do
+      begin
+        if FCancelled then Break;
+        Line := '';
+        for I := 0 to Columns.Count - 1 do
+          Line := Line + Format('%-*s', [MaxLengths[I] + 1, RowCache[J][I]]);
+        Writer.WriteLine(Line);
+      end;
+
     finally
       Columns.Free;
     end;

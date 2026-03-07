@@ -177,9 +177,12 @@ begin
                 IntVal := AField.AsLargeInt;
                 Agg.HasInt := True;
                 Agg.SumInt := Agg.SumInt + IntVal;
-
-                if (Agg.Count = 1) or (IntVal < Agg.MinInt) then Agg.MinInt := IntVal;
-                if (Agg.Count = 1) or (IntVal > Agg.MaxInt) then Agg.MaxInt := IntVal;
+                // FIX BUG 11: Removed the fragile (Count = 1) guard.
+                // Clear() already sets MinInt := High(Int64) and MaxInt := Low(Int64)
+                // as proper sentinels, so a simple comparison is sufficient and correct
+                // for all records including the first one.
+                if IntVal < Agg.MinInt then Agg.MinInt := IntVal;
+                if IntVal > Agg.MaxInt then Agg.MaxInt := IntVal;
               end;
 
             ftCurrency:
@@ -187,9 +190,8 @@ begin
                 CurrVal := AField.AsCurrency;
                 Agg.HasCurrency := True;
                 Agg.SumCurrency := Agg.SumCurrency + CurrVal;
-
-                if (Agg.Count = 1) or (CurrVal < Agg.MinCurrency) then Agg.MinCurrency := CurrVal;
-                if (Agg.Count = 1) or (CurrVal > Agg.MaxCurrency) then Agg.MaxCurrency := CurrVal;
+                if CurrVal < Agg.MinCurrency then Agg.MinCurrency := CurrVal;
+                if CurrVal > Agg.MaxCurrency then Agg.MaxCurrency := CurrVal;
               end;
 
             ftFloat, ftBCD, ftFMTBcd:
@@ -197,9 +199,8 @@ begin
                 FloatVal := AField.AsFloat;
                 Agg.HasFloat := True;
                 Agg.SumFloat := Agg.SumFloat + FloatVal;
-
-                if (Agg.Count = 1) or (FloatVal < Agg.MinFloat) then Agg.MinFloat := FloatVal;
-                if (Agg.Count = 1) or (FloatVal > Agg.MaxFloat) then Agg.MaxFloat := FloatVal;
+                if FloatVal < Agg.MinFloat then Agg.MinFloat := FloatVal;
+                if FloatVal > Agg.MaxFloat then Agg.MaxFloat := FloatVal;
               end;
           end;
 
@@ -210,17 +211,20 @@ begin
         if IsStringField(AField) and (AggType in [vatMin, vatMax]) then
         begin
           StrVal := AField.AsString;
-          Agg.HasString := True;
-
-          if Agg.MinString = '' then
-            Agg.MinString := StrVal
-          else if StrVal < Agg.MinString then
+          // FIX BUG 11 (string): The original '' check was wrong — empty string
+          // is a valid data value and would incorrectly be skipped as a min.
+          // Use HasString as the first-record flag, consistent with numeric types.
+          if not Agg.HasString then
+          begin
+            Agg.HasString := True;
             Agg.MinString := StrVal;
-
-          if Agg.MaxString = '' then
-            Agg.MaxString := StrVal
-          else if StrVal > Agg.MaxString then
             Agg.MaxString := StrVal;
+          end
+          else
+          begin
+            if StrVal < Agg.MinString then Agg.MinString := StrVal;
+            if StrVal > Agg.MaxString then Agg.MaxString := StrVal;
+          end;
         end;
       end;
   end;

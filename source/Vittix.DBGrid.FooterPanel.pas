@@ -92,10 +92,15 @@ begin
   FGrid := AGrid;
   FAggregationEngine := AEngine;
 
+  // DESIGN-TIME SAFETY: AGrid.Parent is nil at design time (grid being placed
+  // on a form for the first time). Setting Parent to nil causes AV in bds.exe.
+  if not Assigned(AGrid) then Exit;
+  if csDesigning in AGrid.ComponentState then Exit;
+  if not Assigned(AGrid.Parent) then Exit;
+
   Parent := AGrid.Parent;
   Align := alBottom;
 
-  // FIX: No longer creates TVittixGridHook - Controller handles sync now
   SyncLayout;
 end;
 
@@ -105,6 +110,9 @@ var
   DC: HDC;
 begin
   if not Assigned(FGrid) then Exit;
+
+  // DESIGN-TIME SAFETY: Do not access GDI handles or ClientWidth in the IDE.
+  if csDesigning in FGrid.ComponentState then Exit;
 
   DC := GetDC(0);
   try

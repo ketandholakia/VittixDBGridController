@@ -1,20 +1,3 @@
-// Recommendations:
-
-// Add more comprehensive error handling
-
-// Consider thread safety if applicable
-
-// Add unit tests for edge cases
-
-// Consider adding filter change notifications
-
-// Document the AND/OR logic behavior clearly
-
-
-
-
-
-
 unit Vittix.DBGrid.Filter.Engine;
 
 interface
@@ -22,7 +5,6 @@ interface
 uses
   System.Classes,
   System.SysUtils,
-  Vcl.Dialogs,
   Data.DB,
   Vittix.DBGrid.ColumnInfo;
 
@@ -178,15 +160,18 @@ var
 begin
   Result := True;
   ErrMsg := '';
-  
+
   if Assigned(FOnValidateFilter) then
   begin
     FOnValidateFilter(Self, FieldName, FilterText, Result, ErrMsg);
-    
+
+    // FIX BUG 5: Engines must never call ShowMessage or any VCL UI directly.
+    // This violated the separation of concerns the architecture is built on.
+    // Raise an exception instead so the calling UI layer can catch and display
+    // the error however it chooses (MessageDlg, status bar, inline label, etc.)
     if not Result then
-    begin
-      ShowMessage('Invalid filter: ' + ErrMsg);
-    end;
+      raise Exception.CreateFmt(
+        'Invalid filter for field "%s": %s', [FieldName, ErrMsg]);
   end;
 end;
 
@@ -196,16 +181,19 @@ var
 begin
   if not Assigned(FDataSet) or not FDataSet.Active then Exit;
 
-  // NEW: Validate all filters before applying
+  // Validate all filters before applying; raises on invalid input
   for I := 0 to FColumns.Count - 1 do
   begin
     if FColumns[I].HasFilter then
     begin
-      if not ValidateFilterText(
-        FColumns[I].FieldName, 
-        FColumns[I].FilterText) then
-      begin
-        Exit; // Don't apply invalid filters
+      try
+        ValidateFilterText(FColumns[I].FieldName, FColumns[I].FilterText);
+      except
+        on E: Exception do
+        begin
+          // Surface validation error to caller; do not apply broken filter
+          raise;
+        end;
       end;
     end;
   end;

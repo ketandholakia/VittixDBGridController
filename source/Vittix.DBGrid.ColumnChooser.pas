@@ -56,9 +56,13 @@ type
     FMenuItemSelectNone: TMenuItem;
     FAllowReorder: Boolean;
     FDraggedIndex: Integer;
+    // FIX BUG 9: Snapshot of original column indices taken when dialog opens.
+    // On Cancel, we roll back the live reorder that drag-drop applies immediately.
+    FOriginalColumnOrder: TArray<Integer>;
 
     procedure BuildColumnList;
     procedure ApplySelection;
+    procedure RollbackColumnOrder;
     function GetColumnCaption(AColumn: TColumn): string;
     
     // Event Handlers
@@ -94,6 +98,13 @@ begin
   FGrid := AGrid;
   FAllowReorder := True;
   FDraggedIndex := -1;
+
+  // FIX BUG 9: Snapshot the current column order so we can roll it back
+  // if the user clicks Cancel. Drag-drop applies reordering to the grid live,
+  // so without this snapshot, Cancel cannot undo a reorder.
+  SetLength(FOriginalColumnOrder, FGrid.Columns.Count);
+  for var K := 0 to FGrid.Columns.Count - 1 do
+    FOriginalColumnOrder[K] := FGrid.Columns[K].Index;
 
   Caption := 'Column Chooser';
   BorderStyle := bsSizeable; // Allow resizing
@@ -170,6 +181,23 @@ begin
   FCheckList.OnDragDrop := CheckListDragDrop;
 
   BuildColumnList;
+end;
+
+procedure TVittixDBGridColumnChooserForm.RollbackColumnOrder;
+var
+  I: Integer;
+begin
+  // FIX BUG 9: Restore each column to its original index position.
+  // We iterate in forward order; the grid engine re-indexes on each assignment.
+  if not Assigned(FGrid) then Exit;
+  if Length(FOriginalColumnOrder) <> FGrid.Columns.Count then Exit;
+
+  for I := 0 to High(FOriginalColumnOrder) do
+  begin
+    if (FOriginalColumnOrder[I] < FGrid.Columns.Count) and
+       (FGrid.Columns[I].Index <> FOriginalColumnOrder[I]) then
+      FGrid.Columns[I].Index := FOriginalColumnOrder[I];
+  end;
 end;
 
 procedure TVittixDBGridColumnChooserForm.BuildColumnList;
@@ -363,7 +391,10 @@ begin
   Frm := TVittixDBGridColumnChooserForm.CreateChooser(nil, AGrid);
   try
     if Frm.ShowModal = mrOk then
-      Frm.ApplySelection;
+      Frm.ApplySelection
+    else
+      // FIX BUG 9: Roll back any live column reordering done during drag-drop
+      Frm.RollbackColumnOrder;
   finally
     Frm.Free;
   end;

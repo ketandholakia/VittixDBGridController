@@ -8,7 +8,7 @@ implementation
 
 uses
   System.Classes,
-  DesignIntf,        // REQUIRED for RegisterComponentEditor
+  DesignIntf,
   DesignEditors,
   Vittix.DBGrid,
   Vittix.DBGrid.Editor;
@@ -16,12 +16,9 @@ uses
 procedure Register;
 begin
   RegisterComponents('Vittix', [TVittixDBGrid]);
-
-  RegisterComponentEditor(
-    TVittixDBGrid,
-    TVittixDBGridEditor
-  );
+  RegisterComponentEditor(TVittixDBGrid, TVittixDBGridEditor);
 end;
 
 end.
 
+end.
