@@ -17,6 +17,7 @@
 *.obj
 *.so
 *.apk
+*.res
 
 # --- Platform output folders ---
 Win32/
@@ -58,3 +59,6 @@ modules/
 # --- OS ---
 .DS_Store
 Thumbs.db
+
+# --- Test artifacts ---
+tests/TestResults.xml
