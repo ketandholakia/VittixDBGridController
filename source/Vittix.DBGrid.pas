@@ -211,7 +211,10 @@ begin
   // if the controller is ready but couldn't hook it earlier (e.g. when
   // HookGrid ran before the handle was allocated at runtime).
   if Assigned(FController) and (FController is TVittixDBGridController) then
+  begin
     TVittixDBGridController(FController).InstallWindowProc;
+    TVittixDBGridController(FController).GridLayoutChanged;
+  end;
 end;
 
 procedure TVittixDBGrid.Loaded;
@@ -224,14 +227,22 @@ begin
   if csDesigning in ComponentState then Exit;
 
   if Assigned(FController) and (FController is TVittixDBGridController) then
+  begin
     TVittixDBGridController(FController).DataSourceChanged;
+    TVittixDBGridController(FController).GridLayoutChanged;
+  end;
 end;
 
 procedure TVittixDBGrid.LayoutChanged;
 begin
   inherited;
   if not (csLoading in ComponentState) then
+  begin
     SyncColumnInfo;
+
+    if Assigned(FController) and (FController is TVittixDBGridController) then
+      TVittixDBGridController(FController).GridLayoutChanged;
+  end;
 end;
 
 procedure TVittixDBGrid.Notification(AComponent: TComponent;

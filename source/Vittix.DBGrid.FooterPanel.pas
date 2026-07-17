@@ -47,6 +47,8 @@ type
     procedure PopupClick(Sender: TObject);
     function HitTestColumn(X: Integer): TColumn;
     function GetIndicatorOffset: Integer;
+    function GetIndicatorRect: TRect;
+    function GetColumnRect(AColumn: TColumn): TRect;
   protected
     procedure Paint; override;
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
@@ -99,7 +101,8 @@ begin
   if not Assigned(AGrid.Parent) then Exit;
 
   Parent := AGrid.Parent;
-  Align := alBottom;
+  Align := alNone;
+  Anchors := [akLeft, akRight, akBottom];
 
   SyncLayout;
 end;
@@ -123,7 +126,9 @@ begin
     ReleaseDC(0, DC);
   end;
 
-  Width := FGrid.ClientWidth;
+  Left := FGrid.Left;
+  Top := FGrid.Top + FGrid.Height - Height;
+  Width := FGrid.Width;
   Invalidate;
 end;
 
@@ -133,6 +138,57 @@ begin
   if Assigned(FGrid) then
     // Use the public helper we added to TVittixDBGrid
     Result := FGrid.GetIndicatorWidth;
+end;
+
+function TVittixDBGridFooterPanel.GetIndicatorRect: TRect;
+var
+  GridRect: TRect;
+begin
+  Result := Rect(0, 0, 0, 0);
+  if not Assigned(FGrid) then
+    Exit;
+
+  if GetIndicatorOffset <= 0 then
+    Exit;
+
+  GridRect := TVittixGridAccess(FGrid).CellRect(0, 1);
+  Result := Rect(GridRect.Left, 0, GridRect.Right, Height);
+end;
+
+function TVittixDBGridFooterPanel.GetColumnRect(AColumn: TColumn): TRect;
+var
+  GridRect: TRect;
+  VisibleIndex: Integer;
+  I: Integer;
+begin
+  Result := Rect(0, 0, 0, 0);
+  if not Assigned(FGrid) or not Assigned(AColumn) then
+    Exit;
+
+  VisibleIndex := 0;
+  for I := 0 to FGrid.Columns.Count - 1 do
+  begin
+    if not FGrid.Columns[I].Visible then
+      Continue;
+
+    if FGrid.Columns[I] = AColumn then
+      Break;
+
+    Inc(VisibleIndex);
+  end;
+
+  // CellRect gives the actual painted grid cell geometry, including indicator
+  // offset and current grid line spacing. Convert it into footer-local coords.
+  GridRect := TVittixGridAccess(FGrid).CellRect(
+    VisibleIndex + TVittixGridAccess(FGrid).IndicatorOffset,
+    1
+  );
+  Result := Rect(
+    GridRect.Left,
+    0,
+    GridRect.Right,
+    Height
+  );
 end;
 
 procedure TVittixDBGridFooterPanel.Paint;
@@ -154,7 +210,27 @@ begin
   Canvas.Brush.Color := FGrid.FixedColor;
   Canvas.FillRect(ClientRect);
 
-  X := GetIndicatorOffset;
+  // Draw the indicator/footer corner cell explicitly so the first data column
+  // lines up visually with the footer grid. Without this, the indicator width
+  // looks like part of the first column and makes the ID column appear missing.
+  R := GetIndicatorRect;
+  if not IsRectEmpty(R) then
+  begin
+    Canvas.Brush.Color := FGrid.FixedColor;
+    Canvas.FillRect(R);
+
+    Canvas.Pen.Color := clBtnHighlight;
+    Canvas.MoveTo(R.Left, R.Top);
+    Canvas.LineTo(R.Right, R.Top);
+    Canvas.MoveTo(R.Left, R.Bottom);
+    Canvas.LineTo(R.Left, R.Top);
+
+    Canvas.Pen.Color := clBtnShadow;
+    Canvas.MoveTo(R.Right - 1, R.Top);
+    Canvas.LineTo(R.Right - 1, R.Bottom);
+    Canvas.MoveTo(R.Left, R.Bottom - 1);
+    Canvas.LineTo(R.Right, R.Bottom - 1);
+  end;
 
   // FIX: Access protected LeftCol using the cracker class
   StartCol := TVittixGridAccess(FGrid).LeftCol;
@@ -168,7 +244,9 @@ begin
     Col := FGrid.Columns[I];
     if not Col.Visible then Continue;
 
-    R := Rect(X, 0, X + Col.Width, Height);
+    R := GetColumnRect(Col);
+    if IsRectEmpty(R) then
+      Continue;
 
     // Background
     Canvas.Brush.Color := FGrid.FixedColor;
@@ -208,21 +286,17 @@ begin
       DrawFlags
     );
 
-    // FIX: CRITICAL ISSUE #3 - Prevent integer overflow
-    if (MaxInt - Col.Width < X) then Break;
-    Inc(X, Col.Width);
-    if X > ClientWidth then Break;
+    if R.Right > ClientWidth then Break;
   end;
 end;
 
 function TVittixDBGridFooterPanel.HitTestColumn(X: Integer): TColumn;
 var
-  I, PosX, StartCol: Integer;
+  I, StartCol: Integer;
+  R: TRect;
 begin
   Result := nil;
   if not Assigned(FGrid) then Exit;
-
-  PosX := GetIndicatorOffset;
 
   // FIX: Access protected LeftCol using the cracker class
   StartCol := TVittixGridAccess(FGrid).LeftCol;
@@ -234,11 +308,13 @@ begin
   begin
     if not FGrid.Columns[I].Visible then Continue;
 
-    if (X >= PosX) and (X < PosX + FGrid.Columns[I].Width) then
-      Exit(FGrid.Columns[I]);
+    R := GetColumnRect(FGrid.Columns[I]);
+    if IsRectEmpty(R) then
+      Continue;
 
-    Inc(PosX, FGrid.Columns[I].Width);
-    if PosX > ClientWidth then Break;
+    if (X >= R.Left) and (X < R.Right) then
+      Exit(FGrid.Columns[I]);
+    if R.Right > ClientWidth then Break;
   end;
 end;
 

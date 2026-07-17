@@ -126,6 +126,7 @@ type
 
     procedure Detach;
     procedure InstallWindowProc;
+    procedure GridLayoutChanged;
 
     procedure Refresh;
     procedure Clear;
@@ -206,6 +207,12 @@ begin
     FOldWindowProc := FGrid.WindowProc;
     FGrid.WindowProc := GridWindowProc;
   end;
+
+  // First runtime handle creation is the earliest point where the grid has a
+  // stable window and client metrics. Force one footer sync here so startup
+  // alignment matches the final column layout without waiting for a later
+  // resize or interaction.
+  GridLayoutChanged;
 end;
 
 procedure TVittixDBGridController.Loaded;
@@ -254,6 +261,7 @@ begin
     begin
       CreateEngines;
       Refresh;
+      GridLayoutChanged;
     end;
   finally
     FUpdating := False;
@@ -695,6 +703,18 @@ begin
 
   if Assigned(FGrid) then
     FGrid.Invalidate;
+end;
+
+procedure TVittixDBGridController.GridLayoutChanged;
+begin
+  if not Assigned(FGrid) then
+    Exit;
+
+  if Assigned(FFooterPanel) then
+  begin
+    FFooterPanel.SyncLayout;
+    FFooterPanel.Invalidate;
+  end;
 end;
 
 procedure TVittixDBGridController.Clear;
