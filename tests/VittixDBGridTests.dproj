@@ -1,0 +1,53 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{41FAD20C-FB29-42DB-BB75-4F08B55F4023}</ProjectGuid>
+        <MainSource>VittixDBGridTests.dpr</MainSource>
+        <Base>True</Base>
+        <Config Condition="'$(Config)'==''">Debug</Config>
+        <Platform Condition="'$(Platform)'==''">Win32</Platform>
+        <ProjectName Condition="'$(ProjectName)'==''">VittixDBGridTests</ProjectName>
+        <ProjectVersion>20.2</ProjectVersion>
+        <FrameworkType>VCL</FrameworkType>
+        <AppType>Console</AppType>
+        <TargetedPlatforms>1048577</TargetedPlatforms>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Base)'!=''">
+        <DCC_Namespace>System;Vcl;Data;Datasnap;Xml;Winapi;$(DCC_Namespace)</DCC_Namespace>
+        <DCC_UnitSearchPath>src;..\source;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UsePackage>vcl;rtl;dbrtl;vcldb;xmlrtl;$(DCC_UsePackage)</DCC_UsePackage>
+        <SanitizedProjectName>VittixDBGridTests</SanitizedProjectName>
+        <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
+        <VerInfo_Locale>1033</VerInfo_Locale>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Config)'=='Debug' or '$(Cfg_2)'!=''">
+        <Cfg_2>true</Cfg_2>
+        <CfgParent>Base</CfgParent>
+        <Base>true</Base>
+        <DCC_Define>DEBUG;$(DCC_Define)</DCC_Define>
+        <DCC_Optimize>false</DCC_Optimize>
+        <DCC_GenerateStackFrames>true</DCC_GenerateStackFrames>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Config)'=='Release' or '$(Cfg_1)'!=''">
+        <Cfg_1>true</Cfg_1>
+        <CfgParent>Base</CfgParent>
+        <Base>true</Base>
+        <DCC_Define>RELEASE;$(DCC_Define)</DCC_Define>
+    </PropertyGroup>
+    <ItemGroup>
+        <DelphiCompile Include="$(MainSource)">
+            <MainSource>MainSource</MainSource>
+        </DelphiCompile>
+        <DCCReference Include="src\Vittix.Tests.TestData.pas"/>
+        <DCCReference Include="src\Vittix.Tests.ColumnInfo.pas"/>
+        <DCCReference Include="src\Vittix.Tests.SortEngine.pas"/>
+        <DCCReference Include="src\Vittix.Tests.FilterEngine.pas"/>
+        <DCCReference Include="src\Vittix.Tests.AggregationEngine.pas"/>
+        <DCCReference Include="src\Vittix.Tests.ExportEngine.pas"/>
+        <DCCReference Include="src\Vittix.Tests.Controller.Regression.pas"/>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Delphi.Personality.12</Borland.Personality>
+        <Borland.ProjectType>VCLApplication</Borland.ProjectType>
+    </ProjectExtensions>
+    <Import Project="$(BDS)\Bin\CodeGear.Delphi.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Delphi.Targets')"/>
+</Project>

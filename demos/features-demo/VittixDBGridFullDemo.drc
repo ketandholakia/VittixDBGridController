@@ -8,440 +8,460 @@
   resources were bound to the produced executable.
 */
 
-#define Datasnap_MidConst_SInvalidArg 64976
-#define Datasnap_MidConst_SUnableToLoadICU 64977
-#define Datasnap_MidConst_SReadOnlyProvider 64992
-#define Datasnap_MidConst_SNoKeySpecified 64993
-#define Datasnap_MidConst_SNoDataSets 64994
-#define Datasnap_MidConst_SRecConstFail 64995
-#define Datasnap_MidConst_SFieldConstFail 64996
-#define Datasnap_MidConst_SDefExprFail 64997
-#define Datasnap_MidConst_SArrayElementError 64998
-#define Datasnap_MidConst_SNoTableName 64999
-#define Datasnap_MidConst_SNoEditsAllowed 65000
-#define Datasnap_MidConst_SNoDeletesAllowed 65001
-#define Datasnap_MidConst_SNoInsertsAllowed 65002
-#define Datasnap_MidConst_SCannotChangeCommandText 65003
-#define Datasnap_MidConst_SConnectionMissing 65004
-#define Datasnap_MidConst_SNoCircularConnection 65005
-#define Datasnap_MidConst_SClassNotAvailable 65006
-#define Datasnap_MidConst_SOutOfMemory 65007
-#define Vcl_VDBConsts_SRemoteLogin 65008
-#define Datasnap_MidConst_SNoDataProvider 65009
-#define Datasnap_MidConst_SInvalidDataPacket 65010
-#define Datasnap_MidConst_SRefreshError 65011
-#define Datasnap_MidConst_SAggsNoSuchLevel 65012
-#define Datasnap_MidConst_SNoCircularReference 65013
-#define Datasnap_MidConst_SErrorLoadingMidas 65014
-#define Datasnap_MidConst_SCannotCreateDataSet 65015
-#define Datasnap_MidConst_SNoConnectToBroker 65016
-#define Datasnap_MidConst_SNoParentConnection 65017
-#define Datasnap_MidConst_SInvalidResponse 65018
-#define Datasnap_MidConst_STooManyRecordsModified 65019
-#define Datasnap_MidConst_SInvalidOptParamType 65020
-#define Datasnap_MidConst_SMissingDataSet 65021
-#define Datasnap_MidConst_SConstraintFailed 65022
-#define Datasnap_MidConst_SField 65023
-#define Vcl_VDBConsts_SPriorRecord 65024
-#define Vcl_VDBConsts_SNextRecord 65025
-#define Vcl_VDBConsts_SLastRecord 65026
-#define Vcl_VDBConsts_SInsertRecord 65027
-#define Vcl_VDBConsts_SDeleteRecord 65028
-#define Vcl_VDBConsts_SEditRecord 65029
-#define Vcl_VDBConsts_SPostEdit 65030
-#define Vcl_VDBConsts_SCancelEdit 65031
-#define Vcl_VDBConsts_SRefreshRecord 65032
-#define Vcl_VDBConsts_SApplyUpdates 65033
-#define Vcl_VDBConsts_SCancelUpdates 65034
-#define Vcl_VDBConsts_SDeleteRecordQuestion 65035
-#define Vcl_VDBConsts_SDeleteMultipleRecordsQuestion 65036
-#define Vcl_VDBConsts_SDataSourceFixed 65037
-#define Vcl_VDBConsts_SPropDefByLookup 65038
-#define Vcl_VDBConsts_STooManyColumns 65039
-#define Data_DBConsts_SParameterNotFound 65040
-#define Data_DBConsts_SInvalidVersion 65041
-#define Data_DBConsts_SBadFieldType 65042
-#define Data_DBConsts_SAggActive 65043
-#define Data_DBConsts_SProviderSQLNotSupported 65044
-#define Data_DBConsts_SProviderExecuteNotSupported 65045
-#define Data_DBConsts_SExprNoAggOnCalcs 65046
-#define Data_DBConsts_SRecordChanged 65047
-#define Data_DBConsts_SDataSetUnidirectional 65048
-#define Data_DBConsts_SUnassignedVar 65049
-#define Data_DBConsts_SRecordNotFound 65050
-#define Data_DBConsts_SBcdOverflow 65051
-#define Data_DBConsts_SInvalidBcdValue 65052
-#define Data_DBConsts_SCouldNotParseTimeStamp 65053
-#define Data_DBConsts_SInvalidSqlTimeStamp 65054
-#define Vcl_VDBConsts_SFirstRecord 65055
-#define Data_DBConsts_SExprExpected 65056
-#define Data_DBConsts_SExprBadField 65057
-#define Data_DBConsts_SExprBadNullTest 65058
-#define Data_DBConsts_SExprRangeError 65059
-#define Data_DBConsts_SExprIncorrect 65060
-#define Data_DBConsts_SExprNothing 65061
-#define Data_DBConsts_SExprTypeMis 65062
-#define Data_DBConsts_SExprBadScope 65063
-#define Data_DBConsts_SExprNoArith 65064
-#define Data_DBConsts_SExprNotAgg 65065
-#define Data_DBConsts_SExprBadConst 65066
-#define Data_DBConsts_SExprNoAggFilter 65067
-#define Data_DBConsts_SExprEmptyInList 65068
-#define Data_DBConsts_SInvalidKeywordUse 65069
-#define Data_DBConsts_STextFalse 65070
-#define Data_DBConsts_STextTrue 65071
-#define Data_DBConsts_SLookupInfoError 65072
-#define Data_DBConsts_SDataSourceChange 65073
-#define Data_DBConsts_SNoNestedMasterSource 65074
-#define Data_DBConsts_SDataSetOpen 65075
-#define Data_DBConsts_SNotEditing 65076
-#define Data_DBConsts_SDataSetClosed 65077
-#define Data_DBConsts_SDataSetEmpty 65078
-#define Data_DBConsts_SDataSetReadOnly 65079
-#define Data_DBConsts_SNestedDataSetClass 65080
-#define Data_DBConsts_SExprTermination 65081
-#define Data_DBConsts_SExprNameError 65082
-#define Data_DBConsts_SExprStringError 65083
-#define Data_DBConsts_SExprInvalidChar 65084
-#define Data_DBConsts_SExprNoLParen 65085
-#define Data_DBConsts_SExprNoRParen 65086
-#define Data_DBConsts_SExprNoRParenOrComma 65087
-#define Data_DBConsts_SFieldSizeMismatch 65088
-#define Data_DBConsts_SInvalidVarByteArray 65089
-#define Data_DBConsts_SFieldOutOfRange 65090
-#define Data_DBConsts_SFieldRequired 65091
-#define Data_DBConsts_SDataSetMissing 65092
-#define Data_DBConsts_SInvalidCalcType 65093
-#define Data_DBConsts_SFieldReadOnly 65094
-#define Data_DBConsts_SFieldIndexError 65095
-#define Data_DBConsts_SNoFieldIndexes 65096
-#define Data_DBConsts_SNotIndexField 65097
-#define Data_DBConsts_SIndexFieldMissing 65098
-#define Data_DBConsts_SDuplicateIndexName 65099
-#define Data_DBConsts_SNoIndexForFields 65100
-#define Data_DBConsts_SIndexNotFound 65101
-#define Data_DBConsts_SDBDuplicateName 65102
-#define Data_DBConsts_SCircularDataLink 65103
-#define Vcl_ComStrs_sFailSetCalMinMaxRange 65104
-#define Vcl_ComStrs_sFailsetCalSelRange 65105
-#define Data_DBConsts_SInvalidFieldSize 65106
-#define Data_DBConsts_SInvalidFieldKind 65107
-#define Data_DBConsts_SUnknownFieldType 65108
-#define Data_DBConsts_SFieldNameMissing 65109
-#define Data_DBConsts_SDuplicateFieldName 65110
-#define Data_DBConsts_SFieldNotFound 65111
-#define Data_DBConsts_SFieldAccessError 65112
-#define Data_DBConsts_SFieldValueError 65113
-#define Data_DBConsts_SFieldRangeError 65114
-#define Data_DBConsts_SBcdFieldRangeError 65115
-#define Data_DBConsts_SInvalidIntegerValue 65116
-#define Data_DBConsts_SInvalidBoolValue 65117
-#define Data_DBConsts_SInvalidFloatValue 65118
-#define Data_DBConsts_SFieldTypeMismatch 65119
-#define System_Win_ComConst_SVarNotObject 65120
-#define System_Win_ComConst_STooManyParams 65121
-#define Vcl_ComStrs_sTabFailClear 65122
-#define Vcl_ComStrs_sTabFailDelete 65123
-#define Vcl_ComStrs_sTabFailRetrieve 65124
-#define Vcl_ComStrs_sTabFailGetObject 65125
-#define Vcl_ComStrs_sTabFailSet 65126
-#define Vcl_ComStrs_sTabFailSetObject 65127
-#define Vcl_ComStrs_sTabMustBeMultiLine 65128
-#define Vcl_ComStrs_sPageIndexError 65129
-#define Vcl_ComStrs_sInvalidComCtl32 65130
-#define Vcl_ComStrs_sDateTimeMax 65131
-#define Vcl_ComStrs_sDateTimeMin 65132
-#define Vcl_ComStrs_sNeedAllowNone 65133
-#define Vcl_ComStrs_sFailSetCalDateTime 65134
-#define Vcl_ComStrs_sFailSetCalMaxSelRange 65135
-#define Vcl_Consts_SStyleRegisterError 65136
-#define Vcl_Consts_SStyleClassRegisterError 65137
-#define Vcl_Consts_SStyleNotFound 65138
-#define Vcl_Consts_SStyleClassNotFound 65139
-#define Vcl_Consts_SStyleInvalidHandle 65140
-#define Vcl_Consts_SStyleFormatError 65141
-#define Vcl_Consts_SStyleHookClassRegistered 65142
-#define Vcl_Consts_SStyleHookClassNotRegistered 65143
-#define Vcl_Consts_SStyleInvalidParameter 65144
-#define Vcl_Consts_SStyleFeatureNotSupported 65145
-#define Vcl_Consts_SStyleNotRegistered 65146
-#define Vcl_Consts_SStyleUnregisterError 65147
-#define Vcl_Consts_SStyleNotRegisteredNoName 65148
-#define Vcl_Consts_sBeginInvokeNoHandle 65149
-#define System_Win_ComConst_SOleError 65150
-#define System_Win_ComConst_SNoMethod 65151
-#define Vcl_Consts_SPromptArrayTooShort 65152
-#define Vcl_Consts_SPromptArrayEmpty 65153
-#define Vcl_Consts_SUsername 65154
-#define Vcl_Consts_SPassword 65155
-#define Vcl_Consts_SDomain 65156
-#define Vcl_Consts_SLogin 65157
-#define Vcl_Consts_SErrorSettingCount 65158
-#define Vcl_Consts_SListBoxMustBeVirtual 65159
-#define Vcl_Consts_STrayIconRemoveError 65160
-#define Vcl_Consts_SPageControlNotSet 65161
-#define Vcl_Consts_SWindowsVistaRequired 65162
-#define Vcl_Consts_STaskDlgButtonCaption 65163
-#define Vcl_Consts_STaskDlgRadioButtonCaption 65164
-#define Vcl_Consts_SInvalidTaskDlgButtonCaption 65165
-#define Vcl_Consts_SStyleLoadError 65166
-#define Vcl_Consts_SStyleLoadErrors 65167
-#define Vcl_Consts_SmkcAlt 65168
-#define Vcl_Consts_SOutOfRange 65169
-#define Vcl_Consts_sAllFilter 65170
-#define Vcl_Consts_SInsertLineError 65171
-#define Vcl_Consts_SInvalidClipFmt 65172
-#define Vcl_Consts_SIconToClipboard 65173
-#define Vcl_Consts_SCannotOpenClipboard 65174
-#define Vcl_Consts_SInvalidMemoSize 65175
-#define Vcl_Consts_SInvalidPrinterOp 65176
-#define Vcl_Consts_SNoDefaultPrinter 65177
-#define Vcl_Consts_SDuplicateMenus 65178
-#define Vcl_Consts_SDockedCtlNeedsName 65179
-#define Vcl_Consts_SDockTreeRemoveError 65180
-#define Vcl_Consts_SDockZoneNotFound 65181
-#define Vcl_Consts_SDockZoneHasNoCtl 65182
-#define Vcl_Consts_SDockZoneVersionConflict 65183
-#define Vcl_Consts_SmkcTab 65184
-#define Vcl_Consts_SmkcEsc 65185
-#define Vcl_Consts_SmkcEnter 65186
-#define Vcl_Consts_SmkcSpace 65187
-#define Vcl_Consts_SmkcPgUp 65188
-#define Vcl_Consts_SmkcPgDn 65189
-#define Vcl_Consts_SmkcEnd 65190
-#define Vcl_Consts_SmkcHome 65191
-#define Vcl_Consts_SmkcLeft 65192
-#define Vcl_Consts_SmkcUp 65193
-#define Vcl_Consts_SmkcRight 65194
-#define Vcl_Consts_SmkcDown 65195
-#define Vcl_Consts_SmkcIns 65196
-#define Vcl_Consts_SmkcDel 65197
-#define Vcl_Consts_SmkcShift 65198
-#define Vcl_Consts_SmkcCtrl 65199
-#define Vcl_Consts_SMsgDlgError 65200
-#define Vcl_Consts_SMsgDlgInformation 65201
-#define Vcl_Consts_SMsgDlgConfirm 65202
-#define Vcl_Consts_SMsgDlgYes 65203
-#define Vcl_Consts_SMsgDlgNo 65204
-#define Vcl_Consts_SMsgDlgOK 65205
-#define Vcl_Consts_SMsgDlgCancel 65206
-#define Vcl_Consts_SMsgDlgHelp 65207
-#define Vcl_Consts_SMsgDlgAbort 65208
-#define Vcl_Consts_SMsgDlgRetry 65209
-#define Vcl_Consts_SMsgDlgIgnore 65210
-#define Vcl_Consts_SMsgDlgAll 65211
-#define Vcl_Consts_SMsgDlgNoToAll 65212
-#define Vcl_Consts_SMsgDlgYesToAll 65213
-#define Vcl_Consts_SMsgDlgClose 65214
-#define Vcl_Consts_SmkcBkSp 65215
-#define Vcl_Consts_SAbortButton 65216
-#define Vcl_Consts_SAllButton 65217
-#define Vcl_Consts_SCannotDragForm 65218
-#define Vcl_Consts_SVMetafiles 65219
-#define Vcl_Consts_SVEnhMetafiles 65220
-#define Vcl_Consts_SVIcons 65221
-#define Vcl_Consts_SVBitmaps 65222
-#define Vcl_Consts_SVTIFFImages 65223
-#define Vcl_Consts_SGridTooLarge 65224
-#define Vcl_Consts_STooManyDeleted 65225
-#define Vcl_Consts_SIndexOutOfRange 65226
-#define Vcl_Consts_SFixedColTooBig 65227
-#define Vcl_Consts_SFixedRowTooBig 65228
-#define Vcl_Consts_SMaskErr 65229
-#define Vcl_Consts_SMaskEditErr 65230
-#define Vcl_Consts_SMsgDlgWarning 65231
-#define Vcl_Consts_SPrinterIndexError 65232
-#define Vcl_Consts_SInvalidPrinter 65233
-#define Vcl_Consts_SDeviceOnPort 65234
-#define Vcl_Consts_SGroupIndexTooLow 65235
-#define Vcl_Consts_SNoMDIForm 65236
-#define Vcl_Consts_SImageCanvasNeedsBitmap 65237
-#define Vcl_Consts_SControlParentSetToSelf 65238
-#define Vcl_Consts_SControlNonMainThreadUsage 65239
-#define Vcl_Consts_SOKButton 65240
-#define Vcl_Consts_SCancelButton 65241
-#define Vcl_Consts_SYesButton 65242
-#define Vcl_Consts_SNoButton 65243
-#define Vcl_Consts_SHelpButton 65244
-#define Vcl_Consts_SCloseButton 65245
-#define Vcl_Consts_SIgnoreButton 65246
-#define Vcl_Consts_SRetryButton 65247
-#define Vcl_Consts_SWindowClass 65248
-#define Vcl_Consts_SCannotFocus 65249
-#define Vcl_Consts_SParentRequired 65250
-#define Vcl_Consts_SControlPath 65251
-#define Vcl_Consts_SParentGivenNotAParent 65252
-#define Vcl_Consts_SMDIChildNotVisible 65253
-#define Vcl_Consts_SVisibleChanged 65254
-#define Vcl_Consts_SCannotShowModal 65255
-#define Vcl_Consts_SScrollBarRange 65256
-#define Vcl_Consts_SPropertyOutOfRange 65257
-#define Vcl_Consts_SMenuIndexError 65258
-#define Vcl_Consts_SMenuReinserted 65259
-#define Vcl_Consts_SMenuNotFound 65260
-#define Vcl_Consts_SNoTimers 65261
-#define Vcl_Consts_SNotPrinting 65262
-#define Vcl_Consts_SPrinting 65263
-#define Vcl_Consts_SChangeWicSize 65264
-#define Vcl_Consts_SUnknownExtension 65265
-#define Vcl_Consts_SUnknownClipboardFormat 65266
-#define Vcl_Consts_SUnknownStreamFormat 65267
-#define Vcl_Consts_SOutOfResources 65268
-#define Vcl_Consts_SNoCanvasHandle 65269
-#define Vcl_Consts_SInvalidTextFormatFlag 65270
-#define Vcl_Consts_SInvalidFrameIndex 65271
-#define Vcl_Consts_SInvalidImageSize 65272
-#define Vcl_Consts_SInvalidImageList 65273
-#define Vcl_Consts_SReplaceImage 65274
-#define Vcl_Consts_SInsertImage 65275
-#define Vcl_Consts_SImageIndexError 65276
-#define Vcl_Consts_SImageReadFail 65277
-#define Vcl_Consts_SImageWriteFail 65278
-#define Vcl_Consts_SWindowDCError 65279
-#define System_RTLConsts_sObserverMultipleSingleCast 65280
-#define System_RTLConsts_sObserverNoInterface 65281
-#define System_RTLConsts_sObserverNoSinglecastFound 65282
-#define System_RTLConsts_sObserverNoMulticastFound 65283
-#define System_RTLConsts_sObserverNotAvailable 65284
-#define System_RTLConsts_sMustWaitOnOneEvent 65285
-#define System_RTLConsts_sBeginInvokeDestroying 65286
-#define Vcl_Consts_SInvalidTabPosition 65287
-#define Vcl_Consts_SInvalidTabStyle 65288
-#define Vcl_Consts_SInvalidBitmap 65289
-#define Vcl_Consts_SInvalidIcon 65290
-#define Vcl_Consts_SInvalidMetafile 65291
-#define Vcl_Consts_SInvalidPixelFormat 65292
-#define Vcl_Consts_SInvalidImage 65293
-#define Vcl_Consts_SScanLine 65294
-#define Vcl_Consts_SChangeIconSize 65295
-#define System_RTLConsts_SWindowsServer2008R2 65296
-#define System_RTLConsts_SWindows2000 65297
-#define System_RTLConsts_SWindowsXP 65298
-#define System_RTLConsts_SWindowsServer2003 65299
-#define System_RTLConsts_SWindowsServer2003R2 65300
-#define System_RTLConsts_SWindowsServer2012 65301
-#define System_RTLConsts_SWindowsServer2012R2 65302
-#define System_RTLConsts_SWindowsServer2016 65303
-#define System_RTLConsts_SWindowsServer2019 65304
-#define System_RTLConsts_SWindowsServer2022 65305
-#define System_RTLConsts_SWindows8 65306
-#define System_RTLConsts_SWindows8Point1 65307
-#define System_RTLConsts_SWindows10 65308
-#define System_RTLConsts_SWindows11 65309
-#define System_RTLConsts_SWinRTInstanceError 65310
-#define System_RTLConsts_sObserverUnsupported 65311
-#define System_RTLConsts_SInsufficientRtti 65312
-#define System_RTLConsts_SParameterCountMismatch 65313
-#define System_RTLConsts_SNonPublicType 65314
-#define System_RTLConsts_SByRefArgMismatch 65315
-#define System_RTLConsts_SPropIsReadOnly 65316
-#define System_RTLConsts_SPropIsWriteOnly 65317
-#define System_RTLConsts_SInvalidRttiDestroy 65318
-#define System_RTLConsts_SServiceNotFound 65319
-#define System_RTLConsts_SVersionStr 65320
-#define System_RTLConsts_SSPVersionStr 65321
-#define System_RTLConsts_SVersion32 65322
-#define System_RTLConsts_SVersion64 65323
-#define System_RTLConsts_SWindows 65324
-#define System_RTLConsts_SWindowsVista 65325
-#define System_RTLConsts_SWindowsServer2008 65326
-#define System_RTLConsts_SWindows7 65327
-#define System_RTLConsts_sInvalidTimespanDuration 65328
-#define System_RTLConsts_sTimespanValueCannotBeNan 65329
-#define System_RTLConsts_sCannotNegateTimespan 65330
-#define System_RTLConsts_sInvalidTimespanFormat 65331
-#define System_RTLConsts_sTimespanElementTooLong 65332
-#define System_RTLConsts_SNoContext 65333
-#define System_RTLConsts_SNoContextFound 65334
-#define System_RTLConsts_SNoIndex 65335
-#define System_RTLConsts_SNoSearch 65336
-#define System_RTLConsts_SNoTableOfContents 65337
-#define System_RTLConsts_SNoTopics 65338
-#define System_RTLConsts_SNothingFound 65339
-#define System_RTLConsts_SArgumentOutOfRange 65340
-#define System_RTLConsts_SArgumentNil 65341
-#define System_RTLConsts_SGenericItemNotFound 65342
-#define System_RTLConsts_SGenericDuplicateItem 65343
-#define System_RTLConsts_SInvalidCharsInFileName 65344
-#define System_RTLConsts_SEmptyPath 65345
-#define System_RTLConsts_SPathTooLong 65346
-#define System_RTLConsts_SPathNotFound 65347
-#define System_RTLConsts_SPathFormatNotSupported 65348
-#define System_RTLConsts_SSpecifiedFileNotFound 65349
-#define System_RTLConsts_SFileTooLong 65350
-#define System_RTLConsts_SLocalTimeInvalid 65351
-#define System_RTLConsts_hNoFilterViewer 65352
-#define System_RTLConsts_sArgumentInvalid 65353
-#define System_RTLConsts_sInvalidStringAndObjectArrays 65354
-#define System_RTLConsts_sSameArrays 65355
-#define System_RTLConsts_sNoConstruct 65356
-#define System_RTLConsts_sInvalidTimeoutValue 65357
-#define System_RTLConsts_sSpinCountOutOfRange 65358
-#define System_RTLConsts_sTimespanTooLong 65359
-#define System_RTLConsts_SSeekNotImplemented 65360
-#define System_RTLConsts_SSortedListError 65361
-#define System_RTLConsts_SUnknownGroup 65362
-#define System_RTLConsts_SUnknownProperty 65363
-#define System_RTLConsts_SWriteError 65364
-#define System_RTLConsts_SThreadCreateError 65365
-#define System_RTLConsts_SThreadError 65366
-#define System_RTLConsts_SThreadExternalTerminate 65367
-#define System_RTLConsts_SThreadExternalWait 65368
-#define System_RTLConsts_SThreadStartError 65369
-#define System_RTLConsts_SThreadExternalCheckTerminated 65370
-#define System_RTLConsts_SThreadExternalSetReturnValue 65371
-#define System_RTLConsts_SParamIsNil 65372
-#define System_RTLConsts_SParamIsNegative 65373
-#define System_RTLConsts_SInputBufferExceed 65374
-#define System_RTLConsts_SInvalidCharsInPath 65375
-#define System_RTLConsts_SInvalidPropertyValue 65376
-#define System_RTLConsts_SInvalidRegType 65377
-#define System_RTLConsts_SListCapacityError 65378
-#define System_RTLConsts_SListCountError 65379
-#define System_RTLConsts_SListIndexError 65380
-#define System_RTLConsts_SListIndexErrorRangeReason 65381
-#define System_RTLConsts_SListIndexErrorEmptyReason 65382
-#define System_RTLConsts_SMemoryStreamError 65383
-#define System_RTLConsts_SNoComSupport 65384
-#define System_RTLConsts_SPropertyException 65385
-#define System_RTLConsts_SReadError 65386
-#define System_RTLConsts_SReadOnlyProperty 65387
-#define System_RTLConsts_SRegCreateFailed 65388
-#define System_RTLConsts_SRegGetDataFailed 65389
-#define System_RTLConsts_SRegSetDataFailed 65390
-#define System_RTLConsts_SResNotFound 65391
-#define System_RTLConsts_SCantWriteResourceStreamError 65392
-#define System_RTLConsts_SCheckSynchronizeError 65393
-#define System_RTLConsts_SClassNotFound 65394
-#define System_RTLConsts_SDuplicateClass 65395
-#define System_RTLConsts_SDuplicateItem 65396
-#define System_RTLConsts_SDuplicateName 65397
-#define System_RTLConsts_SDuplicateString 65398
-#define System_RTLConsts_SFCreateErrorEx 65399
-#define System_RTLConsts_SFOpenErrorEx 65400
-#define System_RTLConsts_SIniFileWriteError 65401
-#define System_RTLConsts_SInvalidImage 65402
-#define System_RTLConsts_SInvalidName 65403
-#define System_RTLConsts_SInvalidProperty 65404
-#define System_RTLConsts_SInvalidPropertyElement 65405
-#define System_RTLConsts_SInvalidPropertyPath 65406
-#define System_RTLConsts_SInvalidPropertyType 65407
+#define Datasnap_MidConst_SConnectionMissing 64960
+#define Datasnap_MidConst_SNoCircularConnection 64961
+#define Datasnap_MidConst_SClassNotAvailable 64962
+#define Datasnap_MidConst_SOutOfMemory 64963
+#define Datasnap_MidConst_SInvalidArg 64964
+#define Datasnap_MidConst_SUnableToLoadICU 64965
+#define Datasnap_MidConst_SInvalidOptParamType 64976
+#define Datasnap_MidConst_SMissingDataSet 64977
+#define Datasnap_MidConst_SConstraintFailed 64978
+#define Datasnap_MidConst_SField 64979
+#define Datasnap_MidConst_SReadOnlyProvider 64980
+#define Datasnap_MidConst_SNoKeySpecified 64981
+#define Datasnap_MidConst_SNoDataSets 64982
+#define Datasnap_MidConst_SRecConstFail 64983
+#define Datasnap_MidConst_SFieldConstFail 64984
+#define Datasnap_MidConst_SDefExprFail 64985
+#define Datasnap_MidConst_SArrayElementError 64986
+#define Datasnap_MidConst_SNoTableName 64987
+#define Datasnap_MidConst_SNoEditsAllowed 64988
+#define Datasnap_MidConst_SNoDeletesAllowed 64989
+#define Datasnap_MidConst_SNoInsertsAllowed 64990
+#define Datasnap_MidConst_SCannotChangeCommandText 64991
+#define Vcl_VDBConsts_SDeleteMultipleRecordsQuestion 64992
+#define Vcl_VDBConsts_SDataSourceFixed 64993
+#define Vcl_VDBConsts_SPropDefByLookup 64994
+#define Vcl_VDBConsts_STooManyColumns 64995
+#define Vcl_VDBConsts_SRemoteLogin 64996
+#define Datasnap_MidConst_SNoDataProvider 64997
+#define Datasnap_MidConst_SInvalidDataPacket 64998
+#define Datasnap_MidConst_SRefreshError 64999
+#define Datasnap_MidConst_SAggsNoSuchLevel 65000
+#define Datasnap_MidConst_SNoCircularReference 65001
+#define Datasnap_MidConst_SErrorLoadingMidas 65002
+#define Datasnap_MidConst_SCannotCreateDataSet 65003
+#define Datasnap_MidConst_SNoConnectToBroker 65004
+#define Datasnap_MidConst_SNoParentConnection 65005
+#define Datasnap_MidConst_SInvalidResponse 65006
+#define Datasnap_MidConst_STooManyRecordsModified 65007
+#define Data_DBConsts_SInvalidBcdValue 65008
+#define Data_DBConsts_SCouldNotParseTimeStamp 65009
+#define Data_DBConsts_SInvalidSqlTimeStamp 65010
+#define Vcl_VDBConsts_SFirstRecord 65011
+#define Vcl_VDBConsts_SPriorRecord 65012
+#define Vcl_VDBConsts_SNextRecord 65013
+#define Vcl_VDBConsts_SLastRecord 65014
+#define Vcl_VDBConsts_SInsertRecord 65015
+#define Vcl_VDBConsts_SDeleteRecord 65016
+#define Vcl_VDBConsts_SEditRecord 65017
+#define Vcl_VDBConsts_SPostEdit 65018
+#define Vcl_VDBConsts_SCancelEdit 65019
+#define Vcl_VDBConsts_SRefreshRecord 65020
+#define Vcl_VDBConsts_SApplyUpdates 65021
+#define Vcl_VDBConsts_SCancelUpdates 65022
+#define Vcl_VDBConsts_SDeleteRecordQuestion 65023
+#define Data_DBConsts_SExprEmptyInList 65024
+#define Data_DBConsts_SInvalidKeywordUse 65025
+#define Data_DBConsts_STextFalse 65026
+#define Data_DBConsts_STextTrue 65027
+#define Data_DBConsts_SParameterNotFound 65028
+#define Data_DBConsts_SInvalidVersion 65029
+#define Data_DBConsts_SBadFieldType 65030
+#define Data_DBConsts_SAggActive 65031
+#define Data_DBConsts_SProviderSQLNotSupported 65032
+#define Data_DBConsts_SProviderExecuteNotSupported 65033
+#define Data_DBConsts_SExprNoAggOnCalcs 65034
+#define Data_DBConsts_SRecordChanged 65035
+#define Data_DBConsts_SDataSetUnidirectional 65036
+#define Data_DBConsts_SUnassignedVar 65037
+#define Data_DBConsts_SRecordNotFound 65038
+#define Data_DBConsts_SBcdOverflow 65039
+#define Data_DBConsts_SExprInvalidChar 65040
+#define Data_DBConsts_SExprNoLParen 65041
+#define Data_DBConsts_SExprNoRParen 65042
+#define Data_DBConsts_SExprNoRParenOrComma 65043
+#define Data_DBConsts_SExprExpected 65044
+#define Data_DBConsts_SExprBadField 65045
+#define Data_DBConsts_SExprBadNullTest 65046
+#define Data_DBConsts_SExprRangeError 65047
+#define Data_DBConsts_SExprIncorrect 65048
+#define Data_DBConsts_SExprNothing 65049
+#define Data_DBConsts_SExprTypeMis 65050
+#define Data_DBConsts_SExprBadScope 65051
+#define Data_DBConsts_SExprNoArith 65052
+#define Data_DBConsts_SExprNotAgg 65053
+#define Data_DBConsts_SExprBadConst 65054
+#define Data_DBConsts_SExprNoAggFilter 65055
+#define Data_DBConsts_SNoIndexForFields 65056
+#define Data_DBConsts_SIndexNotFound 65057
+#define Data_DBConsts_SDBDuplicateName 65058
+#define Data_DBConsts_SCircularDataLink 65059
+#define Data_DBConsts_SLookupInfoError 65060
+#define Data_DBConsts_SDataSourceChange 65061
+#define Data_DBConsts_SNoNestedMasterSource 65062
+#define Data_DBConsts_SDataSetOpen 65063
+#define Data_DBConsts_SNotEditing 65064
+#define Data_DBConsts_SDataSetClosed 65065
+#define Data_DBConsts_SDataSetEmpty 65066
+#define Data_DBConsts_SDataSetReadOnly 65067
+#define Data_DBConsts_SNestedDataSetClass 65068
+#define Data_DBConsts_SExprTermination 65069
+#define Data_DBConsts_SExprNameError 65070
+#define Data_DBConsts_SExprStringError 65071
+#define Data_DBConsts_SInvalidIntegerValue 65072
+#define Data_DBConsts_SInvalidBoolValue 65073
+#define Data_DBConsts_SInvalidFloatValue 65074
+#define Data_DBConsts_SFieldTypeMismatch 65075
+#define Data_DBConsts_SFieldSizeMismatch 65076
+#define Data_DBConsts_SInvalidVarByteArray 65077
+#define Data_DBConsts_SFieldOutOfRange 65078
+#define Data_DBConsts_SFieldRequired 65079
+#define Data_DBConsts_SDataSetMissing 65080
+#define Data_DBConsts_SInvalidCalcType 65081
+#define Data_DBConsts_SFieldReadOnly 65082
+#define Data_DBConsts_SFieldIndexError 65083
+#define Data_DBConsts_SNoFieldIndexes 65084
+#define Data_DBConsts_SNotIndexField 65085
+#define Data_DBConsts_SIndexFieldMissing 65086
+#define Data_DBConsts_SDuplicateIndexName 65087
+#define Vcl_ComStrs_sDateTimeMin 65088
+#define Vcl_ComStrs_sNeedAllowNone 65089
+#define Vcl_ComStrs_sFailSetCalDateTime 65090
+#define Vcl_ComStrs_sFailSetCalMaxSelRange 65091
+#define Vcl_ComStrs_sFailSetCalMinMaxRange 65092
+#define Vcl_ComStrs_sFailsetCalSelRange 65093
+#define Data_DBConsts_SInvalidFieldSize 65094
+#define Data_DBConsts_SInvalidFieldKind 65095
+#define Data_DBConsts_SUnknownFieldType 65096
+#define Data_DBConsts_SFieldNameMissing 65097
+#define Data_DBConsts_SDuplicateFieldName 65098
+#define Data_DBConsts_SFieldNotFound 65099
+#define Data_DBConsts_SFieldAccessError 65100
+#define Data_DBConsts_SFieldValueError 65101
+#define Data_DBConsts_SFieldRangeError 65102
+#define Data_DBConsts_SBcdFieldRangeError 65103
+#define Vcl_Consts_SStyleNotRegisteredNoName 65104
+#define Vcl_Consts_sBeginInvokeNoHandle 65105
+#define System_Win_ComConst_SOleError 65106
+#define System_Win_ComConst_SNoMethod 65107
+#define System_Win_ComConst_SVarNotObject 65108
+#define System_Win_ComConst_STooManyParams 65109
+#define Vcl_ComStrs_sTabFailClear 65110
+#define Vcl_ComStrs_sTabFailDelete 65111
+#define Vcl_ComStrs_sTabFailRetrieve 65112
+#define Vcl_ComStrs_sTabFailGetObject 65113
+#define Vcl_ComStrs_sTabFailSet 65114
+#define Vcl_ComStrs_sTabFailSetObject 65115
+#define Vcl_ComStrs_sTabMustBeMultiLine 65116
+#define Vcl_ComStrs_sPageIndexError 65117
+#define Vcl_ComStrs_sInvalidComCtl32 65118
+#define Vcl_ComStrs_sDateTimeMax 65119
+#define Vcl_Consts_STaskDlgRadioButtonCaption 65120
+#define Vcl_Consts_SInvalidTaskDlgButtonCaption 65121
+#define Vcl_Consts_SStyleLoadError 65122
+#define Vcl_Consts_SStyleLoadErrors 65123
+#define Vcl_Consts_SStyleRegisterError 65124
+#define Vcl_Consts_SStyleClassRegisterError 65125
+#define Vcl_Consts_SStyleNotFound 65126
+#define Vcl_Consts_SStyleClassNotFound 65127
+#define Vcl_Consts_SStyleInvalidHandle 65128
+#define Vcl_Consts_SStyleFormatError 65129
+#define Vcl_Consts_SStyleHookClassRegistered 65130
+#define Vcl_Consts_SStyleHookClassNotRegistered 65131
+#define Vcl_Consts_SStyleInvalidParameter 65132
+#define Vcl_Consts_SStyleFeatureNotSupported 65133
+#define Vcl_Consts_SStyleNotRegistered 65134
+#define Vcl_Consts_SStyleUnregisterError 65135
+#define Vcl_Consts_SDockTreeRemoveError 65136
+#define Vcl_Consts_SDockZoneNotFound 65137
+#define Vcl_Consts_SDockZoneHasNoCtl 65138
+#define Vcl_Consts_SDockZoneVersionConflict 65139
+#define Vcl_Consts_SPromptArrayTooShort 65140
+#define Vcl_Consts_SPromptArrayEmpty 65141
+#define Vcl_Consts_SUsername 65142
+#define Vcl_Consts_SPassword 65143
+#define Vcl_Consts_SDomain 65144
+#define Vcl_Consts_SLogin 65145
+#define Vcl_Consts_SErrorSettingCount 65146
+#define Vcl_Consts_SListBoxMustBeVirtual 65147
+#define Vcl_Consts_STrayIconRemoveError 65148
+#define Vcl_Consts_SPageControlNotSet 65149
+#define Vcl_Consts_SWindowsVistaRequired 65150
+#define Vcl_Consts_STaskDlgButtonCaption 65151
+#define Vcl_Consts_SmkcIns 65152
+#define Vcl_Consts_SmkcDel 65153
+#define Vcl_Consts_SmkcShift 65154
+#define Vcl_Consts_SmkcCtrl 65155
+#define Vcl_Consts_SmkcAlt 65156
+#define Vcl_Consts_SOutOfRange 65157
+#define Vcl_Consts_sAllFilter 65158
+#define Vcl_Consts_SInsertLineError 65159
+#define Vcl_Consts_SInvalidClipFmt 65160
+#define Vcl_Consts_SIconToClipboard 65161
+#define Vcl_Consts_SCannotOpenClipboard 65162
+#define Vcl_Consts_SInvalidMemoSize 65163
+#define Vcl_Consts_SInvalidPrinterOp 65164
+#define Vcl_Consts_SNoDefaultPrinter 65165
+#define Vcl_Consts_SDuplicateMenus 65166
+#define Vcl_Consts_SDockedCtlNeedsName 65167
+#define Vcl_Consts_SMsgDlgNoToAll 65168
+#define Vcl_Consts_SMsgDlgYesToAll 65169
+#define Vcl_Consts_SMsgDlgClose 65170
+#define Vcl_Consts_SmkcBkSp 65171
+#define Vcl_Consts_SmkcTab 65172
+#define Vcl_Consts_SmkcEsc 65173
+#define Vcl_Consts_SmkcEnter 65174
+#define Vcl_Consts_SmkcSpace 65175
+#define Vcl_Consts_SmkcPgUp 65176
+#define Vcl_Consts_SmkcPgDn 65177
+#define Vcl_Consts_SmkcEnd 65178
+#define Vcl_Consts_SmkcHome 65179
+#define Vcl_Consts_SmkcLeft 65180
+#define Vcl_Consts_SmkcUp 65181
+#define Vcl_Consts_SmkcRight 65182
+#define Vcl_Consts_SmkcDown 65183
+#define Vcl_Consts_SFixedRowTooBig 65184
+#define Vcl_Consts_SMaskErr 65185
+#define Vcl_Consts_SMaskEditErr 65186
+#define Vcl_Consts_SMsgDlgWarning 65187
+#define Vcl_Consts_SMsgDlgError 65188
+#define Vcl_Consts_SMsgDlgInformation 65189
+#define Vcl_Consts_SMsgDlgConfirm 65190
+#define Vcl_Consts_SMsgDlgYes 65191
+#define Vcl_Consts_SMsgDlgNo 65192
+#define Vcl_Consts_SMsgDlgOK 65193
+#define Vcl_Consts_SMsgDlgCancel 65194
+#define Vcl_Consts_SMsgDlgHelp 65195
+#define Vcl_Consts_SMsgDlgAbort 65196
+#define Vcl_Consts_SMsgDlgRetry 65197
+#define Vcl_Consts_SMsgDlgIgnore 65198
+#define Vcl_Consts_SMsgDlgAll 65199
+#define Vcl_Consts_SHelpButton 65200
+#define Vcl_Consts_SCloseButton 65201
+#define Vcl_Consts_SIgnoreButton 65202
+#define Vcl_Consts_SRetryButton 65203
+#define Vcl_Consts_SAbortButton 65204
+#define Vcl_Consts_SAllButton 65205
+#define Vcl_Consts_SCannotDragForm 65206
+#define Vcl_Consts_SVMetafiles 65207
+#define Vcl_Consts_SVEnhMetafiles 65208
+#define Vcl_Consts_SVIcons 65209
+#define Vcl_Consts_SVBitmaps 65210
+#define Vcl_Consts_SVTIFFImages 65211
+#define Vcl_Consts_SGridTooLarge 65212
+#define Vcl_Consts_STooManyDeleted 65213
+#define Vcl_Consts_SIndexOutOfRange 65214
+#define Vcl_Consts_SFixedColTooBig 65215
+#define Vcl_Consts_SMenuNotFound 65216
+#define Vcl_Consts_SNoTimers 65217
+#define Vcl_Consts_SNotPrinting 65218
+#define Vcl_Consts_SPrinting 65219
+#define Vcl_Consts_SPrinterIndexError 65220
+#define Vcl_Consts_SInvalidPrinter 65221
+#define Vcl_Consts_SDeviceOnPort 65222
+#define Vcl_Consts_SGroupIndexTooLow 65223
+#define Vcl_Consts_SNoMDIForm 65224
+#define Vcl_Consts_SImageCanvasNeedsBitmap 65225
+#define Vcl_Consts_SControlParentSetToSelf 65226
+#define Vcl_Consts_SControlNonMainThreadUsage 65227
+#define Vcl_Consts_SOKButton 65228
+#define Vcl_Consts_SCancelButton 65229
+#define Vcl_Consts_SYesButton 65230
+#define Vcl_Consts_SNoButton 65231
+#define Vcl_Consts_SImageIndexError 65232
+#define Vcl_Consts_SImageReadFail 65233
+#define Vcl_Consts_SImageWriteFail 65234
+#define Vcl_Consts_SWindowDCError 65235
+#define Vcl_Consts_SWindowClass 65236
+#define Vcl_Consts_SCannotFocus 65237
+#define Vcl_Consts_SParentRequired 65238
+#define Vcl_Consts_SControlPath 65239
+#define Vcl_Consts_SParentGivenNotAParent 65240
+#define Vcl_Consts_SMDIChildNotVisible 65241
+#define Vcl_Consts_SVisibleChanged 65242
+#define Vcl_Consts_SCannotShowModal 65243
+#define Vcl_Consts_SScrollBarRange 65244
+#define Vcl_Consts_SPropertyOutOfRange 65245
+#define Vcl_Consts_SMenuIndexError 65246
+#define Vcl_Consts_SMenuReinserted 65247
+#define Vcl_Consts_SInvalidPixelFormat 65248
+#define Vcl_Consts_SInvalidImage 65249
+#define Vcl_Consts_SScanLine 65250
+#define Vcl_Consts_SChangeIconSize 65251
+#define Vcl_Consts_SChangeWicSize 65252
+#define Vcl_Consts_SUnknownExtension 65253
+#define Vcl_Consts_SUnknownClipboardFormat 65254
+#define Vcl_Consts_SUnknownStreamFormat 65255
+#define Vcl_Consts_SOutOfResources 65256
+#define Vcl_Consts_SNoCanvasHandle 65257
+#define Vcl_Consts_SInvalidTextFormatFlag 65258
+#define Vcl_Consts_SInvalidFrameIndex 65259
+#define Vcl_Consts_SInvalidImageSize 65260
+#define Vcl_Consts_SInvalidImageList 65261
+#define Vcl_Consts_SReplaceImage 65262
+#define Vcl_Consts_SInsertImage 65263
+#define System_RTLConsts_SZipFileNameEmpty 65264
+#define System_RTLConsts_SZipWrongPassword 65265
+#define System_RTLConsts_SZipCryptorNotAssigned 65266
+#define System_RTLConsts_sObserverUnsupported 65267
+#define System_RTLConsts_sObserverMultipleSingleCast 65268
+#define System_RTLConsts_sObserverNoInterface 65269
+#define System_RTLConsts_sObserverNoSinglecastFound 65270
+#define System_RTLConsts_sObserverNoMulticastFound 65271
+#define System_RTLConsts_sObserverNotAvailable 65272
+#define System_RTLConsts_sMustWaitOnOneEvent 65273
+#define System_RTLConsts_sBeginInvokeDestroying 65274
+#define Vcl_Consts_SInvalidTabPosition 65275
+#define Vcl_Consts_SInvalidTabStyle 65276
+#define Vcl_Consts_SInvalidBitmap 65277
+#define Vcl_Consts_SInvalidIcon 65278
+#define Vcl_Consts_SInvalidMetafile 65279
+#define System_RTLConsts_SWindows8 65280
+#define System_RTLConsts_SWindows8Point1 65281
+#define System_RTLConsts_SWindows10 65282
+#define System_RTLConsts_SWindows11 65283
+#define System_RTLConsts_SWinRTInstanceError 65284
+#define System_RTLConsts_SZipErrorRead 65285
+#define System_RTLConsts_SZipErrorWrite 65286
+#define System_RTLConsts_SZipInvalidLocalHeader 65287
+#define System_RTLConsts_SZipInvalidCentralHeader 65288
+#define System_RTLConsts_SZipCompressionNotSup 65289
+#define System_RTLConsts_SZipOnlyDecompressionSup 65290
+#define System_RTLConsts_SZipDecompressionNotSup 65291
+#define System_RTLConsts_SZipOnlyCompressionSup 65292
+#define System_RTLConsts_SZipNotOpen 65293
+#define System_RTLConsts_SZipNoWrite 65294
+#define System_RTLConsts_SZipNoRead 65295
+#define System_RTLConsts_SVersion32 65296
+#define System_RTLConsts_SVersion64 65297
+#define System_RTLConsts_SWindows 65298
+#define System_RTLConsts_SWindowsVista 65299
+#define System_RTLConsts_SWindowsServer2008 65300
+#define System_RTLConsts_SWindows7 65301
+#define System_RTLConsts_SWindowsServer2008R2 65302
+#define System_RTLConsts_SWindows2000 65303
+#define System_RTLConsts_SWindowsXP 65304
+#define System_RTLConsts_SWindowsServer2003 65305
+#define System_RTLConsts_SWindowsServer2003R2 65306
+#define System_RTLConsts_SWindowsServer2012 65307
+#define System_RTLConsts_SWindowsServer2012R2 65308
+#define System_RTLConsts_SWindowsServer2016 65309
+#define System_RTLConsts_SWindowsServer2019 65310
+#define System_RTLConsts_SWindowsServer2022 65311
+#define System_RTLConsts_SNoTopics 65312
+#define System_RTLConsts_SNothingFound 65313
+#define System_RTLConsts_SArgumentOutOfRange 65314
+#define System_RTLConsts_SArgumentNil 65315
+#define System_RTLConsts_SGenericItemNotFound 65316
+#define System_RTLConsts_SGenericDuplicateItem 65317
+#define System_RTLConsts_SInsufficientRtti 65318
+#define System_RTLConsts_SParameterCountMismatch 65319
+#define System_RTLConsts_SNonPublicType 65320
+#define System_RTLConsts_SByRefArgMismatch 65321
+#define System_RTLConsts_SPropIsReadOnly 65322
+#define System_RTLConsts_SPropIsWriteOnly 65323
+#define System_RTLConsts_SInvalidRttiDestroy 65324
+#define System_RTLConsts_SServiceNotFound 65325
+#define System_RTLConsts_SVersionStr 65326
+#define System_RTLConsts_SSPVersionStr 65327
+#define System_RTLConsts_sInvalidStringAndObjectArrays 65328
+#define System_RTLConsts_sSameArrays 65329
+#define System_RTLConsts_sNoConstruct 65330
+#define System_RTLConsts_sInvalidTimeoutValue 65331
+#define System_RTLConsts_sSpinCountOutOfRange 65332
+#define System_RTLConsts_sTimespanTooLong 65333
+#define System_RTLConsts_sInvalidTimespanDuration 65334
+#define System_RTLConsts_sTimespanValueCannotBeNan 65335
+#define System_RTLConsts_sCannotNegateTimespan 65336
+#define System_RTLConsts_sInvalidTimespanFormat 65337
+#define System_RTLConsts_sTimespanElementTooLong 65338
+#define System_RTLConsts_SNoContext 65339
+#define System_RTLConsts_SNoContextFound 65340
+#define System_RTLConsts_SNoIndex 65341
+#define System_RTLConsts_SNoSearch 65342
+#define System_RTLConsts_SNoTableOfContents 65343
+#define System_RTLConsts_SInputBufferExceed 65344
+#define System_RTLConsts_SInvalidCharsInPath 65345
+#define System_RTLConsts_SInvalidCharsInFileName 65346
+#define System_RTLConsts_SInvalidCharsInSearchPattern 65347
+#define System_RTLConsts_SEmptyPath 65348
+#define System_RTLConsts_SEmptySearchPattern 65349
+#define System_RTLConsts_SPathTooLong 65350
+#define System_RTLConsts_SPathNotFound 65351
+#define System_RTLConsts_SPathFormatNotSupported 65352
+#define System_RTLConsts_SDriveNotFound 65353
+#define System_RTLConsts_SSpecifiedFileNotFound 65354
+#define System_RTLConsts_SFileTooLong 65355
+#define System_RTLConsts_SLocalTimeInvalid 65356
+#define System_RTLConsts_hNoFilterViewer 65357
+#define System_RTLConsts_sArgumentInvalid 65358
+#define System_RTLConsts_sArgumentOutOfRange_OffSizeInvalid 65359
+#define System_RTLConsts_SRegSetDataFailed 65360
+#define System_RTLConsts_SResNotFound 65361
+#define System_RTLConsts_SSeekNotImplemented 65362
+#define System_RTLConsts_SSortedListError 65363
+#define System_RTLConsts_SUnknownGroup 65364
+#define System_RTLConsts_SUnknownProperty 65365
+#define System_RTLConsts_SWriteError 65366
+#define System_RTLConsts_SThreadCreateError 65367
+#define System_RTLConsts_SThreadError 65368
+#define System_RTLConsts_SThreadExternalTerminate 65369
+#define System_RTLConsts_SThreadExternalWait 65370
+#define System_RTLConsts_SThreadStartError 65371
+#define System_RTLConsts_SThreadExternalCheckTerminated 65372
+#define System_RTLConsts_SThreadExternalSetReturnValue 65373
+#define System_RTLConsts_SParamIsNil 65374
+#define System_RTLConsts_SParamIsNegative 65375
+#define System_RTLConsts_SInvalidPropertyPath 65376
+#define System_RTLConsts_SInvalidPropertyType 65377
+#define System_RTLConsts_SInvalidPropertyValue 65378
+#define System_RTLConsts_SInvalidRegType 65379
+#define System_RTLConsts_SListCapacityError 65380
+#define System_RTLConsts_SListCountError 65381
+#define System_RTLConsts_SListIndexError 65382
+#define System_RTLConsts_SListIndexErrorRangeReason 65383
+#define System_RTLConsts_SListIndexErrorEmptyReason 65384
+#define System_RTLConsts_SMemoryStreamError 65385
+#define System_RTLConsts_SNoComSupport 65386
+#define System_RTLConsts_SPropertyException 65387
+#define System_RTLConsts_SReadError 65388
+#define System_RTLConsts_SReadOnlyProperty 65389
+#define System_RTLConsts_SRegCreateFailed 65390
+#define System_RTLConsts_SRegGetDataFailed 65391
+#define System_RTLConsts_SBitsIndexError 65392
+#define System_RTLConsts_SCantWriteResourceStreamError 65393
+#define System_RTLConsts_SCheckSynchronizeError 65394
+#define System_RTLConsts_SClassNotFound 65395
+#define System_RTLConsts_SDuplicateClass 65396
+#define System_RTLConsts_SDuplicateItem 65397
+#define System_RTLConsts_SDuplicateName 65398
+#define System_RTLConsts_SDuplicateString 65399
+#define System_RTLConsts_SFCreateErrorEx 65400
+#define System_RTLConsts_SFOpenErrorEx 65401
+#define System_RTLConsts_SIniFileWriteError 65402
+#define System_RTLConsts_SInvalidImage 65403
+#define System_RTLConsts_SInvalidMask 65404
+#define System_RTLConsts_SInvalidName 65405
+#define System_RTLConsts_SInvalidProperty 65406
+#define System_RTLConsts_SInvalidPropertyElement 65407
 #define System_SysConst_SLongDayNameThu 65408
 #define System_SysConst_SLongDayNameFri 65409
 #define System_SysConst_SLongDayNameSat 65410
-#define System_SysConst_SInvalidSourceArray 65411
-#define System_SysConst_SInvalidDestinationArray 65412
-#define System_SysConst_SCharIndexOutOfBounds 65413
-#define System_SysConst_SByteIndexOutOfBounds 65414
-#define System_SysConst_SInvalidCharCount 65415
-#define System_SysConst_SInvalidDestinationIndex 65416
-#define System_SysConst_SInvalidCodePage 65417
-#define System_SysConst_SInvalidEncodingName 65418
-#define System_SysConst_SNoMappingForUnicodeCharacter 65419
-#define System_SysConst_SInvalidStringBaseIndex 65420
-#define System_RTLConsts_SAncestorNotFound 65421
-#define System_RTLConsts_SAssignError 65422
-#define System_RTLConsts_SBitsIndexError 65423
+#define System_SysConst_SCannotCreateDir 65411
+#define System_SysConst_SInvalidSourceArray 65412
+#define System_SysConst_SInvalidDestinationArray 65413
+#define System_SysConst_SCharIndexOutOfBounds 65414
+#define System_SysConst_SByteIndexOutOfBounds 65415
+#define System_SysConst_SInvalidCharCount 65416
+#define System_SysConst_SInvalidDestinationIndex 65417
+#define System_SysConst_SInvalidCodePage 65418
+#define System_SysConst_SInvalidEncodingName 65419
+#define System_SysConst_SNoMappingForUnicodeCharacter 65420
+#define System_SysConst_SInvalidStringBaseIndex 65421
+#define System_RTLConsts_SAncestorNotFound 65422
+#define System_RTLConsts_SAssignError 65423
 #define System_SysConst_SLongMonthNameAug 65424
 #define System_SysConst_SLongMonthNameSep 65425
 #define System_SysConst_SLongMonthNameOct 65426
@@ -556,8 +576,16 @@
 #define System_SysConst_SAccessDenied 65535
 STRINGTABLE
 BEGIN
+	Datasnap_MidConst_SConnectionMissing,	L"Requires Connection before opening"
+	Datasnap_MidConst_SNoCircularConnection,	L"Circular reference to Connection not allowed"
+	Datasnap_MidConst_SClassNotAvailable,	L"Class not available"
+	Datasnap_MidConst_SOutOfMemory,	L"Out of memory"
 	Datasnap_MidConst_SInvalidArg,	L"Invalid argument"
 	Datasnap_MidConst_SUnableToLoadICU,	L"Unable to load Midas due to missing code page conversion library."
+	Datasnap_MidConst_SInvalidOptParamType,	L"Value cannot be stored in an optional parameter"
+	Datasnap_MidConst_SMissingDataSet,	L"Missing DataSet property"
+	Datasnap_MidConst_SConstraintFailed,	L"Record or field constraint failed."
+	Datasnap_MidConst_SField,	L"Field"
 	Datasnap_MidConst_SReadOnlyProvider,	L"Cannot apply updates to a ReadOnly provider"
 	Datasnap_MidConst_SNoKeySpecified,	L"Unable to find record.  No key specified"
 	Datasnap_MidConst_SNoDataSets,	L"Cannot resolve to dataset when using nested datasets or references"
@@ -570,10 +598,10 @@ BEGIN
 	Datasnap_MidConst_SNoDeletesAllowed,	L"Deletes are not allowed"
 	Datasnap_MidConst_SNoInsertsAllowed,	L"Inserts are not allowed"
 	Datasnap_MidConst_SCannotChangeCommandText,	L"CommandText changes are not allowed"
-	Datasnap_MidConst_SConnectionMissing,	L"Requires Connection before opening"
-	Datasnap_MidConst_SNoCircularConnection,	L"Circular reference to Connection not allowed"
-	Datasnap_MidConst_SClassNotAvailable,	L"Class not available"
-	Datasnap_MidConst_SOutOfMemory,	L"Out of memory"
+	Vcl_VDBConsts_SDeleteMultipleRecordsQuestion,	L"Delete all selected records?"
+	Vcl_VDBConsts_SDataSourceFixed,	L"Operation not allowed in a DBCtrlGrid"
+	Vcl_VDBConsts_SPropDefByLookup,	L"Property already defined by lookup field"
+	Vcl_VDBConsts_STooManyColumns,	L"Grid requested to display more than 256 columns"
 	Vcl_VDBConsts_SRemoteLogin,	L"Remote Login"
 	Datasnap_MidConst_SNoDataProvider,	L"Missing data provider or data packet"
 	Datasnap_MidConst_SInvalidDataPacket,	L"Invalid data packet"
@@ -586,10 +614,10 @@ BEGIN
 	Datasnap_MidConst_SNoParentConnection,	L"ParentConnection is not assigned"
 	Datasnap_MidConst_SInvalidResponse,	L"Invalid response"
 	Datasnap_MidConst_STooManyRecordsModified,	L"Update affected more than 1 record."
-	Datasnap_MidConst_SInvalidOptParamType,	L"Value cannot be stored in an optional parameter"
-	Datasnap_MidConst_SMissingDataSet,	L"Missing DataSet property"
-	Datasnap_MidConst_SConstraintFailed,	L"Record or field constraint failed."
-	Datasnap_MidConst_SField,	L"Field"
+	Data_DBConsts_SInvalidBcdValue,	L"%s is not a valid BCD value"
+	Data_DBConsts_SCouldNotParseTimeStamp,	L"Could not parse SQL TimeStamp string"
+	Data_DBConsts_SInvalidSqlTimeStamp,	L"Invalid SQL date/time values"
+	Vcl_VDBConsts_SFirstRecord,	L"First record"
 	Vcl_VDBConsts_SPriorRecord,	L"Prior record"
 	Vcl_VDBConsts_SNextRecord,	L"Next record"
 	Vcl_VDBConsts_SLastRecord,	L"Last record"
@@ -602,10 +630,10 @@ BEGIN
 	Vcl_VDBConsts_SApplyUpdates,	L"Apply updates"
 	Vcl_VDBConsts_SCancelUpdates,	L"Cancel updates"
 	Vcl_VDBConsts_SDeleteRecordQuestion,	L"Delete record?"
-	Vcl_VDBConsts_SDeleteMultipleRecordsQuestion,	L"Delete all selected records?"
-	Vcl_VDBConsts_SDataSourceFixed,	L"Operation not allowed in a DBCtrlGrid"
-	Vcl_VDBConsts_SPropDefByLookup,	L"Property already defined by lookup field"
-	Vcl_VDBConsts_STooManyColumns,	L"Grid requested to display more than 256 columns"
+	Data_DBConsts_SExprEmptyInList,	L"IN predicate list may not be empty"
+	Data_DBConsts_SInvalidKeywordUse,	L"Invalid use of keyword"
+	Data_DBConsts_STextFalse,	L"False"
+	Data_DBConsts_STextTrue,	L"True"
 	Data_DBConsts_SParameterNotFound,	L"Parameter '%s' not found"
 	Data_DBConsts_SInvalidVersion,	L"Unable to load bind parameters"
 	Data_DBConsts_SBadFieldType,	L"Field '%s' is of an unsupported type"
@@ -618,10 +646,10 @@ BEGIN
 	Data_DBConsts_SUnassignedVar,	L"Unassigned variant value"
 	Data_DBConsts_SRecordNotFound,	L"Record not found"
 	Data_DBConsts_SBcdOverflow,	L"BCD overflow"
-	Data_DBConsts_SInvalidBcdValue,	L"%s is not a valid BCD value"
-	Data_DBConsts_SCouldNotParseTimeStamp,	L"Could not parse SQL TimeStamp string"
-	Data_DBConsts_SInvalidSqlTimeStamp,	L"Invalid SQL date/time values"
-	Vcl_VDBConsts_SFirstRecord,	L"First record"
+	Data_DBConsts_SExprInvalidChar,	L"Invalid filter expression character: '%s'"
+	Data_DBConsts_SExprNoLParen,	L"'(' expected but %s found"
+	Data_DBConsts_SExprNoRParen,	L"')' expected but %s found"
+	Data_DBConsts_SExprNoRParenOrComma,	L"')' or ',' expected but %s found"
 	Data_DBConsts_SExprExpected,	L"Expression expected but %s found"
 	Data_DBConsts_SExprBadField,	L"Field '%s' cannot be used in a filter expression"
 	Data_DBConsts_SExprBadNullTest,	L"NULL only allowed with '=' and '<>'"
@@ -634,10 +662,10 @@ BEGIN
 	Data_DBConsts_SExprNotAgg,	L"Expression is not an aggregate expression"
 	Data_DBConsts_SExprBadConst,	L"Constant is not correct type %s"
 	Data_DBConsts_SExprNoAggFilter,	L"Aggregate expressions not allowed in filters"
-	Data_DBConsts_SExprEmptyInList,	L"IN predicate list may not be empty"
-	Data_DBConsts_SInvalidKeywordUse,	L"Invalid use of keyword"
-	Data_DBConsts_STextFalse,	L"False"
-	Data_DBConsts_STextTrue,	L"True"
+	Data_DBConsts_SNoIndexForFields,	L"No index for fields '%s'"
+	Data_DBConsts_SIndexNotFound,	L"Index '%s' not found"
+	Data_DBConsts_SDBDuplicateName,	L"Duplicate name '%s' in %s"
+	Data_DBConsts_SCircularDataLink,	L"Circular datalinks are not allowed"
 	Data_DBConsts_SLookupInfoError,	L"Lookup information for field '%s' is incomplete"
 	Data_DBConsts_SDataSourceChange,	L"DataSource cannot be changed"
 	Data_DBConsts_SNoNestedMasterSource,	L"Nested datasets cannot have a MasterSource"
@@ -650,10 +678,10 @@ BEGIN
 	Data_DBConsts_SExprTermination,	L"Filter expression incorrectly terminated"
 	Data_DBConsts_SExprNameError,	L"Unterminated field name"
 	Data_DBConsts_SExprStringError,	L"Unterminated string constant"
-	Data_DBConsts_SExprInvalidChar,	L"Invalid filter expression character: '%s'"
-	Data_DBConsts_SExprNoLParen,	L"'(' expected but %s found"
-	Data_DBConsts_SExprNoRParen,	L"')' expected but %s found"
-	Data_DBConsts_SExprNoRParenOrComma,	L"')' or ',' expected but %s found"
+	Data_DBConsts_SInvalidIntegerValue,	L"'%s' is not a valid integer value for field '%s'"
+	Data_DBConsts_SInvalidBoolValue,	L"'%s' is not a valid boolean value for field '%s'"
+	Data_DBConsts_SInvalidFloatValue,	L"'%s' is not a valid floating point value for field '%s'"
+	Data_DBConsts_SFieldTypeMismatch,	L"Type mismatch for field '%s', expecting: %s actual: %s"
 	Data_DBConsts_SFieldSizeMismatch,	L"Size mismatch for field '%s', expecting: %d actual: %d"
 	Data_DBConsts_SInvalidVarByteArray,	L"Invalid variant type or size for field '%s'"
 	Data_DBConsts_SFieldOutOfRange,	L"Value of field '%s' is out of range"
@@ -666,10 +694,10 @@ BEGIN
 	Data_DBConsts_SNotIndexField,	L"Field '%s' is not indexed and cannot be modified"
 	Data_DBConsts_SIndexFieldMissing,	L"Cannot access index field '%s'"
 	Data_DBConsts_SDuplicateIndexName,	L"Duplicate index name '%s'"
-	Data_DBConsts_SNoIndexForFields,	L"No index for fields '%s'"
-	Data_DBConsts_SIndexNotFound,	L"Index '%s' not found"
-	Data_DBConsts_SDBDuplicateName,	L"Duplicate name '%s' in %s"
-	Data_DBConsts_SCircularDataLink,	L"Circular datalinks are not allowed"
+	Vcl_ComStrs_sDateTimeMin,	L"Date is less than minimum of %s"
+	Vcl_ComStrs_sNeedAllowNone,	L"You must be in ShowCheckbox mode to set to this date"
+	Vcl_ComStrs_sFailSetCalDateTime,	L"Failed to set calendar date or time"
+	Vcl_ComStrs_sFailSetCalMaxSelRange,	L"Failed to set maximum selection range"
 	Vcl_ComStrs_sFailSetCalMinMaxRange,	L"Failed to set calendar min/max range"
 	Vcl_ComStrs_sFailsetCalSelRange,	L"Failed to set calendar selected range"
 	Data_DBConsts_SInvalidFieldSize,	L"Invalid field size"
@@ -682,10 +710,10 @@ BEGIN
 	Data_DBConsts_SFieldValueError,	L"Invalid value for field '%s'"
 	Data_DBConsts_SFieldRangeError,	L"%g is not a valid value for field '%s'. The allowed range is %g to %g"
 	Data_DBConsts_SBcdFieldRangeError,	L"%s is not a valid value for field '%s'. The allowed range is %s to %s"
-	Data_DBConsts_SInvalidIntegerValue,	L"'%s' is not a valid integer value for field '%s'"
-	Data_DBConsts_SInvalidBoolValue,	L"'%s' is not a valid boolean value for field '%s'"
-	Data_DBConsts_SInvalidFloatValue,	L"'%s' is not a valid floating point value for field '%s'"
-	Data_DBConsts_SFieldTypeMismatch,	L"Type mismatch for field '%s', expecting: %s actual: %s"
+	Vcl_Consts_SStyleNotRegisteredNoName,	L"Style not registered"
+	Vcl_Consts_sBeginInvokeNoHandle,	L"Cannot call BeginInvoke on a control with no parent or window handle"
+	System_Win_ComConst_SOleError,	L"OLE error %.8x"
+	System_Win_ComConst_SNoMethod,	L"Method '%s' not supported by automation object"
 	System_Win_ComConst_SVarNotObject,	L"Variant does not reference an automation object"
 	System_Win_ComConst_STooManyParams,	L"Dispatch methods do not support more than 64 parameters"
 	Vcl_ComStrs_sTabFailClear,	L"Failed to clear tab control"
@@ -698,10 +726,10 @@ BEGIN
 	Vcl_ComStrs_sPageIndexError,	L"%d is an invalid PageIndex value.  PageIndex must be between 0 and %d"
 	Vcl_ComStrs_sInvalidComCtl32,	L"This control requires version 4.70 or greater of COMCTL32.DLL"
 	Vcl_ComStrs_sDateTimeMax,	L"Date exceeds maximum of %s"
-	Vcl_ComStrs_sDateTimeMin,	L"Date is less than minimum of %s"
-	Vcl_ComStrs_sNeedAllowNone,	L"You must be in ShowCheckbox mode to set to this date"
-	Vcl_ComStrs_sFailSetCalDateTime,	L"Failed to set calendar date or time"
-	Vcl_ComStrs_sFailSetCalMaxSelRange,	L"Failed to set maximum selection range"
+	Vcl_Consts_STaskDlgRadioButtonCaption,	L"RadioButton%d"
+	Vcl_Consts_SInvalidTaskDlgButtonCaption,	L"Caption cannot be empty"
+	Vcl_Consts_SStyleLoadError,	L"Unable to load style '%s'"
+	Vcl_Consts_SStyleLoadErrors,	L"Unable to load styles: %s"
 	Vcl_Consts_SStyleRegisterError,	L"Style '%s' already registered"
 	Vcl_Consts_SStyleClassRegisterError,	L"Style class '%s' already registered"
 	Vcl_Consts_SStyleNotFound,	L"Style '%s' not found"
@@ -714,10 +742,10 @@ BEGIN
 	Vcl_Consts_SStyleFeatureNotSupported,	L"Feature not supported by this style"
 	Vcl_Consts_SStyleNotRegistered,	L"Style '%s' is not registered"
 	Vcl_Consts_SStyleUnregisterError,	L"Cannot unregister the system style"
-	Vcl_Consts_SStyleNotRegisteredNoName,	L"Style not registered"
-	Vcl_Consts_sBeginInvokeNoHandle,	L"Cannot call BeginInvoke on a control with no parent or window handle"
-	System_Win_ComConst_SOleError,	L"OLE error %.8x"
-	System_Win_ComConst_SNoMethod,	L"Method '%s' not supported by automation object"
+	Vcl_Consts_SDockTreeRemoveError,	L"Error removing control from dock tree"
+	Vcl_Consts_SDockZoneNotFound,	L" - Dock zone not found"
+	Vcl_Consts_SDockZoneHasNoCtl,	L" - Dock zone has no control"
+	Vcl_Consts_SDockZoneVersionConflict,	L"Error loading dock zone from the stream. Expecting version %d, but found %d."
 	Vcl_Consts_SPromptArrayTooShort,	L"Length of value array must be >= length of prompt array"
 	Vcl_Consts_SPromptArrayEmpty,	L"Prompt array must not be empty"
 	Vcl_Consts_SUsername,	L"&Username"
@@ -730,10 +758,10 @@ BEGIN
 	Vcl_Consts_SPageControlNotSet,	L"PageControl must first be assigned"
 	Vcl_Consts_SWindowsVistaRequired,	L"%s requires Windows Vista or later"
 	Vcl_Consts_STaskDlgButtonCaption,	L"Button%d"
-	Vcl_Consts_STaskDlgRadioButtonCaption,	L"RadioButton%d"
-	Vcl_Consts_SInvalidTaskDlgButtonCaption,	L"Caption cannot be empty"
-	Vcl_Consts_SStyleLoadError,	L"Unable to load style '%s'"
-	Vcl_Consts_SStyleLoadErrors,	L"Unable to load styles: %s"
+	Vcl_Consts_SmkcIns,	L"Ins"
+	Vcl_Consts_SmkcDel,	L"Del"
+	Vcl_Consts_SmkcShift,	L"Shift+"
+	Vcl_Consts_SmkcCtrl,	L"Ctrl+"
 	Vcl_Consts_SmkcAlt,	L"Alt+"
 	Vcl_Consts_SOutOfRange,	L"Value must be between %d and %d"
 	Vcl_Consts_sAllFilter,	L"All"
@@ -746,10 +774,10 @@ BEGIN
 	Vcl_Consts_SNoDefaultPrinter,	L"There is no default printer currently selected"
 	Vcl_Consts_SDuplicateMenus,	L"Menu '%s' is already being used by another form"
 	Vcl_Consts_SDockedCtlNeedsName,	L"Docked control must have a name"
-	Vcl_Consts_SDockTreeRemoveError,	L"Error removing control from dock tree"
-	Vcl_Consts_SDockZoneNotFound,	L" - Dock zone not found"
-	Vcl_Consts_SDockZoneHasNoCtl,	L" - Dock zone has no control"
-	Vcl_Consts_SDockZoneVersionConflict,	L"Error loading dock zone from the stream. Expecting version %d, but found %d."
+	Vcl_Consts_SMsgDlgNoToAll,	L"N&o to All"
+	Vcl_Consts_SMsgDlgYesToAll,	L"Yes to &All"
+	Vcl_Consts_SMsgDlgClose,	L"&Close"
+	Vcl_Consts_SmkcBkSp,	L"BkSp"
 	Vcl_Consts_SmkcTab,	L"Tab"
 	Vcl_Consts_SmkcEsc,	L"Esc"
 	Vcl_Consts_SmkcEnter,	L"Enter"
@@ -762,10 +790,10 @@ BEGIN
 	Vcl_Consts_SmkcUp,	L"Up"
 	Vcl_Consts_SmkcRight,	L"Right"
 	Vcl_Consts_SmkcDown,	L"Down"
-	Vcl_Consts_SmkcIns,	L"Ins"
-	Vcl_Consts_SmkcDel,	L"Del"
-	Vcl_Consts_SmkcShift,	L"Shift+"
-	Vcl_Consts_SmkcCtrl,	L"Ctrl+"
+	Vcl_Consts_SFixedRowTooBig,	L"Fixed row count must be less than row count"
+	Vcl_Consts_SMaskErr,	L"Invalid input value"
+	Vcl_Consts_SMaskEditErr,	L"Invalid input value.  Use escape key to abandon changes"
+	Vcl_Consts_SMsgDlgWarning,	L"Warning"
 	Vcl_Consts_SMsgDlgError,	L"Error"
 	Vcl_Consts_SMsgDlgInformation,	L"Information"
 	Vcl_Consts_SMsgDlgConfirm,	L"Confirm"
@@ -778,10 +806,10 @@ BEGIN
 	Vcl_Consts_SMsgDlgRetry,	L"&Retry"
 	Vcl_Consts_SMsgDlgIgnore,	L"&Ignore"
 	Vcl_Consts_SMsgDlgAll,	L"&All"
-	Vcl_Consts_SMsgDlgNoToAll,	L"N&o to All"
-	Vcl_Consts_SMsgDlgYesToAll,	L"Yes to &All"
-	Vcl_Consts_SMsgDlgClose,	L"&Close"
-	Vcl_Consts_SmkcBkSp,	L"BkSp"
+	Vcl_Consts_SHelpButton,	L"&Help"
+	Vcl_Consts_SCloseButton,	L"&Close"
+	Vcl_Consts_SIgnoreButton,	L"&Ignore"
+	Vcl_Consts_SRetryButton,	L"&Retry"
 	Vcl_Consts_SAbortButton,	L"Abort"
 	Vcl_Consts_SAllButton,	L"&All"
 	Vcl_Consts_SCannotDragForm,	L"Cannot drag a form"
@@ -794,10 +822,10 @@ BEGIN
 	Vcl_Consts_STooManyDeleted,	L"Too many rows or columns deleted"
 	Vcl_Consts_SIndexOutOfRange,	L"Grid index out of range"
 	Vcl_Consts_SFixedColTooBig,	L"Fixed column count must be less than column count"
-	Vcl_Consts_SFixedRowTooBig,	L"Fixed row count must be less than row count"
-	Vcl_Consts_SMaskErr,	L"Invalid input value"
-	Vcl_Consts_SMaskEditErr,	L"Invalid input value.  Use escape key to abandon changes"
-	Vcl_Consts_SMsgDlgWarning,	L"Warning"
+	Vcl_Consts_SMenuNotFound,	L"Sub-menu is not in menu"
+	Vcl_Consts_SNoTimers,	L"Not enough timers available"
+	Vcl_Consts_SNotPrinting,	L"Printer is not currently printing"
+	Vcl_Consts_SPrinting,	L"Printing in progress"
 	Vcl_Consts_SPrinterIndexError,	L"Printer index out of range"
 	Vcl_Consts_SInvalidPrinter,	L"Printer selected is not valid"
 	Vcl_Consts_SDeviceOnPort,	L"%s on %s"
@@ -810,10 +838,10 @@ BEGIN
 	Vcl_Consts_SCancelButton,	L"Cancel"
 	Vcl_Consts_SYesButton,	L"&Yes"
 	Vcl_Consts_SNoButton,	L"&No"
-	Vcl_Consts_SHelpButton,	L"&Help"
-	Vcl_Consts_SCloseButton,	L"&Close"
-	Vcl_Consts_SIgnoreButton,	L"&Ignore"
-	Vcl_Consts_SRetryButton,	L"&Retry"
+	Vcl_Consts_SImageIndexError,	L"Invalid ImageList Index"
+	Vcl_Consts_SImageReadFail,	L"Failed to read ImageList data from stream"
+	Vcl_Consts_SImageWriteFail,	L"Failed to write ImageList data to stream"
+	Vcl_Consts_SWindowDCError,	L"Error creating window device context"
 	Vcl_Consts_SWindowClass,	L"Error creating window class"
 	Vcl_Consts_SCannotFocus,	L"Cannot focus a disabled or invisible window"
 	Vcl_Consts_SParentRequired,	L"Control '%s' has no parent window"
@@ -826,10 +854,10 @@ BEGIN
 	Vcl_Consts_SPropertyOutOfRange,	L"%s property out of range"
 	Vcl_Consts_SMenuIndexError,	L"Menu index out of range"
 	Vcl_Consts_SMenuReinserted,	L"Menu inserted twice"
-	Vcl_Consts_SMenuNotFound,	L"Sub-menu is not in menu"
-	Vcl_Consts_SNoTimers,	L"Not enough timers available"
-	Vcl_Consts_SNotPrinting,	L"Printer is not currently printing"
-	Vcl_Consts_SPrinting,	L"Printing in progress"
+	Vcl_Consts_SInvalidPixelFormat,	L"Invalid pixel format"
+	Vcl_Consts_SInvalidImage,	L"Invalid image"
+	Vcl_Consts_SScanLine,	L"Scan line index out of range"
+	Vcl_Consts_SChangeIconSize,	L"Cannot change the size of an icon"
 	Vcl_Consts_SChangeWicSize,	L"Cannot change the size of a WIC Image"
 	Vcl_Consts_SUnknownExtension,	L"Unknown picture file extension (.%s)"
 	Vcl_Consts_SUnknownClipboardFormat,	L"Unsupported clipboard format"
@@ -842,10 +870,10 @@ BEGIN
 	Vcl_Consts_SInvalidImageList,	L"Invalid ImageList"
 	Vcl_Consts_SReplaceImage,	L"Unable to Replace Image"
 	Vcl_Consts_SInsertImage,	L"Unable to Insert Image"
-	Vcl_Consts_SImageIndexError,	L"Invalid ImageList Index"
-	Vcl_Consts_SImageReadFail,	L"Failed to read ImageList data from stream"
-	Vcl_Consts_SImageWriteFail,	L"Failed to write ImageList data to stream"
-	Vcl_Consts_SWindowDCError,	L"Error creating window device context"
+	System_RTLConsts_SZipFileNameEmpty,	L"File name must not be empty"
+	System_RTLConsts_SZipWrongPassword,	L"Wrong password or corrupted file"
+	System_RTLConsts_SZipCryptorNotAssigned,	L"Zip file cryptor is not specified"
+	System_RTLConsts_sObserverUnsupported,	L"Observer is not supported"
 	System_RTLConsts_sObserverMultipleSingleCast,	L"Cannot have multiple single cast observers added to the observers collection"
 	System_RTLConsts_sObserverNoInterface,	L"The object does not implement the observer interface"
 	System_RTLConsts_sObserverNoSinglecastFound,	L"No single cast observer with ID %d was added to the observer collection"
@@ -858,10 +886,28 @@ BEGIN
 	Vcl_Consts_SInvalidBitmap,	L"Bitmap image is not valid"
 	Vcl_Consts_SInvalidIcon,	L"Icon image is not valid"
 	Vcl_Consts_SInvalidMetafile,	L"Metafile is not valid"
-	Vcl_Consts_SInvalidPixelFormat,	L"Invalid pixel format"
-	Vcl_Consts_SInvalidImage,	L"Invalid image"
-	Vcl_Consts_SScanLine,	L"Scan line index out of range"
-	Vcl_Consts_SChangeIconSize,	L"Cannot change the size of an icon"
+	System_RTLConsts_SWindows8,	L"Windows 8"
+	System_RTLConsts_SWindows8Point1,	L"Windows 8.1"
+	System_RTLConsts_SWindows10,	L"Windows 10"
+	System_RTLConsts_SWindows11,	L"Windows 11"
+	System_RTLConsts_SWinRTInstanceError,	L"Cannot create instance of class %s"
+	System_RTLConsts_SZipErrorRead,	L"Error reading zip file"
+	System_RTLConsts_SZipErrorWrite,	L"Error writing zip file"
+	System_RTLConsts_SZipInvalidLocalHeader,	L"Invalid Zip Local Header signature"
+	System_RTLConsts_SZipInvalidCentralHeader,	L"Invalid Zip Central Header signature"
+	System_RTLConsts_SZipCompressionNotSup,	L"Support for compression method not registered: %s"
+	System_RTLConsts_SZipOnlyDecompressionSup,	L". Only decompression is supported"
+	System_RTLConsts_SZipDecompressionNotSup,	L"Support for decompression method not registered: %s"
+	System_RTLConsts_SZipOnlyCompressionSup,	L". Only compression is supported"
+	System_RTLConsts_SZipNotOpen,	L"File must be open"
+	System_RTLConsts_SZipNoWrite,	L"File must be open for writing"
+	System_RTLConsts_SZipNoRead,	L"File must be open for reading"
+	System_RTLConsts_SVersion32,	L"32-bit Edition"
+	System_RTLConsts_SVersion64,	L"64-bit Edition"
+	System_RTLConsts_SWindows,	L"Windows"
+	System_RTLConsts_SWindowsVista,	L"Windows Vista"
+	System_RTLConsts_SWindowsServer2008,	L"Windows Server 2008"
+	System_RTLConsts_SWindows7,	L"Windows 7"
 	System_RTLConsts_SWindowsServer2008R2,	L"Windows Server 2008 R2"
 	System_RTLConsts_SWindows2000,	L"Windows 2000"
 	System_RTLConsts_SWindowsXP,	L"Windows XP"
@@ -872,12 +918,12 @@ BEGIN
 	System_RTLConsts_SWindowsServer2016,	L"Windows Server 2016"
 	System_RTLConsts_SWindowsServer2019,	L"Windows Server 2019"
 	System_RTLConsts_SWindowsServer2022,	L"Windows Server 2022"
-	System_RTLConsts_SWindows8,	L"Windows 8"
-	System_RTLConsts_SWindows8Point1,	L"Windows 8.1"
-	System_RTLConsts_SWindows10,	L"Windows 10"
-	System_RTLConsts_SWindows11,	L"Windows 11"
-	System_RTLConsts_SWinRTInstanceError,	L"Cannot create instance of class %s"
-	System_RTLConsts_sObserverUnsupported,	L"Observer is not supported"
+	System_RTLConsts_SNoTopics,	L"No topic-based help system installed"
+	System_RTLConsts_SNothingFound,	L"No help found for %s"
+	System_RTLConsts_SArgumentOutOfRange,	L"Argument out of range"
+	System_RTLConsts_SArgumentNil,	L"Argument must not be nil"
+	System_RTLConsts_SGenericItemNotFound,	L"Item not found"
+	System_RTLConsts_SGenericDuplicateItem,	L"Duplicates not allowed"
 	System_RTLConsts_SInsufficientRtti,	L"Insufficient RTTI available to support this operation"
 	System_RTLConsts_SParameterCountMismatch,	L"Parameter count mismatch"
 	System_RTLConsts_SNonPublicType,	L"Type '%s' is not declared in the interface section of a unit"
@@ -888,12 +934,12 @@ BEGIN
 	System_RTLConsts_SServiceNotFound,	L"Specified Login Credential Service not found"
 	System_RTLConsts_SVersionStr,	L"%s (Version %d.%d, Build %d, %5:s)"
 	System_RTLConsts_SSPVersionStr,	L"%s Service Pack %4:d (Version %1:d.%2:d, Build %3:d, %5:s)"
-	System_RTLConsts_SVersion32,	L"32-bit Edition"
-	System_RTLConsts_SVersion64,	L"64-bit Edition"
-	System_RTLConsts_SWindows,	L"Windows"
-	System_RTLConsts_SWindowsVista,	L"Windows Vista"
-	System_RTLConsts_SWindowsServer2008,	L"Windows Server 2008"
-	System_RTLConsts_SWindows7,	L"Windows 7"
+	System_RTLConsts_sInvalidStringAndObjectArrays,	L"Length of Strings and Objects arrays must be equal"
+	System_RTLConsts_sSameArrays,	L"Source and Destination arrays must not be the same"
+	System_RTLConsts_sNoConstruct,	L"Class %s is not intended to be constructed"
+	System_RTLConsts_sInvalidTimeoutValue,	L"Invalid Timeout value: %s"
+	System_RTLConsts_sSpinCountOutOfRange,	L"SpinCount out of range. Must be between 0 and %d"
+	System_RTLConsts_sTimespanTooLong,	L"Timespan too long"
 	System_RTLConsts_sInvalidTimespanDuration,	L"The duration cannot be returned because the absolute value exceeds the value of TTimeSpan.MaxValue"
 	System_RTLConsts_sTimespanValueCannotBeNan,	L"Value cannot be NaN"
 	System_RTLConsts_sCannotNegateTimespan,	L"Negating the minimum value of a Timespan is invalid"
@@ -904,28 +950,24 @@ BEGIN
 	System_RTLConsts_SNoIndex,	L"Unable to open Index"
 	System_RTLConsts_SNoSearch,	L"Unable to open Search"
 	System_RTLConsts_SNoTableOfContents,	L"Unable to find a Table of Contents"
-	System_RTLConsts_SNoTopics,	L"No topic-based help system installed"
-	System_RTLConsts_SNothingFound,	L"No help found for %s"
-	System_RTLConsts_SArgumentOutOfRange,	L"Argument out of range"
-	System_RTLConsts_SArgumentNil,	L"Argument must not be nil"
-	System_RTLConsts_SGenericItemNotFound,	L"Item not found"
-	System_RTLConsts_SGenericDuplicateItem,	L"Duplicates not allowed"
+	System_RTLConsts_SInputBufferExceed,	L"Input buffer exceeded for %s = %d, %s = %d"
+	System_RTLConsts_SInvalidCharsInPath,	L"Invalid characters in path"
 	System_RTLConsts_SInvalidCharsInFileName,	L"Invalid characters in file name"
+	System_RTLConsts_SInvalidCharsInSearchPattern,	L"Invalid characters in search pattern"
 	System_RTLConsts_SEmptyPath,	L"Path is empty"
+	System_RTLConsts_SEmptySearchPattern,	L"Search pattern is empty"
 	System_RTLConsts_SPathTooLong,	L"The specified path is too long"
 	System_RTLConsts_SPathNotFound,	L"The specified path was not found"
 	System_RTLConsts_SPathFormatNotSupported,	L"The path format is not supported"
+	System_RTLConsts_SDriveNotFound,	L"The drive cannot be found"
 	System_RTLConsts_SSpecifiedFileNotFound,	L"The specified file was not found"
 	System_RTLConsts_SFileTooLong,	L"The specified file is too long."
 	System_RTLConsts_SLocalTimeInvalid,	L"The given \"%s\" local time is invalid (situated within the missing period prior to DST)."
 	System_RTLConsts_hNoFilterViewer,	L"No help viewer that supports filters"
 	System_RTLConsts_sArgumentInvalid,	L"Invalid argument"
-	System_RTLConsts_sInvalidStringAndObjectArrays,	L"Length of Strings and Objects arrays must be equal"
-	System_RTLConsts_sSameArrays,	L"Source and Destination arrays must not be the same"
-	System_RTLConsts_sNoConstruct,	L"Class %s is not intended to be constructed"
-	System_RTLConsts_sInvalidTimeoutValue,	L"Invalid Timeout value: %s"
-	System_RTLConsts_sSpinCountOutOfRange,	L"SpinCount out of range. Must be between 0 and %d"
-	System_RTLConsts_sTimespanTooLong,	L"Timespan too long"
+	System_RTLConsts_sArgumentOutOfRange_OffSizeInvalid,	L"Offset and size are invalid for the given stream"
+	System_RTLConsts_SRegSetDataFailed,	L"Failed to set data for '%s'"
+	System_RTLConsts_SResNotFound,	L"Resource %s not found"
 	System_RTLConsts_SSeekNotImplemented,	L"%s.Seek not implemented"
 	System_RTLConsts_SSortedListError,	L"Operation not allowed on sorted list"
 	System_RTLConsts_SUnknownGroup,	L"%s not in a class registration group"
@@ -940,8 +982,8 @@ BEGIN
 	System_RTLConsts_SThreadExternalSetReturnValue,	L"Cannot call SetReturnValue on an externally create thread"
 	System_RTLConsts_SParamIsNil,	L"Parameter %s cannot be nil"
 	System_RTLConsts_SParamIsNegative,	L"Parameter %s cannot be a negative value"
-	System_RTLConsts_SInputBufferExceed,	L"Input buffer exceeded for %s = %d, %s = %d"
-	System_RTLConsts_SInvalidCharsInPath,	L"Invalid characters in path"
+	System_RTLConsts_SInvalidPropertyPath,	L"Invalid property path"
+	System_RTLConsts_SInvalidPropertyType,	L"Invalid property type: %s"
 	System_RTLConsts_SInvalidPropertyValue,	L"Invalid property value"
 	System_RTLConsts_SInvalidRegType,	L"Invalid data type for '%s'"
 	System_RTLConsts_SListCapacityError,	L"List capacity out of bounds (%d)"
@@ -956,8 +998,7 @@ BEGIN
 	System_RTLConsts_SReadOnlyProperty,	L"Property is read-only"
 	System_RTLConsts_SRegCreateFailed,	L"Failed to create key %s"
 	System_RTLConsts_SRegGetDataFailed,	L"Failed to get data for '%s'"
-	System_RTLConsts_SRegSetDataFailed,	L"Failed to set data for '%s'"
-	System_RTLConsts_SResNotFound,	L"Resource %s not found"
+	System_RTLConsts_SBitsIndexError,	L"Bits index out of range"
 	System_RTLConsts_SCantWriteResourceStreamError,	L"Can't write to a read-only resource stream"
 	System_RTLConsts_SCheckSynchronizeError,	L"CheckSynchronize called from thread $%x, which is NOT the main thread"
 	System_RTLConsts_SClassNotFound,	L"Class %s not found"
@@ -969,14 +1010,14 @@ BEGIN
 	System_RTLConsts_SFOpenErrorEx,	L"Cannot open file \"%s\". %s"
 	System_RTLConsts_SIniFileWriteError,	L"Unable to write to %s"
 	System_RTLConsts_SInvalidImage,	L"Invalid stream format"
+	System_RTLConsts_SInvalidMask,	L"'%s' is an invalid mask at (%d)"
 	System_RTLConsts_SInvalidName,	L"''%s'' is not a valid component name"
 	System_RTLConsts_SInvalidProperty,	L"Invalid property value"
 	System_RTLConsts_SInvalidPropertyElement,	L"Invalid property element: %s"
-	System_RTLConsts_SInvalidPropertyPath,	L"Invalid property path"
-	System_RTLConsts_SInvalidPropertyType,	L"Invalid property type: %s"
 	System_SysConst_SLongDayNameThu,	L"Thursday"
 	System_SysConst_SLongDayNameFri,	L"Friday"
 	System_SysConst_SLongDayNameSat,	L"Saturday"
+	System_SysConst_SCannotCreateDir,	L"Unable to create directory"
 	System_SysConst_SInvalidSourceArray,	L"Invalid source array"
 	System_SysConst_SInvalidDestinationArray,	L"Invalid destination array"
 	System_SysConst_SCharIndexOutOfBounds,	L"Character index out of bounds (%d)"
@@ -989,7 +1030,6 @@ BEGIN
 	System_SysConst_SInvalidStringBaseIndex,	L"Invalid StringBaseIndex"
 	System_RTLConsts_SAncestorNotFound,	L"Ancestor for '%s' not found"
 	System_RTLConsts_SAssignError,	L"Cannot assign a %s to a %s"
-	System_RTLConsts_SBitsIndexError,	L"Bits index out of range"
 	System_SysConst_SLongMonthNameAug,	L"August"
 	System_SysConst_SLongMonthNameSep,	L"September"
 	System_SysConst_SLongMonthNameOct,	L"October"

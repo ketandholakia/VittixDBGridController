@@ -32,7 +32,8 @@ requires
   vcl,
   dbrtl,
   vcldb,
-  vclx;
+  vclx,
+  dsnap;
 
 contains
   Vittix.DBGrid in '..\source\Vittix.DBGrid.pas',

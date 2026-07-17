@@ -10,7 +10,11 @@ uses
   System.Generics.Defaults,
   Data.DB,
   Vcl.DBGrids,
+  Datasnap.DBClient,
   Vittix.DBGrid.ColumnInfo;
+
+const
+  TEMP_CLIENT_DATASET_INDEX = '__VITTIX_SORT__';
 
 type
   TFieldValidationEvent = procedure(const FieldName: string; Found: Boolean) of object;
@@ -28,6 +32,7 @@ type
 
     function DataSetSupportsIndexFieldNames: Boolean;
     function BuildIndexFieldNames: string;
+    procedure ApplyClientDataSetSorting;
     procedure NormalizeSortIndices;
 
   public
@@ -156,6 +161,13 @@ var
   IndexFields: string;
 begin
   if not Assigned(FDataSet) or not FDataSet.Active then Exit;
+
+  if FDataSet is TCustomClientDataSet then
+  begin
+    ApplyClientDataSetSorting;
+    Exit;
+  end;
+
   if not DataSetSupportsIndexFieldNames then Exit;
 
   IndexFields := BuildIndexFieldNames;
@@ -166,6 +178,88 @@ begin
     SetPropValue(FDataSet, 'IndexFieldNames', IndexFields);
   finally
     FDataSet.EnableControls;
+  end;
+end;
+
+procedure TVittixDBGridSortEngine.ApplyClientDataSetSorting;
+var
+  Sorted: TList<TVittixDBGridColumnInfo>;
+  Fields: TStringList;
+  DescFields: TStringList;
+  ClientDataSet: TCustomClientDataSet;
+  Info: TVittixDBGridColumnInfo;
+  I: Integer;
+begin
+  ClientDataSet := TCustomClientDataSet(FDataSet);
+  Sorted := TList<TVittixDBGridColumnInfo>.Create;
+  Fields := TStringList.Create;
+  DescFields := TStringList.Create;
+  try
+    Fields.Delimiter := ';';
+    Fields.StrictDelimiter := True;
+    DescFields.Delimiter := ';';
+    DescFields.StrictDelimiter := True;
+
+    for I := 0 to FColumns.Count - 1 do
+      if FColumns[I].SortOrder <> vsoNone then
+        Sorted.Add(FColumns[I]);
+
+    if Sorted.Count = 0 then
+    begin
+      SetPropValue(ClientDataSet, 'IndexName', '');
+      ClientDataSet.IndexFieldNames := '';
+      Exit;
+    end;
+
+    Sorted.Sort(
+      TComparer<TVittixDBGridColumnInfo>.Construct(
+        function(const L, R: TVittixDBGridColumnInfo): Integer
+        begin
+          Result := L.SortIndex - R.SortIndex;
+        end
+      )
+    );
+
+    for Info in Sorted do
+    begin
+      if FDataSet.FindField(Info.FieldName) = nil then
+      begin
+        if Assigned(FOnFieldValidation) then
+          FOnFieldValidation(Info.FieldName, False);
+        Continue;
+      end;
+
+      Fields.Add(Info.FieldName);
+      if Info.SortOrder = vsoDesc then
+        DescFields.Add(Info.FieldName);
+    end;
+
+    ClientDataSet.DisableControls;
+    try
+      SetPropValue(ClientDataSet, 'IndexName', '');
+      try
+        ClientDataSet.DeleteIndex(TEMP_CLIENT_DATASET_INDEX);
+      except
+        // Ignore if the temporary index does not exist yet.
+      end;
+
+      if Fields.Count = 0 then
+        Exit;
+
+      ClientDataSet.AddIndex(
+        TEMP_CLIENT_DATASET_INDEX,
+        Fields.DelimitedText,
+        [],
+        DescFields.DelimitedText
+      );
+      SetPropValue(ClientDataSet, 'IndexName', TEMP_CLIENT_DATASET_INDEX);
+    finally
+      ClientDataSet.EnableControls;
+    end;
+  finally
+    DescFields.Free;
+    Fields.Free;
+    Sorted.Free;
   end;
 end;
 
@@ -183,7 +277,22 @@ begin
   if not Assigned(FDataSet) or not FDataSet.Active then Exit;
 
   // Clear dataset sorting
-  if DataSetSupportsIndexFieldNames then
+  if FDataSet is TCustomClientDataSet then
+  begin
+    TCustomClientDataSet(FDataSet).DisableControls;
+    try
+      SetPropValue(FDataSet, 'IndexName', '');
+      TCustomClientDataSet(FDataSet).IndexFieldNames := '';
+      try
+        TCustomClientDataSet(FDataSet).DeleteIndex(TEMP_CLIENT_DATASET_INDEX);
+      except
+        // Ignore if the temporary index was never created.
+      end;
+    finally
+      TCustomClientDataSet(FDataSet).EnableControls;
+    end;
+  end
+  else if DataSetSupportsIndexFieldNames then
   begin
     FDataSet.DisableControls;
     try
