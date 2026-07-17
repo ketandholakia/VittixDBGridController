@@ -227,7 +227,9 @@ if (-not $Repository) {
 }
 
 Ensure-CleanWorktree
-Ensure-TagDoesNotExist -Tag $tag
+if (-not $SkipTagPush) {
+  Ensure-TagDoesNotExist -Tag $tag
+}
 
 if (-not $SkipInstallerBuild) {
   & powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "build-installer.ps1") -Config $Config -Platform $Platform
