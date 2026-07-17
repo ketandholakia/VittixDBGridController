@@ -51,8 +51,8 @@ Name: "demo"; Description: "Feature demo project"; Types: full custom
 Name: "delphi12"; Description: "{#DelphiDisplayName} integration files"; Types: full custom
 
 [Tasks]
-Name: "addlibrarypath"; Description: "Add {app}\source to Delphi 12 Win32 library path"; Components: delphi12; Types: full custom; Flags: checkedonce
-Name: "registerdesignpkg"; Description: "Register design-time package in Delphi 12"; Components: delphi12; Types: full custom; Flags: checkedonce
+Name: "addlibrarypath"; Description: "Add {app}\source to Delphi 12 Win32 library path"; Components: delphi12; Flags: checkedonce
+Name: "registerdesignpkg"; Description: "Register design-time package in Delphi 12"; Components: delphi12; Flags: checkedonce
 
 [Dirs]
 Name: "{app}\source"; Components: core
@@ -106,22 +106,61 @@ begin
   Result := Lowercase(RemoveTrailingBackslash(ExpandConstant(Value)));
 end;
 
+function FindCharFrom(const Value: string; Ch: Char; StartPos: Integer): Integer;
+var
+  I: Integer;
+begin
+  Result := 0;
+  for I := StartPos to Length(Value) do
+    if Value[I] = Ch then
+    begin
+      Result := I;
+      Exit;
+    end;
+end;
+
+function NextPathToken(const PathList: string; var StartPos: Integer): string;
+var
+  DelimPos: Integer;
+begin
+  if StartPos > Length(PathList) then
+  begin
+    Result := '';
+    Exit;
+  end;
+
+  DelimPos := FindCharFrom(PathList, ';', StartPos);
+  if DelimPos = 0 then
+  begin
+    Result := Copy(PathList, StartPos, MaxInt);
+    StartPos := Length(PathList) + 1;
+  end
+  else
+  begin
+    Result := Copy(PathList, StartPos, DelimPos - StartPos);
+    StartPos := DelimPos + 1;
+  end;
+end;
+
 function ContainsPath(const PathList, TargetPath: string): Boolean;
 var
-  Parts: TArrayOfString;
-  I: Integer;
+  Item: string;
+  StartPos: Integer;
 begin
   Result := False;
   if Trim(PathList) = '' then
     Exit;
 
-  Parts := SplitString(PathList, ';');
-  for I := 0 to GetArrayLength(Parts) - 1 do
-    if NormalizePath(Parts[I]) = NormalizePath(TargetPath) then
+  StartPos := 1;
+  while StartPos <= Length(PathList) do
+  begin
+    Item := NextPathToken(PathList, StartPos);
+    if NormalizePath(Item) = NormalizePath(TargetPath) then
     begin
       Result := True;
       Exit;
     end;
+  end;
 end;
 
 function AppendPath(const PathList, TargetPath: string): string;
@@ -136,23 +175,24 @@ end;
 
 function RemovePath(const PathList, TargetPath: string): string;
 var
-  Parts: TArrayOfString;
-  I: Integer;
+  Item: string;
+  StartPos: Integer;
 begin
   Result := '';
-  Parts := SplitString(PathList, ';');
-  for I := 0 to GetArrayLength(Parts) - 1 do
+  StartPos := 1;
+  while StartPos <= Length(PathList) do
   begin
-    if Trim(Parts[I]) = '' then
+    Item := NextPathToken(PathList, StartPos);
+    if Trim(Item) = '' then
       Continue;
-    if NormalizePath(Parts[I]) = NormalizePath(TargetPath) then
+    if NormalizePath(Item) = NormalizePath(TargetPath) then
       Continue;
 
     if Result = '' then
-      Result := Parts[I]
+      Result := Item
     else
-      Result := Result + ';' + Parts[I];
-  end;
+      Result := Result + ';' + Item;
+  end
 end;
 
 function GetDelphiRootDir(): string;
