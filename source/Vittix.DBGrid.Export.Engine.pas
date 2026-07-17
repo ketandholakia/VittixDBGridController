@@ -43,6 +43,7 @@ uses
   System.SysUtils,
   System.Variants,
   System.Generics.Collections,
+  System.Zip,
   Vcl.DBGrids,
   Vcl.Clipbrd,
   Data.DB,
@@ -55,7 +56,6 @@ type
     vefCSV,           // Comma-Separated Values
     vefTSV,           // Tab-Separated Values
     vefExcelXLSX,     // Excel 2007+ (XML-based)
-    vefExcelXLS,      // Excel 97-2003 (Binary, requires OLE)
     vefHTML,          // HTML table
     vefXML,           // XML document
     vefJSON,          // JSON array
@@ -169,10 +169,11 @@ type
   TVittixExcelExporter = class
   private
     FExporter: TVittixDBGridExporter;
+    function BuildSheetXML: string;
+    function ColumnLetter(Index: Integer): string;
   public
     constructor Create(AExporter: TVittixDBGridExporter);
     procedure ExportToXLSX(Stream: TStream);
-    procedure ExportToXLS(const FileName: string);
   end;
 
 implementation
@@ -963,14 +964,14 @@ var
   Stream: TFileStream;
   ExcelExporter: TVittixExcelExporter;
 begin
+  if not SameText(TPath.GetExtension(FileName), '.xlsx') then
+    raise Exception.Create('Only .xlsx export is supported');
+
   Stream := TFileStream.Create(FileName, fmCreate);
   try
     ExcelExporter := TVittixExcelExporter.Create(Self);
     try
-      if SameText(TPath.GetExtension(FileName), '.xlsx') then
-        ExcelExporter.ExportToXLSX(Stream)
-      else
-        ExcelExporter.ExportToXLS(FileName);
+      ExcelExporter.ExportToXLSX(Stream);
     finally
       ExcelExporter.Free;
     end;
@@ -997,43 +998,46 @@ begin
   FExporter := AExporter;
 end;
 
-procedure TVittixExcelExporter.ExportToXLSX(Stream: TStream); // Changed to stream-based
+function TVittixExcelExporter.ColumnLetter(Index: Integer): string;
+begin
+  Result := '';
+  Inc(Index);
+
+  while Index > 0 do
+  begin
+    Result := Chr(Ord('A') + ((Index - 1) mod 26)) + Result;
+    Index := (Index - 1) div 26;
+  end;
+end;
+
+function TVittixExcelExporter.BuildSheetXML: string;
 var
   XML: TStringList;
   Columns: TList<TColumn>;
-  Writer: TStreamWriter;
   I, Row, RowCount: Integer;
   Col: TColumn;
   Value: string;
 begin
   if not Assigned(FExporter.Dataset) or not FExporter.Dataset.Active then
     raise Exception.Create('Dataset is not active');
-    
+
   XML := TStringList.Create;
-  // IMPORTANT NOTE: This is a simplified XML export for Excel (SpreadsheetML fragment).
-  // It generates a single XML file that *might* be opened by Excel, but it is NOT a
-  // fully compliant XLSX (Office Open XML) file, which is a ZIP archive containing
-  // multiple XML parts. For full XLSX functionality (e.g., styling, multiple sheets,
-  // formulas), consider using a dedicated library like FlexCel or TXlsFile.
-  
   try
-    // Simplified XLSX export (SpreadsheetML XML format)
     XML.Add('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>');
     XML.Add('<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">');
     XML.Add('<sheetData>');
-    
+
     Columns := FExporter.GetExportColumns;
     try
       Row := 1;
-      
-      // Header row
+
       if FExporter.Options.IncludeHeaders then
       begin
         XML.Add(Format('<row r="%d">', [Row]));
         for I := 0 to Columns.Count - 1 do
         begin
           XML.Add(Format('<c r="%s%d" t="inlineStr">', [
-            Char(Ord('A') + I), Row
+            ColumnLetter(I), Row
           ]));
           XML.Add('<is><t>' + FExporter.EscapeXML(Columns[I].Title.Caption) + '</t></is>');
           XML.Add('</c>');
@@ -1062,7 +1066,7 @@ begin
             begin
               Value := FExporter.FormatFieldValue(Col.Field);
               XML.Add(Format('<c r="%s%d" t="inlineStr">', [
-                Char(Ord('A') + I), Row
+                ColumnLetter(I), Row
               ]));
               XML.Add('<is><t>' + FExporter.EscapeXML(Value) + '</t></is>');
               XML.Add('</c>');
@@ -1085,28 +1089,80 @@ begin
     finally
       Columns.Free;
     end;
-    
+
     XML.Add('</sheetData>');
     XML.Add('</worksheet>');
-    
-    Writer := TStreamWriter.Create(Stream, TEncoding.UTF8);
-    try
-      Writer.Write(XML.Text); // Write the XML content to the stream
-    finally Writer.Free; end;
-    
+
+    Result := XML.Text;
   finally
     XML.Free;
   end;
 end;
 
-procedure TVittixExcelExporter.ExportToXLS(const FileName: string);
+procedure TVittixExcelExporter.ExportToXLSX(Stream: TStream);
+var
+  Zip: TZipFile;
+  TempStream: TMemoryStream;
+  SheetXML: string;
+
+  procedure AddEntry(const ZipPath, Content: string);
+  var
+    EntryStream: TMemoryStream;
+    Bytes: TBytes;
+  begin
+    Bytes := TEncoding.UTF8.GetBytes(Content);
+    EntryStream := TMemoryStream.Create;
+    try
+      if Length(Bytes) > 0 then
+        EntryStream.WriteBuffer(Bytes[0], Length(Bytes));
+      EntryStream.Position := 0;
+      Zip.Add(EntryStream, ZipPath);
+    finally
+      EntryStream.Free;
+    end;
+  end;
 begin
-  // For XLS format, we'd need OLE Automation or a library like FlexCel
-  // For now, export as XLSX
-  raise Exception.Create(
-    'XLS format requires Excel OLE Automation or a third-party library. ' +
-    'Please use XLSX format instead.'
-  );
+  if not Assigned(FExporter.Dataset) or not FExporter.Dataset.Active then
+    raise Exception.Create('Dataset is not active');
+
+  SheetXML := BuildSheetXML;
+  TempStream := TMemoryStream.Create;
+  Zip := TZipFile.Create;
+  try
+    Zip.Open(TempStream, zmWrite);
+    AddEntry('[Content_Types].xml',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="xml" ContentType="application/xml"/>' +
+      '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+      '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' +
+      '</Types>');
+    AddEntry('_rels/.rels',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>' +
+      '</Relationships>');
+    AddEntry('xl/workbook.xml',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ' +
+      'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+      '<sheets><sheet name="Export" sheetId="1" r:id="rId1"/></sheets>' +
+      '</workbook>');
+    AddEntry('xl/_rels/workbook.xml.rels',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>' +
+      '</Relationships>');
+    AddEntry('xl/worksheets/sheet1.xml', SheetXML);
+    Zip.Close;
+
+    TempStream.Position := 0;
+    Stream.CopyFrom(TempStream, TempStream.Size);
+  finally
+    Zip.Free;
+    TempStream.Free;
+  end;
 end;
 
 end.

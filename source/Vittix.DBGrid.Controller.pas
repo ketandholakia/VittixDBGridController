@@ -33,6 +33,8 @@ uses
   // Vittix
   Vittix.DBGrid,
   Vittix.DBGrid.ColumnInfo,
+  Vittix.DBGrid.ColumnChooser,
+  Vittix.DBGrid.Editors,
   Vittix.DBGrid.Sort.Engine,
   Vittix.DBGrid.Filter.Engine,
   Vittix.DBGrid.Aggregation.Engine,
@@ -71,6 +73,8 @@ type
     FOldTitleClick: TDBGridClickEvent;
     FOldDrawColumnCell: TDrawColumnCellEvent;
     FOldMouseDown: TMouseEvent;
+    FOldDblClick: TNotifyEvent;
+    FOldKeyDown: TKeyEvent;
     FOldWindowProc: TWndMethod;
     FOldAfterOpen, FOldAfterClose, FOldAfterScroll,
     FOldAfterPost, FOldAfterDelete: TDataSetNotifyEvent;
@@ -78,6 +82,7 @@ type
     // Internal helpers
     function IsReady: Boolean;
     function FindInfoByColumn(AColumn: TColumn): TVittixDBGridColumnInfo;
+    function FindColumnByField(AField: TField): TColumn;
 
     procedure SetGrid(const Value: TVittixDBGrid);
     procedure SetActive(const Value: Boolean);
@@ -99,6 +104,8 @@ type
       DataCol: Integer; Column: TColumn; State: TGridDrawState);
     procedure GridMouseDown(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Integer);
+    procedure GridDblClick(Sender: TObject);
+    procedure GridKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
 
     // Dataset events
     procedure DatasetAfterOpen(DataSet: TDataSet);
@@ -123,6 +130,7 @@ type
     procedure Refresh;
     procedure Clear;
     procedure ApplyState;
+    procedure ShowColumnChooser;
     procedure SetGlobalFilter(const Text: string);
     procedure ClearFilters;
     procedure SetColumnAggregation(Column: TColumn; Aggregation: TVittixAggregationType);
@@ -331,6 +339,12 @@ begin
   FOldMouseDown := FGrid.OnMouseDown;
   FGrid.OnMouseDown := GridMouseDown;
 
+  FOldDblClick := FGrid.OnDblClick;
+  FGrid.OnDblClick := GridDblClick;
+
+  FOldKeyDown := FGrid.OnKeyDown;
+  FGrid.OnKeyDown := GridKeyDown;
+
   // WindowProc hooking requires an actual Win32 handle.
   // Only install it if one exists — it will be reinstalled via Loaded otherwise.
   if FGrid.HandleAllocated then
@@ -352,6 +366,8 @@ begin
   FGrid.OnTitleClick := FOldTitleClick;
   FGrid.OnDrawColumnCell := FOldDrawColumnCell;
   FGrid.OnMouseDown := FOldMouseDown;
+  FGrid.OnDblClick := FOldDblClick;
+  FGrid.OnKeyDown := FOldKeyDown;
   FGrid.WindowProc := FOldWindowProc;
 end;
 
@@ -534,6 +550,12 @@ begin
   // Title click for filter
   if (Coord.Y = 0) and (Button = mbRight) then
   begin
+    if ssCtrl in Shift then
+    begin
+      ShowColumnChooser;
+      Exit;
+    end;
+
     ColIndex := Coord.X - G.IndicatorOffset;
     if (ColIndex >= 0) and (ColIndex < FGrid.Columns.Count) then
     begin
@@ -554,6 +576,55 @@ begin
     FOldMouseDown(Sender, Button, Shift, X, Y);
 end;
 
+procedure TVittixDBGridController.GridDblClick(Sender: TObject);
+var
+  Field: TField;
+  Column: TColumn;
+begin
+  Field := nil;
+  if Assigned(FGrid) then
+    Field := FGrid.SelectedField;
+  Column := FindColumnByField(Field);
+
+  if Assigned(Column) and Assigned(Field) and
+     (Field.DataType in [ftMemo, ftWideMemo, ftFmtMemo, ftDate, ftTime, ftDateTime]) and
+     TVittixDBGridEditors.EditField(FGrid, Column) then
+  begin
+    Refresh;
+    Exit;
+  end;
+
+  if Assigned(FOldDblClick) then
+    FOldDblClick(Sender);
+end;
+
+procedure TVittixDBGridController.GridKeyDown(Sender: TObject; var Key: Word;
+  Shift: TShiftState);
+var
+  Field: TField;
+  Column: TColumn;
+begin
+  if Key = VK_F2 then
+  begin
+    Field := nil;
+    if Assigned(FGrid) then
+      Field := FGrid.SelectedField;
+    Column := FindColumnByField(Field);
+
+    if Assigned(Column) and Assigned(Field) and
+       (Field.DataType in [ftMemo, ftWideMemo, ftFmtMemo, ftDate, ftTime, ftDateTime]) and
+       TVittixDBGridEditors.EditField(FGrid, Column) then
+    begin
+      Refresh;
+      Key := 0;
+      Exit;
+    end;
+  end;
+
+  if Assigned(FOldKeyDown) then
+    FOldKeyDown(Sender, Key, Shift);
+end;
+
 { ============================================================================= }
 { DATASET EVENTS }
 { ============================================================================= }
@@ -562,29 +633,44 @@ procedure TVittixDBGridController.DatasetAfterOpen(DataSet: TDataSet);
 begin
   CreateEngines;
   Refresh;
+
+  if Assigned(FOldAfterOpen) then
+    FOldAfterOpen(DataSet);
 end;
 
 procedure TVittixDBGridController.DatasetAfterClose(DataSet: TDataSet);
 begin
   DestroyEngines;
+
+  if Assigned(FOldAfterClose) then
+    FOldAfterClose(DataSet);
 end;
 
 procedure TVittixDBGridController.DatasetAfterScroll(DataSet: TDataSet);
 begin
   if Assigned(FGrid) then
     FGrid.Invalidate;
+
+  if Assigned(FOldAfterScroll) then
+    FOldAfterScroll(DataSet);
 end;
 
 procedure TVittixDBGridController.DatasetAfterPost(DataSet: TDataSet);
 begin
   SetAggregationDirty;
   Refresh;
+
+  if Assigned(FOldAfterPost) then
+    FOldAfterPost(DataSet);
 end;
 
 procedure TVittixDBGridController.DatasetAfterDelete(DataSet: TDataSet);
 begin
   SetAggregationDirty;
   Refresh;
+
+  if Assigned(FOldAfterDelete) then
+    FOldAfterDelete(DataSet);
 end;
 
 { ============================================================================= }
@@ -690,6 +776,31 @@ begin
   for I := 0 to FGrid.ColumnInfo.Count - 1 do
     if SameText(FGrid.ColumnInfo[I].FieldName, AColumn.FieldName) then
       Exit(FGrid.ColumnInfo[I]);
+end;
+
+function TVittixDBGridController.FindColumnByField(AField: TField): TColumn;
+var
+  I: Integer;
+begin
+  Result := nil;
+  if not Assigned(FGrid) or not Assigned(AField) then
+    Exit;
+
+  for I := 0 to FGrid.Columns.Count - 1 do
+    if FGrid.Columns[I].Field = AField then
+      Exit(FGrid.Columns[I]);
+end;
+
+procedure TVittixDBGridController.ShowColumnChooser;
+begin
+  if not Assigned(FGrid) then
+    Exit;
+
+  if TVittixDBGridColumnChooserForm.Execute(FGrid) then
+  begin
+    SetAggregationDirty;
+    Refresh;
+  end;
 end;
 
 initialization

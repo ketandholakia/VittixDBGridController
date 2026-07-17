@@ -77,7 +77,7 @@ type
     procedure CheckListDragDrop(Sender, Source: TObject; X, Y: Integer);
   public
     constructor CreateChooser(AOwner: TComponent; AGrid: TDBGrid); reintroduce;
-    class procedure Execute(AGrid: TDBGrid);
+    class function Execute(AGrid: TDBGrid): Boolean;
     
     property AllowReorder: Boolean read FAllowReorder write FAllowReorder;
   end;
@@ -381,17 +381,21 @@ begin
   end;
 end;
 
-class procedure TVittixDBGridColumnChooserForm.Execute(AGrid: TDBGrid);
+class function TVittixDBGridColumnChooserForm.Execute(AGrid: TDBGrid): Boolean;
 var
   Frm: TVittixDBGridColumnChooserForm;
 begin
+  Result := False;
   if not Assigned(AGrid) then
     Exit;
 
   Frm := TVittixDBGridColumnChooserForm.CreateChooser(nil, AGrid);
   try
     if Frm.ShowModal = mrOk then
-      Frm.ApplySelection
+    begin
+      Frm.ApplySelection;
+      Result := True;
+    end
     else
       // FIX BUG 9: Roll back any live column reordering done during drag-drop
       Frm.RollbackColumnOrder;

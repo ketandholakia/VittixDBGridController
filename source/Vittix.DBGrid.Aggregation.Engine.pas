@@ -3,7 +3,9 @@ unit Vittix.DBGrid.Aggregation.Engine;
 interface
 
 uses
+  Winapi.Windows,
   System.Classes,
+  System.Diagnostics,
   System.SysUtils,
   System.Variants,
   Data.DB,
@@ -234,8 +236,16 @@ procedure TVittixDBGridAggregationEngine.Recalculate;
 var
   Bookmark: TBookmark;
   I: Integer;
+{$IFDEF DEBUG}
+  Stopwatch: TStopwatch;
+{$ENDIF}
 begin
   if not Assigned(FDataSet) or not FDataSet.Active then Exit;
+
+  // Full dataset scan by design. Profile before trying to optimize this path.
+{$IFDEF DEBUG}
+  Stopwatch := TStopwatch.StartNew;
+{$ENDIF}
 
   // 1. Reset all aggregators
   Clear;
@@ -293,6 +303,13 @@ begin
     end;
     FDataSet.EnableControls;
   end;
+
+{$IFDEF DEBUG}
+  OutputDebugString(PChar(Format(
+    'Vittix aggregation recalculated in %d ms for %d active aggregation columns',
+    [Stopwatch.ElapsedMilliseconds, Length(FCache)]
+  )));
+{$ENDIF}
 end;
 
 function TVittixDBGridAggregationEngine.GetAggregation(
