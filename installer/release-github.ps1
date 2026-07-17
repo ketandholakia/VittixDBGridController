@@ -32,10 +32,7 @@ function Test-Command {
 }
 
 function Get-GitOutput {
-  param(
-    [Parameter(ValueFromRemainingArguments = $true)]
-    [string[]]$Args
-  )
+  param([string[]]$Args)
 
   $output = & git @Args
   if ($LASTEXITCODE -ne 0) {
@@ -46,7 +43,7 @@ function Get-GitOutput {
 }
 
 function Ensure-CleanWorktree {
-  $status = Get-GitOutput @("status", "--short")
+  $status = Get-GitOutput -Args @("status", "--short")
   if ($status) {
     throw "Git worktree is not clean. Commit or stash changes before creating a release."
   }
@@ -63,7 +60,7 @@ function Normalize-VersionTag {
 }
 
 function Get-RepositoryFromRemote {
-  $remoteUrl = Get-GitOutput @("remote", "get-url", "origin")
+  $remoteUrl = Get-GitOutput -Args @("remote", "get-url", "origin")
 
   if ($remoteUrl -match 'github\.com[:/](?<owner>[^/]+)/(?<repo>[^/.]+?)(?:\.git)?$') {
     return "$($Matches.owner)/$($Matches.repo)"
@@ -75,12 +72,12 @@ function Get-RepositoryFromRemote {
 function Ensure-TagDoesNotExist {
   param([string]$Tag)
 
-  $existingLocal = Get-GitOutput @("tag", "--list", $Tag)
+  $existingLocal = Get-GitOutput -Args @("tag", "--list", $Tag)
   if ($existingLocal -eq $Tag) {
     throw "Git tag already exists locally: $Tag"
   }
 
-  $existingRemote = Get-GitOutput @("ls-remote", "--tags", "origin", $Tag)
+  $existingRemote = Get-GitOutput -Args @("ls-remote", "--tags", "origin", $Tag)
   if ($existingRemote) {
     throw "Git tag already exists on origin: $Tag"
   }
@@ -249,9 +246,9 @@ $tempNotesFile = Join-Path $env:TEMP "vittix-release-notes-$tag.txt"
 Set-Content -LiteralPath $tempNotesFile -Value $releaseNotes -Encoding UTF8
 
 if (-not $SkipTagPush) {
-  Get-GitOutput @("tag", "-a", $tag, "-m", $releaseName)
-  Get-GitOutput @("push", "origin", $TargetBranch)
-  Get-GitOutput @("push", "origin", $tag)
+  Get-GitOutput -Args @("tag", "-a", $tag, "-m", $releaseName)
+  Get-GitOutput -Args @("push", "origin", $TargetBranch)
+  Get-GitOutput -Args @("push", "origin", $tag)
 }
 
 try {
