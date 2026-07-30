@@ -73,6 +73,8 @@ type
     procedure ClearHistory;
     function ValidateCurrentInput: Boolean;
     procedure CommitCurrentValue;
+    procedure ExecuteClearHistoryShortcut;
+    function GetButtonShortcutSummaryText: string;
 
     property OperatorIndex: Integer read GetOperatorIndex;
     property FilterText: string read GetFilterText write SetFilterText;
@@ -355,6 +357,11 @@ begin
     ModalResult := mrOk;
     Key := 0;
   end;
+  if (Key = Ord('H')) and (ssCtrl in Shift) and (ssShift in Shift) then
+  begin
+    ExecuteClearHistoryShortcut;
+    Key := 0;
+  end;
 end;
 
 procedure TVittixDBGridFilterPopup.BtnClearClick(Sender: TObject);
@@ -367,6 +374,16 @@ end;
 procedure TVittixDBGridFilterPopup.CommitCurrentValue;
 begin
   ApplyChanges;
+end;
+
+procedure TVittixDBGridFilterPopup.ExecuteClearHistoryShortcut;
+begin
+  ClearHistory;
+end;
+
+function TVittixDBGridFilterPopup.GetButtonShortcutSummaryText: string;
+begin
+  Result := 'Clear Filter=none;Clear History=Ctrl+Shift+H';
 end;
 
 procedure TVittixDBGridFilterPopup.BtnClearHistoryClick(Sender: TObject);

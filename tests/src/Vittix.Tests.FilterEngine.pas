@@ -66,6 +66,8 @@ type
     [Test]
     procedure FilterPopupEnterCommitsCurrentValue;
     [Test]
+    procedure FilterPopupReportsButtonShortcuts;
+    [Test]
     procedure FilterPopupUsesConfiguredRootPath;
     [Test]
     procedure FilterPopupClearHistoryClearsInMemoryState;
@@ -458,6 +460,27 @@ begin
       Popup.CommitCurrentValue;
       Assert.AreEqual('Alpha', Info.FilterText);
       Assert.IsTrue(Info.HasFilter);
+    finally
+      Popup.Free;
+    end;
+  finally
+    OwnerForm.Free;
+  end;
+end;
+
+procedure TVittixFilterEngineTests.FilterPopupReportsButtonShortcuts;
+var
+  OwnerForm: TForm;
+  Info: TVittixDBGridColumnInfo;
+  Popup: TVittixDBGridFilterPopup;
+begin
+  OwnerForm := TForm.CreateNew(nil);
+  try
+    Info := FColumns.FindByFieldName('Name');
+    Popup := TVittixDBGridFilterPopup.CreatePopup(OwnerForm, Info);
+    try
+      Assert.AreEqual('Clear Filter=none;Clear History=Ctrl+Shift+H', Popup.GetButtonShortcutSummaryText);
+      Popup.ExecuteClearHistoryShortcut;
     finally
       Popup.Free;
     end;
