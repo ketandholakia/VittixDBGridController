@@ -65,6 +65,8 @@ type
     procedure ExplicitPersistenceFilesOverrideRootPath;
     [Test]
     procedure GridPersistenceFilesOverrideRootPathWhenSetAfterRoot;
+    [Test]
+    procedure GridCanSaveAndLoadLayoutToExplicitFile;
   end;
 
 implementation
@@ -474,6 +476,36 @@ begin
       OwnerForm.Free;
     end;
   finally
+  end;
+end;
+
+procedure TVittixLayoutTests.GridCanSaveAndLoadLayoutToExplicitFile;
+var
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+  TempFile: string;
+begin
+  TempFile := TPath.Combine(TPath.GetTempPath, 'VittixDBGridLayout.explicit.json');
+  OwnerForm := TForm.CreateNew(nil);
+  try
+    Grid := TVittixDBGrid.Create(OwnerForm);
+    try
+      Grid.LayoutStorageFileName := TempFile;
+      Grid.Columns[0].Width := 180;
+      TVittixDBGridController(Grid.Controller).SaveLayoutToFile;
+
+      Grid.Columns[0].Width := 50;
+      TVittixDBGridController(Grid.Controller).LoadLayoutFromFile;
+
+      Assert.AreEqual(180, Grid.Columns[0].Width);
+      Assert.IsTrue(FileExists(TempFile));
+    finally
+      Grid.Free;
+      OwnerForm.Free;
+    end;
+  finally
+    if FileExists(TempFile) then
+      DeleteFile(TempFile);
   end;
 end;
 

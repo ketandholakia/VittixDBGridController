@@ -254,6 +254,8 @@ begin
   if FPersistence.LayoutStorageFileName <> Value then
   begin
     FPersistence.LayoutStorageFileName := Value;
+    if Assigned(FController) and (FController is TVittixDBGridController) then
+      TVittixDBGridController(FController).LayoutStorageFileName := Value;
     ApplyPersistenceSettings;
   end;
 end;
@@ -287,9 +289,6 @@ end;
 
 procedure TVittixDBGrid.ApplyPersistenceSettings;
 begin
-  if FPersistence.LayoutStorageFileName <> '' then
-    ;
-
   if FPersistence.ChooserStateFileName <> '' then
     ;
   TVittixDBGridColumnChooserForm.RootPath := FPersistence.PersistenceRootPath;

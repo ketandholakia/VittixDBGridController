@@ -75,6 +75,7 @@ type
 
     FAlternatingRowColors: Boolean;
     FAlternateRowColor: TColor;
+    FLayoutStorageFileName: string;
 
     // Engines (logic only)
     FSortEngine: TVittixDBGridSortEngine;
@@ -150,12 +151,15 @@ type
     procedure ApplyLayout(State: TVittixDBGridLayoutState);
     procedure SaveLayoutToStream(Stream: TStream);
     procedure LoadLayoutFromStream(Stream: TStream);
+    procedure SaveLayoutToFile(const FileName: string = '');
+    procedure LoadLayoutFromFile(const FileName: string = '');
     procedure ResetLayout;
 
     // Called by TVittixDBGrid when its DataSource property changes
     procedure DataSourceChanged;
 
     property Grid: TVittixDBGrid read FGrid write SetGrid;
+    property LayoutStorageFileName: string read FLayoutStorageFileName write FLayoutStorageFileName;
 
   published
     property Active: Boolean read FActive write SetActive default True;
@@ -930,6 +934,38 @@ begin
   end;
 end;
 
+procedure TVittixDBGridController.SaveLayoutToFile(const FileName: string);
+var
+  State: TVittixDBGridLayoutState;
+  Storage: TVittixDBGridLayoutJsonStorage;
+  TargetFile: string;
+  Stream: TFileStream;
+begin
+  if FileName <> '' then
+    TargetFile := FileName
+  else
+    TargetFile := FLayoutStorageFileName;
+  if TargetFile = '' then Exit;
+
+  State := TVittixDBGridLayoutState.Create;
+  try
+    CaptureLayout(State);
+    Storage := TVittixDBGridLayoutJsonStorage.Create;
+    try
+      Stream := TFileStream.Create(TargetFile, fmCreate);
+      try
+        Storage.SaveToStream(State, Stream);
+      finally
+        Stream.Free;
+      end;
+    finally
+      Storage.Free;
+    end;
+  finally
+    State.Free;
+  end;
+end;
+
 procedure TVittixDBGridController.LoadLayoutFromStream(Stream: TStream);
 var
   State: TVittixDBGridLayoutState;
@@ -942,6 +978,37 @@ begin
     ApplyLayout(State);
   finally
     State.Free;
+  end;
+end;
+
+procedure TVittixDBGridController.LoadLayoutFromFile(const FileName: string);
+var
+  Storage: TVittixDBGridLayoutJsonStorage;
+  SourceFile: string;
+  Stream: TFileStream;
+  State: TVittixDBGridLayoutState;
+begin
+  if FileName <> '' then
+    SourceFile := FileName
+  else
+    SourceFile := FLayoutStorageFileName;
+  if (SourceFile = '') or not FileExists(SourceFile) then Exit;
+
+  Storage := TVittixDBGridLayoutJsonStorage.Create;
+  try
+    Stream := TFileStream.Create(SourceFile, fmOpenRead or fmShareDenyWrite);
+    try
+      State := Storage.LoadFromStream(Stream);
+      try
+        ApplyLayout(State);
+      finally
+        State.Free;
+      end;
+    finally
+      Stream.Free;
+    end;
+  finally
+    Storage.Free;
   end;
 end;
 
