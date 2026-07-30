@@ -92,6 +92,8 @@ type
     [Test]
     procedure ChooserAllowReorderDisablesDragOverWhenFalse;
     [Test]
+    procedure CellConditionMatcherSupportsTextAndNumericRules;
+    [Test]
     procedure ChooserCanAdjustColumnWidthThroughPublicApi;
   end;
 
@@ -860,6 +862,26 @@ begin
       OwnerForm.Free;
     end;
   finally
+  end;
+end;
+
+procedure TVittixLayoutTests.CellConditionMatcherSupportsTextAndNumericRules;
+var
+  Cond: TVittixDBGridCellCondition;
+begin
+  Cond := TVittixDBGridCellCondition.Create(nil);
+  try
+    Cond.Enabled := True;
+    Cond.OperatorKind := vccoContains;
+    Cond.Value := 'pha';
+    Assert.IsTrue(Cond.Matches('Alpha'));
+
+    Cond.OperatorKind := vccoGreaterOrEqual;
+    Cond.Value := '100';
+    Assert.IsTrue(Cond.Matches('120'));
+    Assert.IsFalse(Cond.Matches('90'));
+  finally
+    Cond.Free;
   end;
 end;
 

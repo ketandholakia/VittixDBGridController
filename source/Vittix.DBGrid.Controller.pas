@@ -565,7 +565,12 @@ end;
 procedure TVittixDBGridController.GridDrawColumnCell(
   Sender: TObject; const Rect: TRect; DataCol: Integer;
   Column: TColumn; State: TGridDrawState);
-var  IsOddRow: Boolean;
+var
+  IsOddRow: Boolean;
+  Info: TVittixDBGridColumnInfo;
+  Cond: TVittixDBGridCellCondition;
+  FieldValue: string;
+  I: Integer;
 begin
   // Check if we should apply the alternate color
   // We skip:
@@ -584,6 +589,25 @@ begin
 
       if IsOddRow then
         FGrid.Canvas.Brush.Color := FAlternateRowColor;
+    end;
+  end;
+
+  Info := FGrid.ColumnInfoByColumn(Column);
+  if Assigned(Info) and Assigned(FGrid.DataSource) and Assigned(FGrid.DataSource.DataSet) and
+     (not (gdSelected in State)) and (not (gdFixed in State)) then
+  begin
+    FieldValue := FGrid.DataSource.DataSet.FieldByName(Column.FieldName).AsString;
+    for I := 0 to Info.CellConditions.Count - 1 do
+    begin
+      Cond := Info.CellConditions[I];
+      if Cond.Matches(FieldValue) then
+      begin
+        if Cond.BackgroundColor <> clNone then
+          FGrid.Canvas.Brush.Color := Cond.BackgroundColor;
+        if Cond.FontColor <> clNone then
+          FGrid.Canvas.Font.Color := Cond.FontColor;
+        Break;
+      end;
     end;
   end;
 

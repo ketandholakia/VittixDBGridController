@@ -5,10 +5,53 @@ interface
 uses
   System.Classes,
   System.SysUtils,
+  System.StrUtils,
   System.Variants,
-  System.Math;
+  System.Math,
+  Vcl.Graphics;
 
 type
+  TVittixCellConditionOperator = (
+    vccoEquals,
+    vccoNotEquals,
+    vccoContains,
+    vccoStartsWith,
+    vccoEndsWith,
+    vccoGreaterThan,
+    vccoGreaterOrEqual,
+    vccoLessThan,
+    vccoLessOrEqual
+  );
+
+  TVittixDBGridCellCondition = class(TCollectionItem)
+  private
+    FFieldName: string;
+    FEnabled: Boolean;
+    FOperator: TVittixCellConditionOperator;
+    FValue: string;
+    FBackgroundColor: TColor;
+    FFontColor: TColor;
+  published
+    property FieldName: string read FFieldName write FFieldName;
+    property Enabled: Boolean read FEnabled write FEnabled default True;
+    property OperatorKind: TVittixCellConditionOperator read FOperator write FOperator default vccoEquals;
+    property Value: string read FValue write FValue;
+    property BackgroundColor: TColor read FBackgroundColor write FBackgroundColor default clNone;
+    property FontColor: TColor read FFontColor write FFontColor default clNone;
+  public
+    constructor Create(Collection: TCollection); override;
+    function Matches(const AValue: string): Boolean;
+  end;
+
+  TVittixDBGridCellConditions = class(TOwnedCollection)
+  private
+    function GetItem(Index: Integer): TVittixDBGridCellCondition;
+  public
+    constructor Create(AOwner: TPersistent);
+    function Add: TVittixDBGridCellCondition;
+    property Items[Index: Integer]: TVittixDBGridCellCondition read GetItem; default;
+  end;
+
   // ------------------------------------------------------------
   // Sorting
   // ------------------------------------------------------------
@@ -61,6 +104,7 @@ type
     FHasFilter: Boolean;
     FAggregationType: TVittixAggregationType;
     FFooterText: string;
+    FCellConditions: TVittixDBGridCellConditions;
   protected
     function GetDisplayName: string; override;
   public
@@ -90,6 +134,7 @@ type
 
     property FooterText: string
       read FFooterText write FFooterText;
+    property CellConditions: TVittixDBGridCellConditions read FCellConditions;
   end;
 
   // ------------------------------------------------------------
@@ -109,6 +154,57 @@ type
   end;
 
 implementation
+
+{ TVittixDBGridCellConditions }
+
+constructor TVittixDBGridCellConditions.Create(AOwner: TPersistent);
+begin
+  inherited Create(AOwner, TVittixDBGridCellCondition);
+end;
+
+function TVittixDBGridCellConditions.Add: TVittixDBGridCellCondition;
+begin
+  Result := inherited Add as TVittixDBGridCellCondition;
+end;
+
+function TVittixDBGridCellConditions.GetItem(
+  Index: Integer): TVittixDBGridCellCondition;
+begin
+  Result := inherited Items[Index] as TVittixDBGridCellCondition;
+end;
+
+function TVittixDBGridCellCondition.Matches(const AValue: string): Boolean;
+var
+  L, R: Extended;
+begin
+  if not FEnabled then Exit(False);
+
+  case FOperator of
+    vccoEquals: Result := SameText(Trim(AValue), Trim(FValue));
+    vccoNotEquals: Result := not SameText(Trim(AValue), Trim(FValue));
+    vccoContains: Result := ContainsText(AValue, FValue);
+    vccoStartsWith: Result := StartsText(FValue, AValue);
+    vccoEndsWith: Result := EndsText(FValue, AValue);
+    vccoGreaterThan,
+    vccoGreaterOrEqual,
+    vccoLessThan,
+    vccoLessOrEqual:
+      begin
+        if not TryStrToFloat(Trim(AValue), L) or not TryStrToFloat(Trim(FValue), R) then
+          Exit(False);
+        case FOperator of
+          vccoGreaterThan: Result := L > R;
+          vccoGreaterOrEqual: Result := L >= R;
+          vccoLessThan: Result := L < R;
+          vccoLessOrEqual: Result := L <= R;
+        else
+          Result := False;
+        end;
+      end;
+  else
+    Result := False;
+  end;
+end;
 
 const
   MAX_CURRENCY = 922337203685477.5807;
@@ -183,6 +279,7 @@ begin
   inherited;
   FAggregationType := vatNone;
   FFooterText := '';
+  FCellConditions := TVittixDBGridCellConditions.Create(Self);
   FSortOrder := vsoNone;
   FSortIndex := -1;
   Aggregation.Clear;
@@ -202,10 +299,20 @@ begin
     FHasFilter := Src.HasFilter;
     FAggregationType := Src.AggregationType;
     FFooterText := Src.FooterText;
+    FCellConditions.Assign(Src.CellConditions);
     // We do NOT copy the runtime Aggregation results, only metadata
   end
   else
     inherited Assign(Source);
+end;
+
+constructor TVittixDBGridCellCondition.Create(Collection: TCollection);
+begin
+  inherited;
+  FEnabled := True;
+  FOperator := vccoEquals;
+  FBackgroundColor := clNone;
+  FFontColor := clNone;
 end;
 
 function TVittixDBGridColumnInfo.GetDisplayName: string;
