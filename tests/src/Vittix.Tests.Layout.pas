@@ -84,6 +84,8 @@ type
     [Test]
     procedure FooterCanClearAllAggregationsThroughPublicApi;
     [Test]
+    procedure FooterClearAllAggregationsIsNoOpWhenAlreadyEmpty;
+    [Test]
     procedure ChooserCanAdjustColumnWidthThroughPublicApi;
   end;
 
@@ -750,6 +752,21 @@ begin
 
     Footer.ClearAllAggregations;
 
+    Assert.AreEqual(vatNone, FGrid.ColumnInfoByColumn(FGrid.Columns[1]).AggregationType);
+    Assert.AreEqual(vatNone, FGrid.ColumnInfoByColumn(FGrid.Columns[2]).AggregationType);
+  finally
+    Footer.Free;
+  end;
+end;
+
+procedure TVittixLayoutTests.FooterClearAllAggregationsIsNoOpWhenAlreadyEmpty;
+var
+  Footer: TVittixDBGridFooterPanel;
+begin
+  Footer := TVittixDBGridFooterPanel.Create(FOwnerForm);
+  try
+    Footer.Attach(FGrid, nil);
+    Footer.ClearAllAggregations;
     Assert.AreEqual(vatNone, FGrid.ColumnInfoByColumn(FGrid.Columns[1]).AggregationType);
     Assert.AreEqual(vatNone, FGrid.ColumnInfoByColumn(FGrid.Columns[2]).AggregationType);
   finally
