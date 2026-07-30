@@ -94,6 +94,8 @@ type
     [Test]
     procedure CellConditionMatcherSupportsTextAndNumericRules;
     [Test]
+    procedure LayoutSerializerPersistsCellConditions;
+    [Test]
     procedure ChooserCanAdjustColumnWidthThroughPublicApi;
   end;
 
@@ -882,6 +884,35 @@ begin
     Assert.IsFalse(Cond.Matches('90'));
   finally
     Cond.Free;
+  end;
+end;
+
+procedure TVittixLayoutTests.LayoutSerializerPersistsCellConditions;
+var
+  State1, State2: TVittixDBGridLayoutState;
+  Storage: IVittixDBGridLayoutStorage;
+  Stream: TMemoryStream;
+  Col: TVittixDBGridLayoutColumnState;
+begin
+  State1 := TVittixDBGridLayoutState.Create;
+  State2 := nil;
+  Stream := TMemoryStream.Create;
+  Storage := TVittixDBGridLayoutJsonStorage.Create;
+  try
+    FController.CaptureLayout(State1);
+    Col := State1.Columns[1];
+    Col.CellConditionsJson := '[{"fieldName":"Amount","enabled":true,"operatorKind":5,"value":"100","backgroundColor":16777215,"fontColor":0}]';
+    State1.Columns[1] := Col;
+
+    Storage.SaveToStream(State1, Stream);
+    Stream.Position := 0;
+    State2 := Storage.LoadFromStream(Stream);
+
+    Assert.AreEqual(Col.CellConditionsJson, State2.Columns[1].CellConditionsJson);
+  finally
+    State2.Free;
+    Stream.Free;
+    State1.Free;
   end;
 end;
 

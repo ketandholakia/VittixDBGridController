@@ -903,6 +903,7 @@ begin
       Item.SortIndex := Info.SortIndex;
       Item.AggregationType := Info.AggregationType;
       Item.FooterText := Info.FooterText;
+      Item.CellConditionsJson := CellConditionsToJson(Info.CellConditions);
     end;
     State.Columns.Add(Item);
   end;
@@ -936,6 +937,7 @@ begin
         Info.SortIndex := Item.SortIndex;
         Info.AggregationType := Item.AggregationType;
         Info.FooterText := Item.FooterText;
+        CellConditionsFromJson(Info.CellConditions, Item.CellConditionsJson);
       end;
     end;
     ApplyState;

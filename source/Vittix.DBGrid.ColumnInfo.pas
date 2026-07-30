@@ -8,6 +8,7 @@ uses
   System.StrUtils,
   System.Variants,
   System.Math,
+  System.JSON,
   Vcl.Graphics;
 
 type
@@ -152,6 +153,9 @@ type
     property Items[Index: Integer]: TVittixDBGridColumnInfo
       read GetItem; default;
   end;
+
+function CellConditionsToJson(Conditions: TVittixDBGridCellConditions): string;
+procedure CellConditionsFromJson(Conditions: TVittixDBGridCellConditions; const JsonText: string);
 
 implementation
 
@@ -348,6 +352,63 @@ begin
     if SameText(Items[I].FieldName, AName) then
       Exit(Items[I]);
   Result := nil;
+end;
+
+function CellConditionsToJson(Conditions: TVittixDBGridCellConditions): string;
+var
+  Arr: TJSONArray;
+  Cond: TVittixDBGridCellCondition;
+  Obj: TJSONObject;
+  I: Integer;
+begin
+  Arr := TJSONArray.Create;
+  try
+    if Assigned(Conditions) then
+      for I := 0 to Conditions.Count - 1 do
+      begin
+        Cond := Conditions[I];
+        Obj := TJSONObject.Create;
+        Obj.AddPair('fieldName', Cond.FieldName);
+        Obj.AddPair('enabled', TJSONBool.Create(Cond.Enabled));
+        Obj.AddPair('operatorKind', TJSONNumber.Create(Ord(Cond.OperatorKind)));
+        Obj.AddPair('value', Cond.Value);
+        Obj.AddPair('backgroundColor', TJSONNumber.Create(Integer(Cond.BackgroundColor)));
+        Obj.AddPair('fontColor', TJSONNumber.Create(Integer(Cond.FontColor)));
+        Arr.AddElement(Obj);
+      end;
+    Result := Arr.ToJSON;
+  finally
+    Arr.Free;
+  end;
+end;
+
+procedure CellConditionsFromJson(Conditions: TVittixDBGridCellConditions; const JsonText: string);
+var
+  Arr: TJSONArray;
+  I: Integer;
+  Obj: TJSONObject;
+  Cond: TVittixDBGridCellCondition;
+begin
+  if not Assigned(Conditions) then Exit;
+  Conditions.Clear;
+  if JsonText = '' then Exit;
+  Arr := TJSONObject.ParseJSONValue(JsonText) as TJSONArray;
+  try
+    if not Assigned(Arr) then Exit;
+    for I := 0 to Arr.Count - 1 do
+    begin
+      Obj := Arr.Items[I] as TJSONObject;
+      Cond := Conditions.Add;
+      Cond.FieldName := Obj.GetValue<string>('fieldName', '');
+      Cond.Enabled := Obj.GetValue<Boolean>('enabled', True);
+      Cond.OperatorKind := TVittixCellConditionOperator(Obj.GetValue<Integer>('operatorKind', 0));
+      Cond.Value := Obj.GetValue<string>('value', '');
+      Cond.BackgroundColor := TColor(Obj.GetValue<Integer>('backgroundColor', Integer(clNone)));
+      Cond.FontColor := TColor(Obj.GetValue<Integer>('fontColor', Integer(clNone)));
+    end;
+  finally
+    Arr.Free;
+  end;
 end;
 
 end.

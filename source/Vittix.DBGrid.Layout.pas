@@ -2,7 +2,7 @@ unit Vittix.DBGrid.Layout;
 
 interface
 
-uses
+  uses
   System.Classes,
   System.SysUtils,
   System.JSON,
@@ -20,6 +20,7 @@ type
     SortIndex: Integer;
     AggregationType: TVittixAggregationType;
     FooterText: string;
+    CellConditionsJson: string;
   end;
 
   TVittixDBGridLayoutState = class
@@ -154,6 +155,7 @@ begin
       ColumnObj.AddPair('sortIndex', TJSONNumber.Create(Col.SortIndex));
       ColumnObj.AddPair('aggregationType', AggregationTypeToString(Col.AggregationType));
       ColumnObj.AddPair('footerText', Col.FooterText);
+      ColumnObj.AddPair('cellConditionsJson', Col.CellConditionsJson);
       Columns.AddElement(ColumnObj);
     end;
 
@@ -203,6 +205,7 @@ begin
         Col.SortIndex := ColObj.GetValue<Integer>('sortIndex', -1);
         Col.AggregationType := StringToAggregationType(ColObj.GetValue<string>('aggregationType', 'None'));
         Col.FooterText := ColObj.GetValue<string>('footerText', '');
+        Col.CellConditionsJson := ColObj.GetValue<string>('cellConditionsJson', '');
         Result.Columns.Add(Col);
       end;
   finally
