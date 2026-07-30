@@ -39,7 +39,8 @@ uses
   Vittix.DBGrid.Filter.Engine,
   Vittix.DBGrid.Aggregation.Engine,
   Vittix.DBGrid.Filter.Popup,
-  Vittix.DBGrid.FooterPanel;
+  Vittix.DBGrid.FooterPanel,
+  Vittix.DBGrid.Layout;
 
 const
   DEFAULT_ALTERNATE_ROW_COLOR = $00F7F7F7;
@@ -95,6 +96,7 @@ type
     function IsReady: Boolean;
     function FindInfoByColumn(AColumn: TColumn): TVittixDBGridColumnInfo;
     function FindColumnByField(AField: TField): TColumn;
+    function FindColumnByFieldName(const FieldName: string): TColumn;
 
     procedure SetGrid(const Value: TVittixDBGrid);
     procedure SetActive(const Value: Boolean);
@@ -144,6 +146,11 @@ type
     procedure SetGlobalFilter(const Text: string);
     procedure ClearFilters;
     procedure SetColumnAggregation(Column: TColumn; Aggregation: TVittixAggregationType);
+    procedure CaptureLayout(State: TVittixDBGridLayoutState);
+    procedure ApplyLayout(State: TVittixDBGridLayoutState);
+    procedure SaveLayoutToStream(Stream: TStream);
+    procedure LoadLayoutFromStream(Stream: TStream);
+    procedure ResetLayout;
 
     // Called by TVittixDBGrid when its DataSource property changes
     procedure DataSourceChanged;
@@ -827,6 +834,129 @@ begin
   for I := 0 to FGrid.Columns.Count - 1 do
     if FGrid.Columns[I].Field = AField then
       Exit(FGrid.Columns[I]);
+end;
+
+function TVittixDBGridController.FindColumnByFieldName(
+  const FieldName: string): TColumn;
+var
+  I: Integer;
+begin
+  Result := nil;
+  if not Assigned(FGrid) then Exit;
+  for I := 0 to FGrid.Columns.Count - 1 do
+    if SameText(FGrid.Columns[I].FieldName, FieldName) then
+      Exit(FGrid.Columns[I]);
+end;
+
+procedure TVittixDBGridController.CaptureLayout(State: TVittixDBGridLayoutState);
+var
+  I: Integer;
+  Col: TColumn;
+  Info: TVittixDBGridColumnInfo;
+  Item: TVittixDBGridLayoutColumnState;
+begin
+  if (State = nil) or not Assigned(FGrid) then Exit;
+  State.Clear;
+  State.FooterVisible := FShowFooter;
+  State.AlternatingRowColors := FAlternatingRowColors;
+  State.AlternateRowColor := FAlternateRowColor;
+  for I := 0 to FGrid.Columns.Count - 1 do
+  begin
+    Col := FGrid.Columns[I];
+    if (Col = nil) or (Col.FieldName = '') then Continue;
+    Item.FieldName := Col.FieldName;
+    Item.DisplayIndex := Col.Index;
+    Item.Width := Col.Width;
+    Item.Visible := Col.Visible;
+    Info := FGrid.ColumnInfo.FindByFieldName(Col.FieldName);
+    if Assigned(Info) then
+    begin
+      Item.SortOrder := Info.SortOrder;
+      Item.SortIndex := Info.SortIndex;
+      Item.AggregationType := Info.AggregationType;
+    end;
+    State.Columns.Add(Item);
+  end;
+end;
+
+procedure TVittixDBGridController.ApplyLayout(State: TVittixDBGridLayoutState);
+var
+  I: Integer;
+  Item: TVittixDBGridLayoutColumnState;
+  Col: TColumn;
+  Info: TVittixDBGridColumnInfo;
+begin
+  if (State = nil) or not Assigned(FGrid) then Exit;
+  FUpdating := True;
+  try
+    FShowFooter := State.FooterVisible;
+    FAlternatingRowColors := State.AlternatingRowColors;
+    FAlternateRowColor := State.AlternateRowColor;
+    for I := 0 to State.Columns.Count - 1 do
+    begin
+      Item := State.Columns[I];
+      Col := FindColumnByFieldName(Item.FieldName);
+      if Col = nil then Continue;
+      Col.Width := Item.Width;
+      Col.Visible := Item.Visible;
+      Col.Index := Item.DisplayIndex;
+      Info := FGrid.ColumnInfo.FindByFieldName(Item.FieldName);
+      if Assigned(Info) then
+      begin
+        Info.SortOrder := Item.SortOrder;
+        Info.SortIndex := Item.SortIndex;
+        Info.AggregationType := Item.AggregationType;
+      end;
+    end;
+    ApplyState;
+  finally
+    FUpdating := False;
+  end;
+end;
+
+procedure TVittixDBGridController.SaveLayoutToStream(Stream: TStream);
+var
+  State: TVittixDBGridLayoutState;
+  Storage: IVittixDBGridLayoutStorage;
+begin
+  if not Assigned(Stream) then Exit;
+  State := TVittixDBGridLayoutState.Create;
+  try
+    CaptureLayout(State);
+    Storage := TVittixDBGridLayoutJsonStorage.Create;
+    Storage.SaveToStream(State, Stream);
+  finally
+    State.Free;
+  end;
+end;
+
+procedure TVittixDBGridController.LoadLayoutFromStream(Stream: TStream);
+var
+  State: TVittixDBGridLayoutState;
+  Storage: IVittixDBGridLayoutStorage;
+begin
+  if not Assigned(Stream) then Exit;
+  Storage := TVittixDBGridLayoutJsonStorage.Create;
+  State := Storage.LoadFromStream(Stream);
+  try
+    ApplyLayout(State);
+  finally
+    State.Free;
+  end;
+end;
+
+procedure TVittixDBGridController.ResetLayout;
+var
+  I: Integer;
+begin
+  if not Assigned(FGrid) then Exit;
+  for I := 0 to FGrid.Columns.Count - 1 do
+  begin
+    FGrid.Columns[I].Visible := True;
+    if FGrid.Columns[I].Field <> nil then
+      FGrid.Columns[I].Width := FGrid.Columns[I].Field.DisplayWidth * 8;
+  end;
+  Clear;
 end;
 
 procedure TVittixDBGridController.ShowColumnChooser;

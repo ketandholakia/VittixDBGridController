@@ -16,6 +16,7 @@ uses
   Vittix.Tests.FilterEngine in 'src\Vittix.Tests.FilterEngine.pas',
   Vittix.Tests.AggregationEngine in 'src\Vittix.Tests.AggregationEngine.pas',
   Vittix.Tests.ExportEngine in 'src\Vittix.Tests.ExportEngine.pas',
+  Vittix.Tests.Layout in 'src\Vittix.Tests.Layout.pas',
   Vittix.Tests.Controller.Regression in 'src\Vittix.Tests.Controller.Regression.pas';
 
 var

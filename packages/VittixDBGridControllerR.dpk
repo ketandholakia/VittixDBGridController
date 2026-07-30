@@ -46,6 +46,7 @@ contains
   Vittix.DBGrid.ColumnChooser in '..\source\Vittix.DBGrid.ColumnChooser.pas',
   Vittix.DBGrid.Editors in '..\source\Vittix.DBGrid.Editors.pas',
   Vittix.DBGrid.Filter.Popup in '..\source\Vittix.DBGrid.Filter.Popup.pas',
+  Vittix.DBGrid.Layout in '..\source\Vittix.DBGrid.Layout.pas',
   Vittix.DBGrid.Export.Engine in '..\source\Vittix.DBGrid.Export.Engine.pas',
   Vittix.DBGrid.Export.Dialog in '..\source\Vittix.DBGrid.Export.Dialog.pas';
 
