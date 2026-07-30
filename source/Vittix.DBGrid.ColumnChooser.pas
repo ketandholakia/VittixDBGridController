@@ -5,7 +5,7 @@ unit Vittix.DBGrid.ColumnChooser;
 /// ENHANCED VERSION - Column Chooser Dialog for TVittixDBGrid
 /// 
 /// FEATURES IMPLEMENTED:
-/// 1. Drag-and-drop column reordering (from TODO list)
+/// 1. Drag-and-drop column reordering
 /// 2. Select All / Select None shortcuts (Ctrl+A, Ctrl+N)
 /// 3. Double-click to toggle visibility
 /// 4. Keyboard shortcuts for accessibility
