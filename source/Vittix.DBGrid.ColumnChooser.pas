@@ -47,6 +47,7 @@ type
   TVittixDBGridColumnChooserForm = class(TForm)
   private
     FGrid: TDBGrid;
+    FSearchEdit: TEdit;
     FCheckList: TCheckListBox;
     FButtonPanel: TPanel;
     FBtnOK: TButton;
@@ -61,6 +62,7 @@ type
     FOriginalColumnOrder: TArray<Integer>;
 
     procedure BuildColumnList;
+    procedure ApplySearchFilter;
     procedure ApplySelection;
     procedure RollbackColumnOrder;
     function GetColumnCaption(AColumn: TColumn): string;
@@ -75,6 +77,7 @@ type
     procedure CheckListDragOver(Sender, Source: TObject; X, Y: Integer;
       State: TDragState; var Accept: Boolean);
     procedure CheckListDragDrop(Sender, Source: TObject; X, Y: Integer);
+    procedure SearchEditChange(Sender: TObject);
   public
     constructor CreateChooser(AOwner: TComponent; AGrid: TDBGrid); reintroduce;
     class function Execute(AGrid: TDBGrid): Boolean;
@@ -132,6 +135,14 @@ begin
   FPopupMenu.Items.Add(FMenuItemSelectNone);
 
   // Button Panel
+  FSearchEdit := TEdit.Create(Self);
+  FSearchEdit.Parent := Self;
+  FSearchEdit.Align := alTop;
+  FSearchEdit.AlignWithMargins := True;
+  FSearchEdit.Margins.SetBounds(8, 8, 8, 0);
+  FSearchEdit.TextHint := 'Search columns';
+  FSearchEdit.OnChange := SearchEditChange;
+
   FButtonPanel := TPanel.Create(Self);
   FButtonPanel.Parent := Self;
   FButtonPanel.Align := alBottom;
@@ -221,6 +232,32 @@ begin
   finally
     FCheckList.Items.EndUpdate;
   end;
+
+  ApplySearchFilter;
+end;
+
+procedure TVittixDBGridColumnChooserForm.ApplySearchFilter;
+var
+  I: Integer;
+  Query: string;
+  Col: TColumn;
+  CaptionText: string;
+begin
+  Query := Trim(FSearchEdit.Text).ToLower;
+  FCheckList.Items.BeginUpdate;
+  try
+    for I := 0 to FCheckList.Items.Count - 1 do
+    begin
+      Col := TColumn(FCheckList.Items.Objects[I]);
+      CaptionText := LowerCase(FCheckList.Items[I]);
+      FCheckList.ItemEnabled[I] :=
+        (Query = '') or
+        CaptionText.Contains(Query) or
+        LowerCase(Col.FieldName).Contains(Query);
+    end;
+  finally
+    FCheckList.Items.EndUpdate;
+  end;
 end;
 
 function TVittixDBGridColumnChooserForm.GetColumnCaption(
@@ -244,6 +281,11 @@ begin
   Idx := FCheckList.ItemIndex;
   if Idx >= 0 then
     FCheckList.Checked[Idx] := not FCheckList.Checked[Idx];
+end;
+
+procedure TVittixDBGridColumnChooserForm.SearchEditChange(Sender: TObject);
+begin
+  ApplySearchFilter;
 end;
 
 procedure TVittixDBGridColumnChooserForm.CheckListKeyDown(
