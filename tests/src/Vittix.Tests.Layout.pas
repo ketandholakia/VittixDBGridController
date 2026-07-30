@@ -329,12 +329,12 @@ var
   TempFile: string;
 begin
   TempFile := TPath.Combine(TPath.GetTempPath, 'VittixDBGridChooser.test.ini');
-  TVittixDBGridColumnChooserForm.StateFileName := TempFile;
   OwnerForm := TForm.CreateNew(nil);
   try
     Grid := TVittixDBGrid.Create(OwnerForm);
     try
       Grid.Parent := OwnerForm;
+      Grid.ChooserStateFileName := TempFile;
       Chooser := TVittixDBGridColumnChooserForm.CreateChooser(OwnerForm, Grid);
       try
         Chooser.Left := 77;
@@ -349,7 +349,6 @@ begin
       OwnerForm.Free;
     end;
   finally
-    TVittixDBGridColumnChooserForm.StateFileName := '';
     if FileExists(TempFile) then
       DeleteFile(TempFile);
   end;
@@ -362,11 +361,11 @@ var
   Loaded: TVittixDBGridLayoutState;
 begin
   TempFile := TPath.Combine(TPath.GetTempPath, 'VittixDBGridLayout.test.json');
-  TVittixDBGridLayoutJsonStorage.StateFileName := TempFile;
   State := TVittixDBGridLayoutState.Create;
   Loaded := nil;
   try
     FController.CaptureLayout(State);
+    FGrid.LayoutStorageFileName := TempFile;
     TVittixDBGridLayoutJsonStorage.SaveToFile(State);
     Assert.IsTrue(FileExists(TempFile));
 
@@ -376,7 +375,6 @@ begin
   finally
     Loaded.Free;
     State.Free;
-    TVittixDBGridLayoutJsonStorage.StateFileName := '';
     if FileExists(TempFile) then
       DeleteFile(TempFile);
   end;
@@ -395,9 +393,9 @@ begin
       Grid.ChooserStateFileName := 'C:\temp\chooser.ini';
       Grid.FilterHistoryFileName := 'C:\temp\filter.ini';
 
-      Assert.AreEqual('C:\temp\layout.json', TVittixDBGridLayoutJsonStorage.StateFileName);
-      Assert.AreEqual('C:\temp\chooser.ini', TVittixDBGridColumnChooserForm.StateFileName);
-      Assert.AreEqual('C:\temp\filter.ini', TVittixDBGridFilterPopup.HistoryFileName);
+      Assert.AreEqual('C:\temp\layout.json', Grid.LayoutStorageFileName);
+      Assert.AreEqual('C:\temp\chooser.ini', Grid.ChooserStateFileName);
+      Assert.AreEqual('C:\temp\filter.ini', Grid.FilterHistoryFileName);
     finally
       OwnerForm.Free;
     end;
@@ -416,9 +414,7 @@ begin
     try
       Grid.PersistenceRootPath := 'C:\temp\vittix';
 
-      Assert.AreEqual('C:\temp\vittix', TVittixDBGridLayoutJsonStorage.RootPath);
-      Assert.AreEqual('C:\temp\vittix', TVittixDBGridColumnChooserForm.RootPath);
-      Assert.AreEqual('C:\temp\vittix', TVittixDBGridFilterPopup.RootPath);
+      Assert.AreEqual('C:\temp\vittix', Grid.PersistenceRootPath);
     finally
       OwnerForm.Free;
     end;
@@ -455,9 +451,9 @@ begin
       Grid.ChooserStateFileName := 'C:\temp\chooser.ini';
       Grid.FilterHistoryFileName := 'C:\temp\filter.ini';
 
-      Assert.AreEqual('C:\temp\layout.json', TVittixDBGridLayoutJsonStorage.StateFileName);
-      Assert.AreEqual('C:\temp\chooser.ini', TVittixDBGridColumnChooserForm.StateFileName);
-      Assert.AreEqual('C:\temp\filter.ini', TVittixDBGridFilterPopup.HistoryFileName);
+      Assert.AreEqual('C:\temp\layout.json', Grid.LayoutStorageFileName);
+      Assert.AreEqual('C:\temp\chooser.ini', Grid.ChooserStateFileName);
+      Assert.AreEqual('C:\temp\filter.ini', Grid.FilterHistoryFileName);
     finally
       OwnerForm.Free;
     end;
