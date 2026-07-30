@@ -42,6 +42,8 @@ type
     [Test]
     procedure ControllerCanToggleActiveAndFooterRepeatedly;
     [Test]
+    procedure ControllerResetLayoutRestoresFooterVisibility;
+    [Test]
     procedure ControllerCanBeFreedBeforeGridWithoutAV;
     [Test]
     procedure GridCanRecreateWindowHandleWhileAttached;
@@ -302,6 +304,29 @@ begin
       Assert.IsTrue(Controller.ShowFooter);
       Assert.IsNotNull(Grid.DataSource);
       Assert.AreSame(DataSet, Grid.DataSource.DataSet);
+    finally
+      OwnerForm.Free;
+    end;
+  finally
+    DataSet.Free;
+  end;
+end;
+
+procedure TVittixControllerRegressionTests.ControllerResetLayoutRestoresFooterVisibility;
+var
+  DataSet: TClientDataSet;
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+  Controller: TVittixDBGridController;
+begin
+  DataSet := CreateSampleDataSet;
+  try
+    Grid := CreateHeadlessGrid(DataSet, OwnerForm);
+    Controller := TVittixDBGridController(Grid.Controller);
+    try
+      Controller.ShowFooter := False;
+      Controller.ResetLayout;
+      Assert.IsTrue(Controller.ShowFooter);
     finally
       OwnerForm.Free;
     end;
