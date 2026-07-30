@@ -8,7 +8,8 @@ uses
   Vcl.Forms,
   System.SysUtils,
   DUnitX.TestFramework,
-  Vittix.DBGrid;
+  Vittix.DBGrid,
+  Vittix.DBGrid.Controller;
 
 type
   [TestFixture]
@@ -35,6 +36,8 @@ type
     procedure DatasetCanCloseAndReopenWhileGridIsAttached;
     [Test]
     procedure DatasetCanBeDestroyedAfterGridDetach;
+    [Test]
+    procedure ControllerCanToggleActiveAndFooterRepeatedly;
   end;
 
 implementation
@@ -220,6 +223,39 @@ begin
   finally
     if Assigned(DataSet) then
       DataSet.Free;
+  end;
+end;
+
+procedure TVittixControllerRegressionTests.ControllerCanToggleActiveAndFooterRepeatedly;
+var
+  DataSet: TClientDataSet;
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+  Controller: TVittixDBGridController;
+  I: Integer;
+begin
+  DataSet := CreateSampleDataSet;
+  try
+    Grid := CreateHeadlessGrid(DataSet, OwnerForm);
+    Controller := TVittixDBGridController(Grid.Controller);
+    try
+      for I := 1 to 10 do
+      begin
+        Controller.Active := False;
+        Controller.Active := True;
+        Controller.ShowFooter := False;
+        Controller.ShowFooter := True;
+      end;
+
+      Assert.IsTrue(Controller.Active);
+      Assert.IsTrue(Controller.ShowFooter);
+      Assert.IsNotNull(Grid.DataSource);
+      Assert.AreSame(DataSet, Grid.DataSource.DataSet);
+    finally
+      OwnerForm.Free;
+    end;
+  finally
+    DataSet.Free;
   end;
 end;
 
