@@ -10,7 +10,10 @@ uses
   Vcl.Graphics, // Needed for TColor
   Vcl.Controls,
   Data.DB,
-  Vittix.DBGrid.ColumnInfo;
+  Vittix.DBGrid.ColumnInfo,
+  Vittix.DBGrid.ColumnChooser,
+  Vittix.DBGrid.Filter.Popup,
+  Vittix.DBGrid.Layout;
 
 type
   TVittixDBGrid = class(TDBGrid)
@@ -18,6 +21,9 @@ type
     FColumnsInfo: TVittixDBGridColumns;
     FController: TComponent;
     FFooterVisible: Boolean;
+    FLayoutStorageFileName: string;
+    FChooserStateFileName: string;
+    FFilterHistoryFileName: string;
 
     // Local storage for design-time properties before Controller is ready
     FAlternatingRowColors: Boolean;
@@ -32,6 +38,9 @@ type
     procedure SetAlternatingRowColors(const Value: Boolean);
     function GetAlternateRowColor: TColor;
     procedure SetAlternateRowColor(const Value: TColor);
+    procedure SetLayoutStorageFileName(const Value: string);
+    procedure SetChooserStateFileName(const Value: string);
+    procedure SetFilterHistoryFileName(const Value: string);
 
   protected
     procedure Loaded; override;
@@ -56,6 +65,15 @@ type
 
     property AlternateRowColor: TColor
       read GetAlternateRowColor write SetAlternateRowColor default $00F7F7F7;
+
+    property LayoutStorageFileName: string
+      read FLayoutStorageFileName write SetLayoutStorageFileName;
+
+    property ChooserStateFileName: string
+      read FChooserStateFileName write SetChooserStateFileName;
+
+    property FilterHistoryFileName: string
+      read FFilterHistoryFileName write SetFilterHistoryFileName;
 
     property DataSource: TDataSource read GetDataSource write SetDataSource;
 
@@ -216,6 +234,33 @@ begin
   begin
     TVittixDBGridController(FController).InstallWindowProc;
     TVittixDBGridController(FController).GridLayoutChanged;
+  end;
+end;
+
+procedure TVittixDBGrid.SetLayoutStorageFileName(const Value: string);
+begin
+  if FLayoutStorageFileName <> Value then
+  begin
+    FLayoutStorageFileName := Value;
+    TVittixDBGridLayoutJsonStorage.StateFileName := Value;
+  end;
+end;
+
+procedure TVittixDBGrid.SetChooserStateFileName(const Value: string);
+begin
+  if FChooserStateFileName <> Value then
+  begin
+    FChooserStateFileName := Value;
+    TVittixDBGridColumnChooserForm.StateFileName := Value;
+  end;
+end;
+
+procedure TVittixDBGrid.SetFilterHistoryFileName(const Value: string);
+begin
+  if FFilterHistoryFileName <> Value then
+  begin
+    FFilterHistoryFileName := Value;
+    TVittixDBGridFilterPopup.HistoryFileName := Value;
   end;
 end;
 
