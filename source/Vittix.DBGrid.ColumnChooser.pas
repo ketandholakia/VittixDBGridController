@@ -98,6 +98,7 @@ type
     procedure ResetLayout;
     procedure RevertTransientChanges;
     procedure SelectColumnIndex(AIndex: Integer);
+    function CanReorderColumns: Boolean;
     procedure IncreaseSelectedColumnWidth;
     procedure DecreaseSelectedColumnWidth;
     procedure LoadDialogState;
@@ -574,6 +575,11 @@ procedure TVittixDBGridColumnChooserForm.RevertTransientChanges;
 begin
   RollbackColumnOrder;
   RestoreOriginalColumnWidths;
+end;
+
+function TVittixDBGridColumnChooserForm.CanReorderColumns: Boolean;
+begin
+  Result := FAllowReorder;
 end;
 
 procedure TVittixDBGridColumnChooserForm.SelectColumnIndex(AIndex: Integer);

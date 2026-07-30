@@ -86,6 +86,8 @@ type
     [Test]
     procedure FooterClearAllAggregationsIsNoOpWhenAlreadyEmpty;
     [Test]
+    procedure ChooserAllowReorderDisablesDragOverWhenFalse;
+    [Test]
     procedure ChooserCanAdjustColumnWidthThroughPublicApi;
   end;
 
@@ -771,6 +773,32 @@ begin
     Assert.AreEqual(vatNone, FGrid.ColumnInfoByColumn(FGrid.Columns[2]).AggregationType);
   finally
     Footer.Free;
+  end;
+end;
+
+procedure TVittixLayoutTests.ChooserAllowReorderDisablesDragOverWhenFalse;
+var
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+  Chooser: TVittixDBGridColumnChooserForm;
+begin
+  OwnerForm := TForm.CreateNew(nil);
+  try
+    Grid := TVittixDBGrid.Create(OwnerForm);
+    try
+      Grid.Parent := OwnerForm;
+      Chooser := TVittixDBGridColumnChooserForm.CreateChooser(OwnerForm, Grid);
+      try
+        Chooser.AllowReorder := False;
+        Assert.IsFalse(Chooser.CanReorderColumns);
+      finally
+        Chooser.Free;
+      end;
+    finally
+      Grid.Free;
+      OwnerForm.Free;
+    end;
+  finally
   end;
 end;
 
