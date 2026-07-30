@@ -20,6 +20,12 @@
 #ifndef PayloadRoot
 #define PayloadRoot "payload\\Delphi12Athens\\Win32"
 #endif
+#ifndef PayloadRootName
+#define PayloadRootName "Delphi12Athens"
+#endif
+#ifndef PayloadPlatform
+#define PayloadPlatform "Win32"
+#endif
 #define PayloadBplDir PayloadRoot + "\\Bpl"
 #define PayloadDcpDir PayloadRoot + "\\Dcp"
 
@@ -67,8 +73,8 @@ Name: "{app}\source"; Components: core
 Name: "{app}\packages"; Components: core
 Name: "{app}\docs"; Components: docs
 Name: "{app}\demos\features-demo"; Components: demo
-Name: "{app}\payload\Delphi12Athens\Win32\Bpl"; Components: delphi12
-Name: "{app}\payload\Delphi12Athens\Win32\Dcp"; Components: delphi12
+Name: "{app}\payload\{#PayloadRootName}\{#PayloadPlatform}\Bpl"; Components: delphi12
+Name: "{app}\payload\{#PayloadRootName}\{#PayloadPlatform}\Dcp"; Components: delphi12
 
 [Files]
 Source: "..\source\*"; DestDir: "{app}\source"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: core
@@ -81,16 +87,16 @@ Source: "..\docs\*"; DestDir: "{app}\docs"; Flags: ignoreversion recursesubdirs 
 Source: "..\demos\features-demo\*"; DestDir: "{app}\demos\features-demo"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: demo
 
 #ifexist PayloadBplDir + "\\" + DesignPackageName
-Source: "{#PayloadBplDir}\{#DesignPackageName}"; DestDir: "{app}\payload\Delphi12Athens\Win32\Bpl"; Flags: ignoreversion; Components: delphi12
+Source: "{#PayloadBplDir}\{#DesignPackageName}"; DestDir: "{app}\payload\{#PayloadRootName}\{#PayloadPlatform}\Bpl"; Flags: ignoreversion; Components: delphi12
 #endif
 #ifexist PayloadBplDir + "\\" + RuntimePackageName
-Source: "{#PayloadBplDir}\{#RuntimePackageName}"; DestDir: "{app}\payload\Delphi12Athens\Win32\Bpl"; Flags: ignoreversion; Components: delphi12
+Source: "{#PayloadBplDir}\{#RuntimePackageName}"; DestDir: "{app}\payload\{#PayloadRootName}\{#PayloadPlatform}\Bpl"; Flags: ignoreversion; Components: delphi12
 #endif
 #ifexist PayloadDcpDir + "\\" + DesignDcpName
-Source: "{#PayloadDcpDir}\{#DesignDcpName}"; DestDir: "{app}\payload\Delphi12Athens\Win32\Dcp"; Flags: ignoreversion; Components: delphi12
+Source: "{#PayloadDcpDir}\{#DesignDcpName}"; DestDir: "{app}\payload\{#PayloadRootName}\{#PayloadPlatform}\Dcp"; Flags: ignoreversion; Components: delphi12
 #endif
 #ifexist PayloadDcpDir + "\\" + RuntimeDcpName
-Source: "{#PayloadDcpDir}\{#RuntimeDcpName}"; DestDir: "{app}\payload\Delphi12Athens\Win32\Dcp"; Flags: ignoreversion; Components: delphi12
+Source: "{#PayloadDcpDir}\{#RuntimeDcpName}"; DestDir: "{app}\payload\{#PayloadRootName}\{#PayloadPlatform}\Dcp"; Flags: ignoreversion; Components: delphi12
 #endif
 
 Source: "README.md"; DestDir: "{tmp}"; Flags: deleteafterinstall dontcopy
@@ -212,12 +218,12 @@ end;
 
 function GetDesignPackagePath(): string;
 begin
-  Result := ExpandConstant('{app}\payload\Delphi12Athens\Win32\Bpl\{#DesignPackageName}');
+  Result := ExpandConstant('{app}\payload\{#PayloadRootName}\{#PayloadPlatform}\Bpl\{#DesignPackageName}');
 end;
 
 function GetRuntimePackagePath(): string;
 begin
-  Result := ExpandConstant('{app}\payload\Delphi12Athens\Win32\Bpl\{#RuntimePackageName}');
+  Result := ExpandConstant('{app}\payload\{#PayloadRootName}\{#PayloadPlatform}\Bpl\{#RuntimePackageName}');
 end;
 
 function HasCompiledPackages(): Boolean;

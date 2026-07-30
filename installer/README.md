@@ -56,7 +56,8 @@ Useful options:
 - `-Version 1.0.4`
 - `-DelphiVersion 23.0`
 - `-DelphiDisplayName "RAD Studio 12 Athens"`
-- `-PayloadFolder payload\Delphi12Athens\Win32`
+- `-PayloadRootName Delphi12Athens`
+- `-PayloadPlatform Win32`
 - `-SkipPackageBuild`
 - `-SkipSetupCompile`
 
@@ -91,7 +92,8 @@ Useful options:
 - `-Repository owner/repo`
 - `-DelphiVersion 23.0`
 - `-DelphiDisplayName "RAD Studio 12 Athens"`
-- `-PayloadFolder payload\Delphi12Athens\Win32`
+- `-PayloadRootName Delphi12Athens`
+- `-PayloadPlatform Win32`
 
 Notes
 -----

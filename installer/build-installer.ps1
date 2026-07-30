@@ -4,7 +4,8 @@ param(
   [string]$Version = "1.0.0",
   [string]$DelphiVersion = "23.0",
   [string]$DelphiDisplayName = "RAD Studio 12 Athens",
-  [string]$PayloadFolder = "payload\Delphi12Athens\Win32",
+  [string]$PayloadRootName = "Delphi12Athens",
+  [string]$PayloadPlatform = "Win32",
   [switch]$SkipPackageBuild,
   [switch]$SkipSetupCompile
 )
@@ -34,7 +35,7 @@ function Ensure-Directory {
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $packagesDir = Join-Path $repoRoot "packages"
 $installerDir = $PSScriptRoot
-$payloadRoot = Join-Path $installerDir $PayloadFolder
+$payloadRoot = Join-Path $installerDir ("payload\" + $PayloadRootName + "\" + $PayloadPlatform)
 $payloadBplDir = Join-Path $payloadRoot "Bpl"
 $payloadDcpDir = Join-Path $payloadRoot "Dcp"
 $studioRoot = "C:\Program Files (x86)\Embarcadero\Studio\$DelphiVersion"
@@ -112,7 +113,7 @@ if (-not $SkipSetupCompile) {
 
   $issFile = Join-Path $installerDir "VittixDBGridController.iss"
   Write-Host "Compiling Inno Setup installer..."
-  & $iscc $issFile "/dMyAppVersion=$Version" "/dDelphiVersion=$DelphiVersion" "/dDelphiDisplayName=$DelphiDisplayName" "/dPayloadRoot=$PayloadFolder"
+  & $iscc $issFile "/dMyAppVersion=$Version" "/dDelphiVersion=$DelphiVersion" "/dDelphiDisplayName=$DelphiDisplayName" "/dPayloadRoot=payload\$PayloadRootName\$PayloadPlatform" "/dPayloadRootName=$PayloadRootName" "/dPayloadPlatform=$PayloadPlatform"
   if ($LASTEXITCODE -ne 0) {
     throw "Inno Setup compilation failed."
   }
