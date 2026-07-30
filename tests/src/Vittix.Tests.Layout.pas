@@ -113,6 +113,8 @@ type
     procedure ChooserSearchMatchesAllTerms;
     [Test]
     procedure ChooserEscapeClearsSearchText;
+    [Test]
+    procedure ChooserMoveSelectedItemReordersColumns;
   end;
 
 implementation
@@ -1139,6 +1141,33 @@ begin
         Chooser.SearchText := 'Amount';
         Chooser.ClearSearchText;
         Assert.AreEqual('', Chooser.SearchText);
+      finally
+        Chooser.Free;
+      end;
+    finally
+      Grid.Free;
+      OwnerForm.Free;
+    end;
+  finally
+  end;
+end;
+
+procedure TVittixLayoutTests.ChooserMoveSelectedItemReordersColumns;
+var
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+  Chooser: TVittixDBGridColumnChooserForm;
+begin
+  OwnerForm := TForm.CreateNew(nil);
+  try
+    Grid := TVittixDBGrid.Create(OwnerForm);
+    try
+      Grid.Parent := OwnerForm;
+      Chooser := TVittixDBGridColumnChooserForm.CreateChooser(OwnerForm, Grid);
+      try
+        Chooser.SelectColumnIndex(1);
+        Chooser.MoveSelectedItem(1);
+        Assert.AreEqual(2, Grid.Columns[1].Index);
       finally
         Chooser.Free;
       end;

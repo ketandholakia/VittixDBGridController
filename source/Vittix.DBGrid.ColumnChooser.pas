@@ -110,6 +110,7 @@ type
     function GetSearchSummaryText: string;
     procedure AdjustSelectedColumnWidth(Delta: Integer);
     procedure ClearSearchText;
+    procedure MoveSelectedItem(Delta: Integer);
     
     property AllowReorder: Boolean read FAllowReorder write FAllowReorder;
     property SearchText: string read GetSearchText write SetSearchText;
@@ -493,6 +494,16 @@ begin
     DoShrinkWidth(Sender);
     Key := 0;
   end
+  else if (Key = VK_UP) and (ssCtrl in Shift) then
+  begin
+    MoveSelectedItem(-1);
+    Key := 0;
+  end
+  else if (Key = VK_DOWN) and (ssCtrl in Shift) then
+  begin
+    MoveSelectedItem(1);
+    Key := 0;
+  end
   // Space bar to toggle current item
   else if Key = VK_SPACE then
   begin
@@ -645,6 +656,31 @@ end;
 procedure TVittixDBGridColumnChooserForm.ClearSearchText;
 begin
   FSearchEdit.Text := '';
+end;
+
+procedure TVittixDBGridColumnChooserForm.MoveSelectedItem(Delta: Integer);
+var
+  FromIndex, ToIndex: Integer;
+  DraggedChecked: Boolean;
+begin
+  if not FAllowReorder then Exit;
+  FromIndex := FCheckList.ItemIndex;
+  if FromIndex < 0 then Exit;
+
+  ToIndex := FromIndex + Delta;
+  if ToIndex < 0 then
+    ToIndex := 0
+  else if ToIndex >= FCheckList.Items.Count then
+    ToIndex := FCheckList.Items.Count - 1;
+
+  if ToIndex = FromIndex then Exit;
+
+  DraggedChecked := FCheckList.Checked[FromIndex];
+  FCheckList.Items.Move(FromIndex, ToIndex);
+  FCheckList.Checked[ToIndex] := DraggedChecked;
+  if (FromIndex < FGrid.Columns.Count) and (ToIndex < FGrid.Columns.Count) then
+    FGrid.Columns[FromIndex].Index := ToIndex;
+  FCheckList.ItemIndex := ToIndex;
 end;
 
 procedure TVittixDBGridColumnChooserForm.AdjustSelectedColumnWidth(Delta: Integer);
