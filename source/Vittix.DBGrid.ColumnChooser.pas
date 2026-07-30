@@ -57,6 +57,7 @@ type
     FPopupMenu: TPopupMenu;
     FMenuItemSelectAll: TMenuItem;
     FMenuItemSelectNone: TMenuItem;
+    FMenuItemReset: TMenuItem;
     FAllowReorder: Boolean;
     FDraggedIndex: Integer;
     // FIX BUG 9: Snapshot of original column indices taken when dialog opens.
@@ -74,6 +75,7 @@ type
     procedure CheckListKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure DoSelectAll(Sender: TObject);
     procedure DoSelectNone(Sender: TObject);
+    procedure DoReset(Sender: TObject);
     procedure CheckListMouseDown(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Integer);
     procedure CheckListDragOver(Sender, Source: TObject; X, Y: Integer;
@@ -85,6 +87,7 @@ type
     class var RootPath: string;
     constructor CreateChooser(AOwner: TComponent; AGrid: TDBGrid); reintroduce;
     class function Execute(AGrid: TDBGrid): Boolean;
+    procedure ResetLayout;
     procedure LoadDialogState;
     procedure SaveDialogState;
     
@@ -139,6 +142,12 @@ begin
   FMenuItemSelectNone.ShortCut := TextToShortCut('Ctrl+N');
   FMenuItemSelectNone.OnClick := DoSelectNone;
   FPopupMenu.Items.Add(FMenuItemSelectNone);
+
+  FMenuItemReset := TMenuItem.Create(FPopupMenu);
+  FMenuItemReset.Caption := '&Reset Layout';
+  FMenuItemReset.ShortCut := TextToShortCut('Ctrl+R');
+  FMenuItemReset.OnClick := DoReset;
+  FPopupMenu.Items.Add(FMenuItemReset);
 
   // Button Panel
   FSearchEdit := TEdit.Create(Self);
@@ -452,6 +461,31 @@ begin
   finally
     FCheckList.Items.EndUpdate;
   end;
+end;
+
+procedure TVittixDBGridColumnChooserForm.DoReset(Sender: TObject);
+var
+  I: Integer;
+begin
+  if not Assigned(FGrid) then Exit;
+
+  RollbackColumnOrder;
+
+  FCheckList.Items.BeginUpdate;
+  try
+    for I := 0 to FCheckList.Items.Count - 1 do
+      FCheckList.Checked[I] := True;
+  finally
+    FCheckList.Items.EndUpdate;
+  end;
+
+  for I := 0 to FGrid.Columns.Count - 1 do
+    FGrid.Columns[I].Visible := True;
+end;
+
+procedure TVittixDBGridColumnChooserForm.ResetLayout;
+begin
+  DoReset(Self);
 end;
 
 procedure TVittixDBGridColumnChooserForm.ApplySelection;

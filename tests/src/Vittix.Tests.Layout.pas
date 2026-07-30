@@ -70,6 +70,8 @@ type
     procedure GridCanSaveAndLoadLayoutToExplicitFile;
     [Test]
     procedure FooterCanClearAggregationThroughPublicApi;
+    [Test]
+    procedure ChooserResetRestoresOriginalLayout;
   end;
 
 implementation
@@ -528,6 +530,37 @@ begin
     Assert.AreEqual(vatNone, FGrid.ColumnInfoByColumn(Column).AggregationType);
   finally
     Footer.Free;
+  end;
+end;
+
+procedure TVittixLayoutTests.ChooserResetRestoresOriginalLayout;
+var
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+  Chooser: TVittixDBGridColumnChooserForm;
+begin
+  OwnerForm := TForm.CreateNew(nil);
+  try
+    Grid := TVittixDBGrid.Create(OwnerForm);
+    try
+      Grid.Parent := OwnerForm;
+      Chooser := TVittixDBGridColumnChooserForm.CreateChooser(OwnerForm, Grid);
+      try
+        Grid.Columns[0].Index := 2;
+        Grid.Columns[1].Visible := False;
+        Chooser.ResetLayout;
+
+        Assert.AreEqual(0, Grid.Columns[0].Index);
+        Assert.IsTrue(Grid.Columns[1].Visible);
+        Assert.IsTrue(Grid.Columns[2].Visible);
+      finally
+        Chooser.Free;
+      end;
+    finally
+      Grid.Free;
+      OwnerForm.Free;
+    end;
+  finally
   end;
 end;
 
