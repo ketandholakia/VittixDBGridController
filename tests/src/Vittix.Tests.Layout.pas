@@ -58,6 +58,8 @@ type
     [Test]
     procedure ChooserStateUsesConfiguredFileName;
     [Test]
+    procedure ChooserStateUsesConfiguredRootPath;
+    [Test]
     procedure LayoutStorageUsesConfiguredFileName;
     [Test]
     procedure GridSurfaceConfiguresAllPersistencePaths;
@@ -384,6 +386,44 @@ begin
   finally
     if FileExists(TempFile) then
       DeleteFile(TempFile);
+  end;
+end;
+
+procedure TVittixLayoutTests.ChooserStateUsesConfiguredRootPath;
+var
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+  Chooser: TVittixDBGridColumnChooserForm;
+  RootPath: string;
+  PersistedFile: string;
+begin
+  RootPath := TPath.Combine(TPath.GetTempPath, 'VittixDBGridChooserRoot.test');
+  PersistedFile := TPath.Combine(RootPath, 'chooser.ini');
+  ForceDirectories(RootPath);
+  OwnerForm := TForm.CreateNew(nil);
+  try
+    Grid := TVittixDBGrid.Create(OwnerForm);
+    try
+      Grid.Parent := OwnerForm;
+      Grid.PersistenceRootPath := RootPath;
+      Chooser := TVittixDBGridColumnChooserForm.CreateChooser(OwnerForm, Grid);
+      try
+        Chooser.Left := 77;
+        Chooser.Top := 88;
+        Chooser.SaveDialogState;
+      finally
+        Chooser.Free;
+      end;
+
+      Assert.IsTrue(FileExists(PersistedFile));
+    finally
+      OwnerForm.Free;
+    end;
+  finally
+    if FileExists(PersistedFile) then
+      DeleteFile(PersistedFile);
+    if TDirectory.Exists(RootPath) then
+      TDirectory.Delete(RootPath, True);
   end;
 end;
 
