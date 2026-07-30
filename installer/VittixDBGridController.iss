@@ -6,14 +6,20 @@
 #define MyAppURL "https://github.com/ketan/VittixDBGridController"
 #define MyAppExeName "VittixDBGridController"
 
+#ifndef DelphiVersion
 #define DelphiVersion "23.0"
+#endif
+#ifndef DelphiDisplayName
 #define DelphiDisplayName "RAD Studio 12 Athens"
+#endif
 #define DesignPackageName "VittixDBGridControllerD.bpl"
 #define RuntimePackageName "VittixDBGridControllerR.bpl"
 #define DesignDcpName "VittixDBGridControllerD.dcp"
 #define RuntimeDcpName "VittixDBGridControllerR.dcp"
 
+#ifndef PayloadRoot
 #define PayloadRoot "payload\\Delphi12Athens\\Win32"
+#endif
 #define PayloadBplDir PayloadRoot + "\\Bpl"
 #define PayloadDcpDir PayloadRoot + "\\Dcp"
 

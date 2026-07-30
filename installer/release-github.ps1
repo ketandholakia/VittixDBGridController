@@ -8,6 +8,9 @@ param(
   [string]$TargetBranch = "main",
   [string]$Config = "Release",
   [string]$Platform = "Win32",
+  [string]$DelphiVersion = "23.0",
+  [string]$DelphiDisplayName = "RAD Studio 12 Athens",
+  [string]$PayloadFolder = "payload\Delphi12Athens\Win32",
   [switch]$Draft,
   [switch]$PreRelease,
   [switch]$SkipInstallerBuild,
@@ -232,7 +235,7 @@ if (-not $SkipTagPush) {
 }
 
 if (-not $SkipInstallerBuild) {
-  & powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "build-installer.ps1") -Config $Config -Platform $Platform -Version $Version
+  & powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "build-installer.ps1") -Config $Config -Platform $Platform -Version $Version -DelphiVersion $DelphiVersion -DelphiDisplayName $DelphiDisplayName -PayloadFolder $PayloadFolder
   if ($LASTEXITCODE -ne 0) {
     throw "Installer build failed."
   }

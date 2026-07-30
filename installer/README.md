@@ -53,6 +53,10 @@ What it does:
 Useful options:
 
 - `-Config Debug`
+- `-Version 1.0.4`
+- `-DelphiVersion 23.0`
+- `-DelphiDisplayName "RAD Studio 12 Athens"`
+- `-PayloadFolder payload\Delphi12Athens\Win32`
 - `-SkipPackageBuild`
 - `-SkipSetupCompile`
 
@@ -85,6 +89,9 @@ Useful options:
 - `-SkipTagPush`
 - `-SkipReleaseCreate`
 - `-Repository owner/repo`
+- `-DelphiVersion 23.0`
+- `-DelphiDisplayName "RAD Studio 12 Athens"`
+- `-PayloadFolder payload\Delphi12Athens\Win32`
 
 Notes
 -----
