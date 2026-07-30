@@ -90,6 +90,7 @@ type
       State: TDragState; var Accept: Boolean);
     procedure CheckListDragDrop(Sender, Source: TObject; X, Y: Integer);
     procedure SearchEditChange(Sender: TObject);
+    procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
   public
     class var StateFileName: string;
     class var RootPath: string;
@@ -103,6 +104,7 @@ type
     procedure DecreaseSelectedColumnWidth;
     procedure LoadDialogState;
     procedure SaveDialogState;
+    procedure FocusSearchBox;
     
     property AllowReorder: Boolean read FAllowReorder write FAllowReorder;
     property SearchText: string read GetSearchText write SetSearchText;
@@ -141,6 +143,8 @@ begin
   Position := poScreenCenter;
   Width := 340;
   Height := 450;
+  KeyPreview := True;
+  OnKeyDown := FormKeyDown;
   
   // Set minimum size constraints
   Constraints.MinWidth := 250;
@@ -355,6 +359,16 @@ begin
   ApplySearchFilter;
 end;
 
+procedure TVittixDBGridColumnChooserForm.FormKeyDown(Sender: TObject;
+  var Key: Word; Shift: TShiftState);
+begin
+  if (Key = Ord('F')) and (ssCtrl in Shift) then
+  begin
+    FocusSearchBox;
+    Key := 0;
+  end;
+end;
+
 procedure TVittixDBGridColumnChooserForm.LoadDialogState;
 var
   Ini: TIniFile;
@@ -564,6 +578,17 @@ begin
   if not Assigned(Col) then Exit;
   if Col.Width > 24 then
     Col.Width := Col.Width - 16;
+end;
+
+procedure TVittixDBGridColumnChooserForm.FocusSearchBox;
+begin
+  if Assigned(FSearchEdit) then
+  begin
+    ActiveControl := FSearchEdit;
+    if FSearchEdit.CanFocus then
+      FSearchEdit.SetFocus;
+    FSearchEdit.SelectAll;
+  end;
 end;
 
 procedure TVittixDBGridColumnChooserForm.ResetLayout;

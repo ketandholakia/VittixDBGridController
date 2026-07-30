@@ -97,6 +97,8 @@ type
     procedure LayoutSerializerPersistsCellConditions;
     [Test]
     procedure ChooserCanAdjustColumnWidthThroughPublicApi;
+    [Test]
+    procedure ChooserFocusSearchBoxSelectsSearchEdit;
   end;
 
 implementation
@@ -938,6 +940,34 @@ begin
         Assert.IsTrue(Column.Width > 100);
         Chooser.DecreaseSelectedColumnWidth;
         Assert.IsTrue(Column.Width <= 116);
+      finally
+        Chooser.Free;
+      end;
+    finally
+      Grid.Free;
+      OwnerForm.Free;
+    end;
+  finally
+  end;
+end;
+
+procedure TVittixLayoutTests.ChooserFocusSearchBoxSelectsSearchEdit;
+var
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+  Chooser: TVittixDBGridColumnChooserForm;
+begin
+  OwnerForm := TForm.CreateNew(nil);
+  try
+    Grid := TVittixDBGrid.Create(OwnerForm);
+    try
+      Grid.Parent := OwnerForm;
+      Chooser := TVittixDBGridColumnChooserForm.CreateChooser(OwnerForm, Grid);
+      try
+        Chooser.SearchText := 'abc';
+        Chooser.FocusSearchBox;
+        Assert.IsTrue(Assigned(Chooser.ActiveControl));
+        Assert.AreEqual('abc', Chooser.SearchText);
       finally
         Chooser.Free;
       end;
