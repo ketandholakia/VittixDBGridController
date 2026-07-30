@@ -354,7 +354,10 @@ begin
   if Query = '' then
     FSearchSummary.Caption := Format('%d columns', [FCheckList.Items.Count])
   else
-    FSearchSummary.Caption := Format('%d matches', [MatchCount]);
+    if MatchCount = 1 then
+      FSearchSummary.Caption := '1 match'
+    else
+      FSearchSummary.Caption := Format('%d matches', [MatchCount]);
 end;
 
 function TVittixDBGridColumnChooserForm.GetColumnCaption(

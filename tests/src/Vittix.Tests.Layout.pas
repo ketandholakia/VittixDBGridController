@@ -1083,7 +1083,7 @@ begin
       Chooser := TVittixDBGridColumnChooserForm.CreateChooser(OwnerForm, Grid);
       try
         Chooser.SearchText := 'am';
-        Assert.AreEqual('1 matches', Chooser.SearchSummaryText);
+        Assert.AreEqual('1 match', Chooser.SearchSummaryText);
       finally
         Chooser.Free;
       end;
@@ -1109,7 +1109,7 @@ begin
       Chooser := TVittixDBGridColumnChooserForm.CreateChooser(OwnerForm, Grid);
       try
         Chooser.SearchText := 'am';
-        Assert.AreEqual('1 matches', Chooser.SearchSummaryText);
+        Assert.AreEqual('1 match', Chooser.SearchSummaryText);
         Chooser.SearchText := 'am um';
         Assert.AreEqual('0 matches', Chooser.SearchSummaryText);
       finally
