@@ -40,6 +40,7 @@ type
     procedure ApplyChanges;
     procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure ComboChange(Sender: TObject);
+    procedure LoadDistinctValues;
     function ValidateInput: Boolean;
   public
     OnValidateFilterInput: TFilterValidationEvent;
@@ -59,6 +60,7 @@ type
 implementation
 
 uses
+  Data.DB,
   System.Generics.Collections;
 
 var
@@ -168,6 +170,8 @@ begin
 
   if GFilterHistory.TryGetValue(FHistoryKey, LHistory) then
     FRecentCombo.Items.Assign(LHistory);
+
+  LoadDistinctValues;
   
   // Select all text so user can type to replace immediately
   FRecentCombo.SelectAll;
@@ -196,6 +200,53 @@ end;
 procedure TVittixDBGridFilterPopup.ComboChange(Sender: TObject);
 begin
   ValidateInput;
+end;
+
+procedure TVittixDBGridFilterPopup.LoadDistinctValues;
+var
+  Grid: TDBGrid;
+  DataSet: TDataSet;
+  Field: TField;
+  Values: TStringList;
+begin
+  if not (Owner is TDBGrid) then
+    Exit;
+
+  Grid := TDBGrid(Owner);
+  if not Assigned(Grid.DataSource) then
+    Exit;
+
+  DataSet := Grid.DataSource.DataSet;
+  if not Assigned(DataSet) or not DataSet.Active then
+    Exit;
+
+  Field := DataSet.FindField(FColumnInfo.FieldName);
+  if not Assigned(Field) then
+    Exit;
+
+  Values := TStringList.Create;
+  try
+    Values.Sorted := True;
+    Values.Duplicates := dupIgnore;
+
+    DataSet.DisableControls;
+    try
+      DataSet.First;
+      while not DataSet.Eof do
+      begin
+        if not Field.IsNull then
+          Values.Add(Trim(Field.AsString));
+        DataSet.Next;
+      end;
+    finally
+      DataSet.EnableControls;
+    end;
+
+    if Values.Count > 0 then
+      FRecentCombo.Items.AddStrings(Values);
+  finally
+    Values.Free;
+  end;
 end;
 
 function TVittixDBGridFilterPopup.ValidateInput: Boolean;
