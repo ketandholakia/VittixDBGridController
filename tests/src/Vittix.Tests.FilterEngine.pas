@@ -53,6 +53,8 @@ type
     procedure FilterPopupRestoresOperatorFromSavedText;
     [Test]
     procedure FilterPopupLoadsPersistedHistory;
+    [Test]
+    procedure FilterPopupCanClearPersistedHistory;
   end;
 
 implementation
@@ -291,6 +293,33 @@ begin
     OwnerForm.Free;
     if FileExists(TempFile) then
       DeleteFile(TempFile);
+  end;
+end;
+
+procedure TVittixFilterEngineTests.FilterPopupCanClearPersistedHistory;
+var
+  OwnerForm: TForm;
+  Info: TVittixDBGridColumnInfo;
+  Popup: TVittixDBGridFilterPopup;
+  TempFile: string;
+begin
+  TempFile := TPath.Combine(TPath.GetTempPath, 'VittixDBGridFilterHistory.clear.ini');
+  TVittixDBGridFilterPopup.HistoryFileName := TempFile;
+  OwnerForm := TForm.CreateNew(nil);
+  try
+    Info := FColumns.FindByFieldName('Name');
+    Popup := TVittixDBGridFilterPopup.CreatePopup(OwnerForm, Info);
+    try
+      Popup.PersistHistory;
+      Assert.IsTrue(FileExists(TempFile));
+      Popup.ClearHistory;
+      Assert.IsFalse(FileExists(TempFile));
+    finally
+      Popup.Free;
+    end;
+  finally
+    TVittixDBGridFilterPopup.HistoryFileName := '';
+    OwnerForm.Free;
   end;
 end;
 

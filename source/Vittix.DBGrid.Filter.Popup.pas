@@ -27,6 +27,7 @@ type
     FButtonPanel: TPanel;
     FBtnOK: TButton;
     FBtnClear: TButton;
+    FBtnClearHistory: TButton;
     FBtnCancel: TButton;
     FLabelTitle: TLabel;
     FValidationLabel: TLabel;
@@ -39,6 +40,7 @@ type
     FOperatorHistoryKey: string;
 
     procedure BtnClearClick(Sender: TObject);
+    procedure BtnClearHistoryClick(Sender: TObject);
     procedure ApplyChanges;
     procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure ComboChange(Sender: TObject);
@@ -66,6 +68,7 @@ type
       AOnValidate: TFilterValidationEvent = nil
     ): Boolean;
     procedure PersistHistory;
+    procedure ClearHistory;
 
     property OperatorIndex: Integer read GetOperatorIndex;
     property FilterText: string read GetFilterText;
@@ -163,6 +166,15 @@ begin
   FBtnClear.Width := 90;
   FBtnClear.OnClick := BtnClearClick;
 
+  FBtnClearHistory := TButton.Create(Self);
+  FBtnClearHistory.Parent := FButtonPanel;
+  FBtnClearHistory.Caption := 'Clear History';
+  FBtnClearHistory.Align := alLeft;
+  FBtnClearHistory.AlignWithMargins := True;
+  FBtnClearHistory.Margins.SetBounds(4, 8, 4, 8);
+  FBtnClearHistory.Width := 100;
+  FBtnClearHistory.OnClick := BtnClearHistoryClick;
+
   // Validation Label
   FValidationLabel := TLabel.Create(Self);
   FValidationLabel.Parent := Self;
@@ -258,6 +270,19 @@ begin
   ApplyChanges;
 end;
 
+procedure TVittixDBGridFilterPopup.ClearHistory;
+var
+  LHistory: TStringList;
+begin
+  if GFilterHistory.TryGetValue(FHistoryKey, LHistory) then
+    LHistory.Clear;
+  if GFilterHistory.TryGetValue(FOperatorHistoryKey, LHistory) then
+    LHistory.Clear;
+
+  if FileExists(GetHistoryPath) then
+    TFile.Delete(GetHistoryPath);
+end;
+
 procedure TVittixDBGridFilterPopup.LoadPersistedHistory;
 var
   Ini: TIniFile;
@@ -311,6 +336,11 @@ begin
   FRecentCombo.Text := '';
   ApplyChanges;
   ModalResult := mrOk;
+end;
+
+procedure TVittixDBGridFilterPopup.BtnClearHistoryClick(Sender: TObject);
+begin
+  ClearHistory;
 end;
 
 procedure TVittixDBGridFilterPopup.ComboChange(Sender: TObject);
