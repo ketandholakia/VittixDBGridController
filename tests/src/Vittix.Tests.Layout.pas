@@ -101,6 +101,8 @@ type
     procedure ChooserFocusSearchBoxSelectsSearchEdit;
     [Test]
     procedure ChooserClampsToMinimumSizeOnResize;
+    [Test]
+    procedure ChooserSearchSummaryReflectsMatches;
   end;
 
 implementation
@@ -999,6 +1001,32 @@ begin
         Chooser.SetBounds(Chooser.Left, Chooser.Top, 10, 10);
         Assert.IsTrue(Chooser.Width >= 250);
         Assert.IsTrue(Chooser.Height >= 300);
+      finally
+        Chooser.Free;
+      end;
+    finally
+      Grid.Free;
+      OwnerForm.Free;
+    end;
+  finally
+  end;
+end;
+
+procedure TVittixLayoutTests.ChooserSearchSummaryReflectsMatches;
+var
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+  Chooser: TVittixDBGridColumnChooserForm;
+begin
+  OwnerForm := TForm.CreateNew(nil);
+  try
+    Grid := TVittixDBGrid.Create(OwnerForm);
+    try
+      Grid.Parent := OwnerForm;
+      Chooser := TVittixDBGridColumnChooserForm.CreateChooser(OwnerForm, Grid);
+      try
+        Chooser.SearchText := 'am';
+        Assert.AreEqual('1 matches', Chooser.SearchSummaryText);
       finally
         Chooser.Free;
       end;

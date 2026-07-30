@@ -52,6 +52,7 @@ type
     FSearchEdit: TEdit;
     FCheckList: TCheckListBox;
     FButtonPanel: TPanel;
+    FSearchSummary: TLabel;
     FBtnOK: TButton;
     FBtnCancel: TButton;
     FPopupMenu: TPopupMenu;
@@ -106,9 +107,11 @@ type
     procedure LoadDialogState;
     procedure SaveDialogState;
     procedure FocusSearchBox;
+    function GetSearchSummaryText: string;
     
     property AllowReorder: Boolean read FAllowReorder write FAllowReorder;
     property SearchText: string read GetSearchText write SetSearchText;
+    property SearchSummaryText: string read GetSearchSummaryText;
   end;
 
 implementation
@@ -193,6 +196,13 @@ begin
   FSearchEdit.Margins.SetBounds(8, 8, 8, 0);
   FSearchEdit.TextHint := 'Search columns';
   FSearchEdit.OnChange := SearchEditChange;
+
+  FSearchSummary := TLabel.Create(Self);
+  FSearchSummary.Parent := Self;
+  FSearchSummary.Align := alTop;
+  FSearchSummary.AlignWithMargins := True;
+  FSearchSummary.Margins.SetBounds(12, 2, 12, 0);
+  FSearchSummary.Caption := '';
 
   FButtonPanel := TPanel.Create(Self);
   FButtonPanel.Parent := Self;
@@ -305,8 +315,10 @@ var
   Query: string;
   Col: TColumn;
   CaptionText: string;
+  MatchCount: Integer;
 begin
   Query := Trim(FSearchEdit.Text).ToLower;
+  MatchCount := 0;
   FCheckList.Items.BeginUpdate;
   try
     for I := 0 to FCheckList.Items.Count - 1 do
@@ -317,10 +329,17 @@ begin
         (Query = '') or
         CaptionText.Contains(Query) or
         LowerCase(Col.FieldName).Contains(Query);
+      if FCheckList.ItemEnabled[I] then
+        Inc(MatchCount);
     end;
   finally
     FCheckList.Items.EndUpdate;
   end;
+
+  if Query = '' then
+    FSearchSummary.Caption := Format('%d columns', [FCheckList.Items.Count])
+  else
+    FSearchSummary.Caption := Format('%d matches', [MatchCount]);
 end;
 
 function TVittixDBGridColumnChooserForm.GetColumnCaption(
@@ -599,6 +618,14 @@ begin
       FSearchEdit.SetFocus;
     FSearchEdit.SelectAll;
   end;
+end;
+
+function TVittixDBGridColumnChooserForm.GetSearchSummaryText: string;
+begin
+  if Assigned(FSearchSummary) then
+    Result := FSearchSummary.Caption
+  else
+    Result := '';
 end;
 
 procedure TVittixDBGridColumnChooserForm.ResetLayout;
