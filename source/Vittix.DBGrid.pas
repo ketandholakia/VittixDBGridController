@@ -37,11 +37,11 @@ type
     procedure Loaded; override;
     procedure LayoutChanged; override;
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
-    procedure BeforeDestruction; override;
     procedure CreateWnd; override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
+    procedure BeforeDestruction; override;
 
     function ColumnInfoByColumn(Column: TColumn): TVittixDBGridColumnInfo;
     function GetIndicatorWidth: Integer;

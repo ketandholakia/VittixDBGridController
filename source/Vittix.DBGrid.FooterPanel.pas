@@ -198,7 +198,6 @@ var
   Col: TColumn;
   Info: TVittixDBGridColumnInfo;
   Text: string;
-  X: Integer;
   DrawFlags: Cardinal;
   StartCol: Integer;
 begin

@@ -112,8 +112,6 @@ class function TfrmExportDialog.Execute(AGrid: TVittixDBGrid): Boolean;
 var
   Dlg: TfrmExportDialog;
 begin
-  Result := False;
-  
   if not Assigned(AGrid) then
     raise Exception.Create('Grid is not assigned');
     
@@ -273,7 +271,6 @@ procedure TfrmExportDialog.GeneratePreview;
 var
   PreviewData: string;
   Exporter: TVittixDBGridExporter;
-  SavedRecordCount: Integer;
 begin
   memoPreview.Lines.Clear;
   memoPreview.Lines.Add('Generating preview...');
@@ -287,9 +284,7 @@ begin
     Exporter.Options.DateFormat := edtDateFormat.Text;
     Exporter.Options.TimeFormat := edtTimeFormat.Text;
     Exporter.Options.CurrencyFormat := edtCurrencyFormat.Text;
-    
-    // Limit preview to first 10 rows
-    SavedRecordCount := 0;
+
     if Assigned(FGrid.DataSource.DataSet) then
     begin
       FGrid.DataSource.DataSet.DisableControls;
