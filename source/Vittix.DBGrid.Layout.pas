@@ -48,6 +48,7 @@ type
   TVittixDBGridLayoutJsonStorage = class(TInterfacedObject, IVittixDBGridLayoutStorage)
   public
     class var StateFileName: string;
+    class var RootPath: string;
     procedure SaveToStream(const State: TVittixDBGridLayoutState; Stream: TStream);
     function LoadFromStream(Stream: TStream): TVittixDBGridLayoutState;
     class procedure SaveToFile(const State: TVittixDBGridLayoutState; const FileName: string = '');
@@ -60,6 +61,15 @@ function AggregationTypeToString(Value: TVittixAggregationType): string;
 function StringToAggregationType(const Value: string): TVittixAggregationType;
 
 implementation
+
+function LayoutFileName(const ExplicitFileName, RootPath, DefaultName: string): string;
+begin
+  if ExplicitFileName <> '' then
+    Exit(ExplicitFileName);
+  if RootPath <> '' then
+    Exit(IncludeTrailingPathDelimiter(RootPath) + DefaultName);
+  Result := '';
+end;
 
 function SortOrderToString(Value: TVittixSortOrder): string;
 begin
@@ -219,6 +229,8 @@ begin
     TargetFile := FileName
   else if StateFileName <> '' then
     TargetFile := StateFileName
+  else if RootPath <> '' then
+    TargetFile := IncludeTrailingPathDelimiter(RootPath) + 'layout.json'
   else
     Exit;
 
@@ -247,6 +259,8 @@ begin
     SourceFile := FileName
   else if StateFileName <> '' then
     SourceFile := StateFileName
+  else if RootPath <> '' then
+    SourceFile := IncludeTrailingPathDelimiter(RootPath) + 'layout.json'
   else
     Exit;
 

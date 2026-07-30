@@ -22,7 +22,6 @@ type
   /// </summary>
   TVittixDBGridFilterPopup = class(TForm)
   private
-    class var FHistoryFileName: string;
     FRecentCombo: TComboBox;
     FOperatorCombo: TComboBox;
     FButtonPanel: TPanel;
@@ -51,6 +50,7 @@ type
     function GetFilterText: string;
   public
     class var HistoryFileName: string;
+    class var RootPath: string;
     OnValidateFilterInput: TFilterValidationEvent;
 
     constructor CreatePopup(
@@ -73,6 +73,7 @@ implementation
 
 uses
   Data.DB,
+  System.IOUtils,
   System.IniFiles,
   System.Math,
   System.Generics.Collections;
@@ -258,6 +259,8 @@ function HistoryPath: string;
 begin
   if TVittixDBGridFilterPopup.HistoryFileName <> '' then
     Exit(TVittixDBGridFilterPopup.HistoryFileName);
+  if TVittixDBGridFilterPopup.RootPath <> '' then
+    Exit(TPath.Combine(TVittixDBGridFilterPopup.RootPath, 'filter.ini'));
   Result := IncludeTrailingPathDelimiter(ExtractFilePath(ParamStr(0))) + 'VittixDBGridFilterHistory.ini';
 end;
 
@@ -493,6 +496,7 @@ end;
 initialization
   GFilterHistory := TObjectDictionary<string, TStringList>.Create([doOwnsValues]);
   TVittixDBGridFilterPopup.HistoryFileName := '';
+  TVittixDBGridFilterPopup.RootPath := '';
 
 finalization
   GFilterHistory.Free;

@@ -82,6 +82,7 @@ type
     procedure SearchEditChange(Sender: TObject);
   public
     class var StateFileName: string;
+    class var RootPath: string;
     constructor CreateChooser(AOwner: TComponent; AGrid: TDBGrid); reintroduce;
     class function Execute(AGrid: TDBGrid): Boolean;
     procedure LoadDialogState;
@@ -301,6 +302,8 @@ var
 begin
   if StateFileName <> '' then
     FileName := StateFileName
+  else if RootPath <> '' then
+    FileName := TPath.Combine(RootPath, 'chooser.ini')
   else
     FileName := TPath.Combine(ExtractFilePath(ParamStr(0)), 'VittixDBGridChooser.ini');
   Ini := TIniFile.Create(FileName);
@@ -323,6 +326,8 @@ var
 begin
   if StateFileName <> '' then
     FileName := StateFileName
+  else if RootPath <> '' then
+    FileName := TPath.Combine(RootPath, 'chooser.ini')
   else
     FileName := TPath.Combine(ExtractFilePath(ParamStr(0)), 'VittixDBGridChooser.ini');
   Ini := TIniFile.Create(FileName);

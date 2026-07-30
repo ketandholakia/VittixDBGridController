@@ -59,6 +59,8 @@ type
     procedure LayoutStorageUsesConfiguredFileName;
     [Test]
     procedure GridSurfaceConfiguresAllPersistencePaths;
+    [Test]
+    procedure GridPersistenceRootPathFanOutsToHelpers;
   end;
 
 implementation
@@ -392,6 +394,27 @@ begin
       Assert.AreEqual('C:\temp\layout.json', TVittixDBGridLayoutJsonStorage.StateFileName);
       Assert.AreEqual('C:\temp\chooser.ini', TVittixDBGridColumnChooserForm.StateFileName);
       Assert.AreEqual('C:\temp\filter.ini', TVittixDBGridFilterPopup.HistoryFileName);
+    finally
+      OwnerForm.Free;
+    end;
+  finally
+  end;
+end;
+
+procedure TVittixLayoutTests.GridPersistenceRootPathFanOutsToHelpers;
+var
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+begin
+  OwnerForm := TForm.CreateNew(nil);
+  try
+    Grid := TVittixDBGrid.Create(OwnerForm);
+    try
+      Grid.PersistenceRootPath := 'C:\temp\vittix';
+
+      Assert.AreEqual('C:\temp\vittix', TVittixDBGridLayoutJsonStorage.RootPath);
+      Assert.AreEqual('C:\temp\vittix', TVittixDBGridColumnChooserForm.RootPath);
+      Assert.AreEqual('C:\temp\vittix', TVittixDBGridFilterPopup.RootPath);
     finally
       OwnerForm.Free;
     end;

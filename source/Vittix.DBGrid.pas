@@ -24,6 +24,7 @@ type
     FLayoutStorageFileName: string;
     FChooserStateFileName: string;
     FFilterHistoryFileName: string;
+    FPersistenceRootPath: string;
 
     // Local storage for design-time properties before Controller is ready
     FAlternatingRowColors: Boolean;
@@ -41,6 +42,7 @@ type
     procedure SetLayoutStorageFileName(const Value: string);
     procedure SetChooserStateFileName(const Value: string);
     procedure SetFilterHistoryFileName(const Value: string);
+    procedure SetPersistenceRootPath(const Value: string);
 
   protected
     procedure Loaded; override;
@@ -74,6 +76,9 @@ type
 
     property FilterHistoryFileName: string
       read FFilterHistoryFileName write SetFilterHistoryFileName;
+
+    property PersistenceRootPath: string
+      read FPersistenceRootPath write SetPersistenceRootPath;
 
     property DataSource: TDataSource read GetDataSource write SetDataSource;
 
@@ -261,6 +266,17 @@ begin
   begin
     FFilterHistoryFileName := Value;
     TVittixDBGridFilterPopup.HistoryFileName := Value;
+  end;
+end;
+
+procedure TVittixDBGrid.SetPersistenceRootPath(const Value: string);
+begin
+  if FPersistenceRootPath <> Value then
+  begin
+    FPersistenceRootPath := Value;
+    TVittixDBGridLayoutJsonStorage.RootPath := Value;
+    TVittixDBGridColumnChooserForm.RootPath := Value;
+    TVittixDBGridFilterPopup.RootPath := Value;
   end;
 end;
 
