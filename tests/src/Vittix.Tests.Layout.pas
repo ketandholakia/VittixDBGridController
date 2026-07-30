@@ -942,6 +942,8 @@ begin
         Chooser.SelectColumnIndex(1);
         Chooser.IncreaseSelectedColumnWidth;
         Assert.IsTrue(Column.Width > 100);
+        Chooser.SelectColumnIndex(1);
+        Chooser.AdjustSelectedColumnWidth(-16);
         Chooser.DecreaseSelectedColumnWidth;
         Assert.IsTrue(Column.Width <= 116);
       finally

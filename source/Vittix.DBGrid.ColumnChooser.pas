@@ -108,6 +108,7 @@ type
     procedure SaveDialogState;
     procedure FocusSearchBox;
     function GetSearchSummaryText: string;
+    procedure AdjustSelectedColumnWidth(Delta: Integer);
     
     property AllowReorder: Boolean read FAllowReorder write FAllowReorder;
     property SearchText: string read GetSearchText write SetSearchText;
@@ -460,6 +461,16 @@ begin
     DoSelectNone(Sender);
     Key := 0;
   end
+  else if (Key = VK_OEM_PLUS) and (ssCtrl in Shift) then
+  begin
+    DoGrowWidth(Sender);
+    Key := 0;
+  end
+  else if ((Key = VK_OEM_MINUS) or (Key = VK_SUBTRACT)) and (ssCtrl in Shift) then
+  begin
+    DoShrinkWidth(Sender);
+    Key := 0;
+  end
   // Space bar to toggle current item
   else if Key = VK_SPACE then
   begin
@@ -589,24 +600,13 @@ begin
 end;
 
 procedure TVittixDBGridColumnChooserForm.IncreaseSelectedColumnWidth;
-var
-  Col: TColumn;
 begin
-  if FCheckList.ItemIndex < 0 then Exit;
-  Col := TColumn(FCheckList.Items.Objects[FCheckList.ItemIndex]);
-  if not Assigned(Col) then Exit;
-  Col.Width := Col.Width + 16;
+  AdjustSelectedColumnWidth(16);
 end;
 
 procedure TVittixDBGridColumnChooserForm.DecreaseSelectedColumnWidth;
-var
-  Col: TColumn;
 begin
-  if FCheckList.ItemIndex < 0 then Exit;
-  Col := TColumn(FCheckList.Items.Objects[FCheckList.ItemIndex]);
-  if not Assigned(Col) then Exit;
-  if Col.Width > 24 then
-    Col.Width := Col.Width - 16;
+  AdjustSelectedColumnWidth(-16);
 end;
 
 procedure TVittixDBGridColumnChooserForm.FocusSearchBox;
@@ -618,6 +618,21 @@ begin
       FSearchEdit.SetFocus;
     FSearchEdit.SelectAll;
   end;
+end;
+
+procedure TVittixDBGridColumnChooserForm.AdjustSelectedColumnWidth(Delta: Integer);
+var
+  Col: TColumn;
+  NewWidth: Integer;
+begin
+  if FCheckList.ItemIndex < 0 then Exit;
+  Col := TColumn(FCheckList.Items.Objects[FCheckList.ItemIndex]);
+  if not Assigned(Col) then Exit;
+
+  NewWidth := Col.Width + Delta;
+  if NewWidth < 24 then
+    NewWidth := 24;
+  Col.Width := NewWidth;
 end;
 
 function TVittixDBGridColumnChooserForm.GetSearchSummaryText: string;
