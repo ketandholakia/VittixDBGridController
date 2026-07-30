@@ -1,6 +1,7 @@
 param(
   [string]$Config = "Release",
   [string]$Platform = "Win32",
+  [string]$Version = "1.0.0",
   [switch]$SkipPackageBuild,
   [switch]$SkipSetupCompile
 )
@@ -107,7 +108,7 @@ if (-not $SkipSetupCompile) {
 
   $issFile = Join-Path $installerDir "VittixDBGridController.iss"
   Write-Host "Compiling Inno Setup installer..."
-  & $iscc $issFile
+  & $iscc $issFile "/dMyAppVersion=$Version"
   if ($LASTEXITCODE -ne 0) {
     throw "Inno Setup compilation failed."
   }

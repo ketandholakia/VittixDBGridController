@@ -232,7 +232,7 @@ if (-not $SkipTagPush) {
 }
 
 if (-not $SkipInstallerBuild) {
-  & powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "build-installer.ps1") -Config $Config -Platform $Platform
+  & powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "build-installer.ps1") -Config $Config -Platform $Platform -Version $Version
   if ($LASTEXITCODE -ne 0) {
     throw "Installer build failed."
   }

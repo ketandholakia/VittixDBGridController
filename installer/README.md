@@ -63,7 +63,7 @@ To build the installer, tag the repo, and publish a GitHub release with the inst
 
 ```powershell
 $env:GITHUB_TOKEN = "your-token"
-powershell -ExecutionPolicy Bypass -File .\installer\release-github.ps1 -Version 1.0.0
+powershell -ExecutionPolicy Bypass -File .\installer\release-github.ps1 -Version 1.0.4
 ```
 
 If `gh` is installed and authenticated, the script will prefer `gh release create`. Otherwise it falls back to the GitHub REST API using `GITHUB_TOKEN`.
@@ -72,7 +72,7 @@ What it does:
 
 - Verifies the git worktree is clean
 - Builds the installer through `installer\build-installer.ps1`
-- Creates and pushes tag `v1.0.0`
+- Creates and pushes a tag that matches the supplied `-Version`
 - Creates a GitHub release on the `origin` repository
 - Uploads `installer\output\VittixDBGridControllerSetup.exe` as a release asset
 
