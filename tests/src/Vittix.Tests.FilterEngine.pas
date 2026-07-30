@@ -6,6 +6,7 @@ uses
   System.SysUtils,
   Datasnap.DBClient,
   Data.DB,
+  System.IOUtils,
   Vcl.Forms,
   DUnitX.TestFramework,
   Vittix.DBGrid.ColumnInfo,
@@ -50,6 +51,8 @@ type
     procedure FilterOperatorsSupportEqualsAndComparisonModes;
     [Test]
     procedure FilterPopupRestoresOperatorFromSavedText;
+    [Test]
+    procedure FilterPopupUsesConfiguredHistoryFile;
   end;
 
 implementation
@@ -253,6 +256,36 @@ begin
     end;
   finally
     OwnerForm.Free;
+  end;
+end;
+
+procedure TVittixFilterEngineTests.FilterPopupUsesConfiguredHistoryFile;
+var
+  OwnerForm: TForm;
+  Info: TVittixDBGridColumnInfo;
+  Popup: TVittixDBGridFilterPopup;
+  TempFile: string;
+begin
+  TempFile := TPath.Combine(TPath.GetTempPath, 'VittixDBGridFilterHistory.test.ini');
+  TVittixDBGridFilterPopup.HistoryFileName := TempFile;
+  OwnerForm := TForm.CreateNew(nil);
+  try
+    Info := FColumns.FindByFieldName('Name');
+    Info.FilterText := '';
+    Info.HasFilter := False;
+    Popup := TVittixDBGridFilterPopup.CreatePopup(OwnerForm, Info);
+    try
+      Popup.PersistHistory;
+    finally
+      Popup.Free;
+    end;
+
+    Assert.IsTrue(FileExists(TempFile));
+  finally
+    OwnerForm.Free;
+    TVittixDBGridFilterPopup.HistoryFileName := '';
+    if FileExists(TempFile) then
+      DeleteFile(TempFile);
   end;
 end;
 

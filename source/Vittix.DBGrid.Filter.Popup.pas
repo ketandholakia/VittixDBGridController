@@ -22,6 +22,7 @@ type
   /// </summary>
   TVittixDBGridFilterPopup = class(TForm)
   private
+    class var FHistoryFileName: string;
     FRecentCombo: TComboBox;
     FOperatorCombo: TComboBox;
     FButtonPanel: TPanel;
@@ -49,6 +50,7 @@ type
     function GetOperatorIndex: Integer;
     function GetFilterText: string;
   public
+    class var HistoryFileName: string;
     OnValidateFilterInput: TFilterValidationEvent;
 
     constructor CreatePopup(
@@ -61,6 +63,7 @@ type
       AColumnInfo: TVittixDBGridColumnInfo;
       AOnValidate: TFilterValidationEvent = nil
     ): Boolean;
+    procedure PersistHistory;
 
     property OperatorIndex: Integer read GetOperatorIndex;
     property FilterText: string read GetFilterText;
@@ -70,6 +73,7 @@ implementation
 
 uses
   Data.DB,
+  System.IniFiles,
   System.Math,
   System.Generics.Collections;
 
@@ -243,6 +247,18 @@ begin
 
   ActiveControl := FRecentCombo;
   FRecentCombo.OnChange := ComboChange;
+end;
+
+procedure TVittixDBGridFilterPopup.PersistHistory;
+begin
+  ApplyChanges;
+end;
+
+function HistoryPath: string;
+begin
+  if TVittixDBGridFilterPopup.HistoryFileName <> '' then
+    Exit(TVittixDBGridFilterPopup.HistoryFileName);
+  Result := IncludeTrailingPathDelimiter(ExtractFilePath(ParamStr(0))) + 'VittixDBGridFilterHistory.ini';
 end;
 
 procedure TVittixDBGridFilterPopup.FormKeyDown(
@@ -434,6 +450,18 @@ begin
   FColumnInfo.HasFilter := NewText <> '';
   
   FOriginalText := NewText;
+
+  try
+    with TIniFile.Create(HistoryPath) do
+    try
+      WriteString(FHistoryKey, 'LastFilter', NewText);
+      WriteInteger(FHistoryKey, 'OperatorIndex', FOperatorCombo.ItemIndex);
+    finally
+      Free;
+    end;
+  except
+    // Non-fatal; in-memory history still works.
+  end;
 end;
 
 class function TVittixDBGridFilterPopup.Execute(
@@ -464,6 +492,7 @@ end;
 
 initialization
   GFilterHistory := TObjectDictionary<string, TStringList>.Create([doOwnsValues]);
+  TVittixDBGridFilterPopup.HistoryFileName := '';
 
 finalization
   GFilterHistory.Free;
