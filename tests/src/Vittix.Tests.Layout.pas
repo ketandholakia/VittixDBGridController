@@ -78,6 +78,8 @@ type
     [Test]
     procedure ChooserResetRestoresOriginalLayout;
     [Test]
+    procedure ChooserRevertTransientChangesRestoresWidthsAndOrder;
+    [Test]
     procedure FooterCanClearAllAggregationsThroughPublicApi;
     [Test]
     procedure ChooserCanAdjustColumnWidthThroughPublicApi;
@@ -650,6 +652,39 @@ begin
         Assert.IsTrue(Grid.Columns[2].Visible);
         Assert.AreEqual(100, Grid.Columns[1].Width);
         Assert.AreEqual(180, Grid.Columns[2].Width);
+      finally
+        Chooser.Free;
+      end;
+    finally
+      Grid.Free;
+      OwnerForm.Free;
+    end;
+  finally
+  end;
+end;
+
+procedure TVittixLayoutTests.ChooserRevertTransientChangesRestoresWidthsAndOrder;
+var
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+  Chooser: TVittixDBGridColumnChooserForm;
+begin
+  OwnerForm := TForm.CreateNew(nil);
+  try
+    Grid := TVittixDBGrid.Create(OwnerForm);
+    try
+      Grid.Parent := OwnerForm;
+      Chooser := TVittixDBGridColumnChooserForm.CreateChooser(OwnerForm, Grid);
+      try
+        Grid.Columns[0].Index := 2;
+        Grid.Columns[1].Width := 140;
+        Grid.Columns[2].Width := 160;
+
+        Chooser.RevertTransientChanges;
+
+        Assert.AreEqual(0, Grid.Columns[0].Index);
+        Assert.AreEqual(140, Grid.Columns[1].Width);
+        Assert.AreEqual(160, Grid.Columns[2].Width);
       finally
         Chooser.Free;
       end;

@@ -96,6 +96,7 @@ type
     constructor CreateChooser(AOwner: TComponent; AGrid: TDBGrid); reintroduce;
     class function Execute(AGrid: TDBGrid): Boolean;
     procedure ResetLayout;
+    procedure RevertTransientChanges;
     procedure SelectColumnIndex(AIndex: Integer);
     procedure IncreaseSelectedColumnWidth;
     procedure DecreaseSelectedColumnWidth;
@@ -569,6 +570,12 @@ begin
   DoReset(Self);
 end;
 
+procedure TVittixDBGridColumnChooserForm.RevertTransientChanges;
+begin
+  RollbackColumnOrder;
+  RestoreOriginalColumnWidths;
+end;
+
 procedure TVittixDBGridColumnChooserForm.SelectColumnIndex(AIndex: Integer);
 begin
   if (AIndex < 0) or (AIndex >= FCheckList.Items.Count) then
@@ -614,15 +621,16 @@ begin
 
   Frm := TVittixDBGridColumnChooserForm.CreateChooser(nil, AGrid);
   try
-  if Frm.ShowModal = mrOk then
+    if Frm.ShowModal = mrOk then
     begin
       Frm.ApplySelection;
       Frm.SaveDialogState;
       Result := True;
     end
     else
-      // FIX BUG 9: Roll back any live column reordering done during drag-drop
-      Frm.RollbackColumnOrder;
+    begin
+      Frm.RevertTransientChanges;
+    end;
   finally
     Frm.Free;
   end;
