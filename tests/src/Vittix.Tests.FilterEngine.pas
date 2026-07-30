@@ -57,6 +57,8 @@ type
     procedure FilterPopupCanClearPersistedHistory;
     [Test]
     procedure FilterPopupUsesConfiguredRootPath;
+    [Test]
+    procedure FilterPopupClearHistoryClearsInMemoryState;
   end;
 
 implementation
@@ -382,6 +384,42 @@ begin
       DeleteFile(PersistedFile);
     if TDirectory.Exists(RootPath) then
       TDirectory.Delete(RootPath, True);
+  end;
+end;
+
+procedure TVittixFilterEngineTests.FilterPopupClearHistoryClearsInMemoryState;
+var
+  OwnerForm: TForm;
+  Info: TVittixDBGridColumnInfo;
+  Popup: TVittixDBGridFilterPopup;
+  TempFile: string;
+begin
+  TempFile := TPath.Combine(TPath.GetTempPath, 'VittixDBGridFilterHistory.memory.ini');
+  TVittixDBGridFilterPopup.HistoryFileName := TempFile;
+  OwnerForm := TForm.CreateNew(nil);
+  try
+    Info := FColumns.FindByFieldName('Name');
+    Popup := TVittixDBGridFilterPopup.CreatePopup(OwnerForm, Info);
+    try
+      Popup.PersistHistory;
+      Popup.ClearHistory;
+      Popup := TVittixDBGridFilterPopup.CreatePopup(OwnerForm, Info);
+      try
+        Assert.AreEqual('', Popup.FilterText);
+        Assert.AreEqual(0, Popup.OperatorIndex);
+      finally
+        Popup.Free;
+        Popup := nil;
+      end;
+    finally
+      if Assigned(Popup) then
+        Popup.Free;
+    end;
+  finally
+    TVittixDBGridFilterPopup.HistoryFileName := '';
+    OwnerForm.Free;
+    if FileExists(TempFile) then
+      DeleteFile(TempFile);
   end;
 end;
 
