@@ -44,6 +44,8 @@ type
     [Test]
     procedure ApplyLayout_RestoresFooterCustomization;
     [Test]
+    procedure ApplyLayout_RestoresFooterVisible;
+    [Test]
     procedure ApplyLayout_IgnoresMissingFields;
     [Test]
     procedure ApplyLayout_IgnoresUnknownSavedFields;
@@ -191,6 +193,21 @@ begin
     Assert.IsTrue(FController.ShowFooter);
     Assert.AreEqual(vatNone, FGrid.ColumnInfoByColumn(FGrid.Columns[1]).AggregationType);
     Assert.AreEqual(vatNone, FGrid.ColumnInfoByColumn(FGrid.Columns[2]).AggregationType);
+  finally
+    State.Free;
+  end;
+end;
+
+procedure TVittixLayoutTests.ApplyLayout_RestoresFooterVisible;
+var
+  State: TVittixDBGridLayoutState;
+begin
+  State := TVittixDBGridLayoutState.Create;
+  try
+    FController.CaptureLayout(State);
+    FController.ShowFooter := False;
+    FController.ApplyLayout(State);
+    Assert.IsTrue(FController.ShowFooter);
   finally
     State.Free;
   end;
