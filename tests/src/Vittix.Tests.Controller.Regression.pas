@@ -6,6 +6,7 @@ uses
   Datasnap.DBClient,
   Data.DB,
   Vcl.Forms,
+  System.SysUtils,
   DUnitX.TestFramework,
   Vittix.DBGrid;
 
@@ -60,12 +61,11 @@ procedure TVittixControllerRegressionTests.ExistingAfterPostHandlerStillFiresAft
 var
   DataSet: TClientDataSet;
   OwnerForm: TForm;
-  Grid: TVittixDBGrid;
 begin
   DataSet := CreateSampleDataSet;
   try
     DataSet.AfterPost := DatasetAfterPost;
-    Grid := CreateHeadlessGrid(DataSet, OwnerForm);
+    CreateHeadlessGrid(DataSet, OwnerForm);
     try
       DataSet.Edit;
       DataSet.FieldByName('Name').AsString := 'Alpha updated';
@@ -83,12 +83,11 @@ procedure TVittixControllerRegressionTests.ExistingAfterScrollHandlerStillFiresA
 var
   DataSet: TClientDataSet;
   OwnerForm: TForm;
-  Grid: TVittixDBGrid;
 begin
   DataSet := CreateSampleDataSet;
   try
     DataSet.AfterScroll := DatasetAfterScroll;
-    Grid := CreateHeadlessGrid(DataSet, OwnerForm);
+    CreateHeadlessGrid(DataSet, OwnerForm);
     try
       FAfterScrollCalled := False;
       DataSet.First;
@@ -106,11 +105,10 @@ procedure TVittixControllerRegressionTests.GridTeardownDoesNotRaise;
 var
   DataSet: TClientDataSet;
   OwnerForm: TForm;
-  Grid: TVittixDBGrid;
 begin
   DataSet := CreateSampleDataSet;
   try
-    Grid := CreateHeadlessGrid(DataSet, OwnerForm);
+    CreateHeadlessGrid(DataSet, OwnerForm);
     Assert.WillNotRaise(
       procedure
       begin
@@ -183,6 +181,7 @@ begin
     DataSet.AfterClose := DatasetAfterClose;
     Grid := CreateHeadlessGrid(DataSet, OwnerForm);
     try
+      Assert.IsNotNull(Grid);
       FAfterCloseCalled := False;
       DataSet.Close;
       Assert.IsTrue(FAfterCloseCalled);
@@ -209,14 +208,15 @@ begin
   DataSet := CreateSampleDataSet;
   try
     Grid := CreateHeadlessGrid(DataSet, OwnerForm);
-    Assert.WillNotRaise(
-      procedure
-      begin
-        OwnerForm.Free;
-        DataSet.Free;
-        DataSet := nil;
-      end
-    );
+    try
+      Assert.IsNotNull(Grid);
+      OwnerForm.Free;
+      DataSet.Free;
+      DataSet := nil;
+    except
+      on E: Exception do
+        Assert.Fail(E.ClassName + ': ' + E.Message);
+    end;
   finally
     if Assigned(DataSet) then
       DataSet.Free;

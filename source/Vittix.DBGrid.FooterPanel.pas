@@ -22,6 +22,7 @@ uses
   System.Classes,
   System.Types,
   System.SysUtils,
+  System.UITypes,
   Winapi.Windows,
   Vcl.Controls,
   Vcl.Graphics,
