@@ -288,10 +288,31 @@ begin
       Popup.Free;
     end;
 
+    Info.FilterText := '!Alpha';
+    Info.HasFilter := True;
     Popup := TVittixDBGridFilterPopup.CreatePopup(OwnerForm, Info);
     try
+      Popup.PersistHistory;
+    finally
+      Popup.Free;
+    end;
+
+    Info.FilterText := '';
+    Info.HasFilter := False;
+    Popup := TVittixDBGridFilterPopup.CreatePopup(OwnerForm, Info);
+    try
+      Assert.AreEqual(4, Popup.OperatorIndex);
       Assert.AreEqual('', Popup.FilterText);
-      Assert.AreEqual(0, Popup.OperatorIndex);
+      Popup.PersistHistory;
+    finally
+      Popup.Free;
+    end;
+
+    Popup := TVittixDBGridFilterPopup.CreatePopup(OwnerForm, Info);
+    try
+      Assert.AreEqual(4, Popup.OperatorIndex);
+      Assert.AreEqual('', Popup.FilterText);
+      Popup.PersistHistory;
     finally
       Popup.Free;
     end;
