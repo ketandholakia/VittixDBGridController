@@ -125,6 +125,7 @@ type
     function GetExportColumns: TList<TColumn>;
     function FormatFieldValue(Field: TField): string;
     function EscapeCSV(const Value: string): string;
+    function NeutralizeFormulaInjection(const Value: string): string;
     function EscapeHTML(const Value: string): string;
     function EscapeXML(const Value: string): string;
     function EscapeJSON(const Value: string): string;
@@ -337,19 +338,31 @@ function TVittixDBGridExporter.EscapeCSV(const Value: string): string;
 var
   NeedsQuotes: Boolean;
 begin
+  Result := NeutralizeFormulaInjection(Value);
+
   NeedsQuotes := (Pos(FOptions.Delimiter, Value) > 0) or 
                  (Pos(FOptions.QuoteChar, Value) > 0) or
-                 (Pos(#13, Value) > 0) or 
-                 (Pos(#10, Value) > 0);
+                 (Pos(#13, Result) > 0) or 
+                 (Pos(#10, Result) > 0);
                  
   if NeedsQuotes then
   begin
-    Result := StringReplace(Value, FOptions.QuoteChar, 
+    Result := StringReplace(Result, FOptions.QuoteChar, 
       FOptions.QuoteChar + FOptions.QuoteChar, [rfReplaceAll]);
     Result := FOptions.QuoteChar + Result + FOptions.QuoteChar;
   end
-  else
-    Result := Value;
+end;
+
+function TVittixDBGridExporter.NeutralizeFormulaInjection(const Value: string): string;
+begin
+  Result := Value;
+  if Result = '' then
+    Exit;
+
+  case Result[1] of
+    '=', '+', '-', '@':
+      Result := '''' + Result;
+  end;
 end;
 
 function TVittixDBGridExporter.EscapeHTML(const Value: string): string;

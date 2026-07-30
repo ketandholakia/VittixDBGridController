@@ -42,6 +42,10 @@ type
     procedure CancelStopsExportEarly;
     [Test]
     procedure CancelledFileExportDoesNotOverwriteExistingFile;
+    [Test]
+    procedure CsvNeutralizesFormulaLeadingValues;
+    [Test]
+    procedure TsvNeutralizesFormulaLeadingValues;
   end;
 
 implementation
@@ -266,6 +270,33 @@ begin
 
   Assert.AreEqual(OriginalText, TFile.ReadAllText(TempFileName, TEncoding.UTF8));
   TFile.Delete(TempFileName);
+end;
+
+procedure TVittixExportEngineTests.CsvNeutralizesFormulaLeadingValues;
+var
+  Output: string;
+begin
+  FDataSet.Edit;
+  FDataSet.FieldByName('Name').AsString := '=SUM(1,2)';
+  FDataSet.Post;
+
+  Output := FExporter.ExportToString(vefCSV);
+
+  Assert.IsTrue(Output.Contains('''=SUM(1,2)'));
+  Assert.IsFalse(Output.Contains(#10'=SUM(1,2)'));
+end;
+
+procedure TVittixExportEngineTests.TsvNeutralizesFormulaLeadingValues;
+var
+  Output: string;
+begin
+  FDataSet.Edit;
+  FDataSet.FieldByName('Name').AsString := '+SUM(1,2)';
+  FDataSet.Post;
+
+  Output := FExporter.ExportToString(vefTSV);
+
+  Assert.IsTrue(Output.Contains('''+SUM(1,2)'));
 end;
 
 end.
