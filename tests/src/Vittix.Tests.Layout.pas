@@ -74,6 +74,8 @@ type
     [Test]
     procedure GridCanSaveAndLoadLayoutToExplicitFile;
     [Test]
+    procedure GridExplicitLayoutFileOverridesRootPath;
+    [Test]
     procedure FooterCanClearAggregationThroughPublicApi;
     [Test]
     procedure ChooserResetRestoresOriginalLayout;
@@ -606,6 +608,46 @@ begin
   finally
     if FileExists(TempFile) then
       DeleteFile(TempFile);
+  end;
+end;
+
+procedure TVittixLayoutTests.GridExplicitLayoutFileOverridesRootPath;
+var
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+  RootPath: string;
+  ExplicitFile: string;
+  RootFile: string;
+begin
+  RootPath := TPath.Combine(TPath.GetTempPath, 'VittixDBGridLayoutRoot.test');
+  ExplicitFile := TPath.Combine(TPath.GetTempPath, 'VittixDBGridLayoutExplicit.test.json');
+  RootFile := TPath.Combine(RootPath, 'layout.json');
+  ForceDirectories(RootPath);
+  OwnerForm := TForm.CreateNew(nil);
+  try
+    Grid := TVittixDBGrid.Create(OwnerForm);
+    try
+      Grid.PersistenceRootPath := RootPath;
+      Grid.LayoutStorageFileName := ExplicitFile;
+      Grid.Columns[0].Width := 190;
+      TVittixDBGridController(Grid.Controller).SaveLayoutToFile;
+      Assert.IsTrue(FileExists(ExplicitFile));
+      Assert.IsFalse(FileExists(RootFile));
+
+      Grid.Columns[0].Width := 50;
+      TVittixDBGridController(Grid.Controller).LoadLayoutFromFile;
+      Assert.AreEqual(190, Grid.Columns[0].Width);
+    finally
+      Grid.Free;
+      OwnerForm.Free;
+    end;
+  finally
+    if FileExists(ExplicitFile) then
+      DeleteFile(ExplicitFile);
+    if FileExists(RootFile) then
+      DeleteFile(RootFile);
+    if TDirectory.Exists(RootPath) then
+      TDirectory.Delete(RootPath, True);
   end;
 end;
 
