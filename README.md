@@ -164,3 +164,13 @@ Current behavior:
 - explicit file properties take precedence when set
 - `PersistenceRootPath` acts as the shared fallback base
 - the component keeps persistence wiring internal; application code configures only `TVittixDBGrid`
+
+### Chooser, filter, and footer behavior
+
+The current chooser and popup surfaces now include a few small but useful affordances:
+
+- chooser search supports multiple terms, a live match summary, `Ctrl+F` focus, `Esc` clear, and `Ctrl+Up` / `Ctrl+Down` reorder
+- filter popup supports `Enter` commit, `Esc` cancel, scoped history, distinct-value restriction, and `Not Between`
+- footer popup exposes clear-current and clear-all actions, plus keyboard accelerators for those actions
+
+For testability, several of these surfaces expose read-only summary helpers on the corresponding classes. They are intended for regression coverage and diagnostics, not as a new public UI contract.
