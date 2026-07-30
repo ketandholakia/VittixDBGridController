@@ -6,6 +6,7 @@ uses
   System.Classes,
   System.SysUtils,
   System.TypInfo,
+  System.StrUtils,
   System.Generics.Collections,
   System.Generics.Defaults,
   Data.DB,
@@ -47,6 +48,7 @@ type
     procedure ApplySorting;
     procedure ClearSorting;
     procedure ToggleSort(AColumn: TColumn; MultiColumn: Boolean = False);
+    function GetSortSummaryText: string;
 
     property OnFieldValidation: TFieldValidationEvent read FOnFieldValidation write FOnFieldValidation;
   end;
@@ -387,6 +389,26 @@ begin
 
   NormalizeSortIndices;
   ApplySorting;
+end;
+
+function TVittixDBGridSortEngine.GetSortSummaryText: string;
+var
+  Parts: TStringList;
+  I: Integer;
+begin
+  Parts := TStringList.Create;
+  try
+    for I := 0 to FColumns.Count - 1 do
+      if FColumns[I].SortOrder <> vsoNone then
+        Parts.Add(Format('%s:%s#%d', [
+          FColumns[I].FieldName,
+          IfThen(FColumns[I].SortOrder = vsoAsc, 'A', 'D'),
+          FColumns[I].SortIndex
+        ]));
+    Result := Parts.CommaText;
+  finally
+    Parts.Free;
+  end;
 end;
 
 end.

@@ -37,6 +37,8 @@ type
     [Test]
     procedure MultiColumnSortBuildsExpectedIndexFieldNames;
     [Test]
+    procedure SortSummaryTextReflectsCurrentSortOrder;
+    [Test]
     procedure UnknownFieldIsSkippedAndReported;
     [Test]
     procedure ClearSortingResetsMetadataAndDatasetIndex;
@@ -113,6 +115,15 @@ begin
   Assert.AreEqual(1, FDataSet.FieldByName('ID').AsInteger);
   FDataSet.Next;
   Assert.AreEqual(4, FDataSet.FieldByName('ID').AsInteger);
+end;
+
+procedure TVittixSortEngineTests.SortSummaryTextReflectsCurrentSortOrder;
+begin
+  FEngine.ToggleSort(FGrid.Columns[1], False);
+  FEngine.ToggleSort(FGrid.Columns[2], True);
+  FEngine.ToggleSort(FGrid.Columns[2], True);
+
+  Assert.AreEqual('Name:A#0,Amount:D#1', FEngine.GetSortSummaryText);
 end;
 
 procedure TVittixSortEngineTests.UnknownFieldIsSkippedAndReported;
