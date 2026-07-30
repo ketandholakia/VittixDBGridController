@@ -21,7 +21,7 @@ type
   TVittixFilterMatchMode = (
     vfmContains, vfmEquals, vfmStartsWith, vfmEndsWith,
     vfmNotEquals, vfmGreaterThan, vfmGreaterOrEqual, vfmLessThan, vfmLessOrEqual,
-    vfmBetween
+    vfmBetween, vfmNotBetween
   );
 
   // NEW: Filter validation event
@@ -360,6 +360,7 @@ begin
   if Copy(Value, 1, 2) = '>=' then begin Mode := vfmGreaterOrEqual; Delete(Value, 1, 2); Exit; end;
   if Copy(Value, 1, 2) = '<=' then begin Mode := vfmLessOrEqual; Delete(Value, 1, 2); Exit; end;
   if Copy(Value, 1, 2) = '<>' then begin Mode := vfmNotEquals; Delete(Value, 1, 2); Exit; end;
+  if Copy(Value, 1, 3) = '!..' then begin Mode := vfmNotBetween; Delete(Value, 1, 3); Exit; end;
   if Copy(Value, 1, 2) = '..' then begin Mode := vfmBetween; Delete(Value, 1, 2); Exit; end;
   if Copy(Value, 1, 1) = '=' then begin Mode := vfmEquals; Delete(Value, 1, 1); Exit; end;
   if Copy(Value, 1, 1) = '!' then begin Mode := vfmNotEquals; Delete(Value, 1, 1); Exit; end;
@@ -400,7 +401,8 @@ begin
     vfmGreaterOrEqual,
     vfmLessThan,
     vfmLessOrEqual,
-    vfmBetween:
+    vfmBetween,
+    vfmNotBetween:
       begin
         if Mode = vfmBetween then
         begin
@@ -416,6 +418,25 @@ begin
           if TryStrToFloat(LowText, FN) and TryStrToFloat(Hay, VN) and
              TryStrToFloat(HighText, HighVal) then
             Result := (VN >= FN) and (VN <= HighVal)
+          else
+            Result := False;
+          Exit;
+        end;
+
+        if Mode = vfmNotBetween then
+        begin
+          if Pos('|', Needle) = 0 then
+            Exit(False);
+
+          Parts := Needle.Split(['|']);
+          if Length(Parts) <> 2 then
+            Exit(False);
+
+          LowText := Trim(Parts[0]);
+          HighText := Trim(Parts[1]);
+          if TryStrToFloat(LowText, FN) and TryStrToFloat(Hay, VN) and
+             TryStrToFloat(HighText, HighVal) then
+            Result := (VN < FN) or (VN > HighVal)
           else
             Result := False;
           Exit;

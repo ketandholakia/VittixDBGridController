@@ -216,6 +216,7 @@ begin
   FOperatorCombo.Items.Add('Less Than');
   FOperatorCombo.Items.Add('Less or Equal');
   FOperatorCombo.Items.Add('Between');
+  FOperatorCombo.Items.Add('Not Between');
   FOperatorCombo.ItemIndex := 0;
   
   // Load existing filter
@@ -379,6 +380,7 @@ begin
     8: Result := '<';
     9: Result := '<=';
     10: Result := '..';
+    11: Result := '!..';
   else
     Result := '';
   end;
@@ -397,6 +399,7 @@ begin
   if Prefix = '<' then Exit(8);
   if Prefix = '<=' then Exit(9);
   if Prefix = '..' then Exit(10);
+  if Prefix = '!..' then Exit(11);
   Result := 0;
 end;
 

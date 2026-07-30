@@ -52,9 +52,13 @@ type
     [Test]
     procedure FilterOperatorsSupportBetweenRanges;
     [Test]
+    procedure FilterOperatorsSupportNotBetweenRanges;
+    [Test]
     procedure FilterPopupRestoresOperatorFromSavedText;
     [Test]
     procedure FilterPopupRestoresBetweenOperatorFromSavedText;
+    [Test]
+    procedure FilterPopupRestoresNotBetweenOperatorFromSavedText;
     [Test]
     procedure FilterPopupLoadsPersistedHistory;
     [Test]
@@ -273,6 +277,16 @@ begin
   Assert.AreEqual(150, FDataSet.FieldByName('Amount').AsInteger);
 end;
 
+procedure TVittixFilterEngineTests.FilterOperatorsSupportNotBetweenRanges;
+begin
+  FColumns.FindByFieldName('Amount').FilterText := '!..150|300';
+  FColumns.FindByFieldName('Amount').HasFilter := True;
+  FEngine.Active := True;
+
+  Assert.AreEqual(3, CountVisibleRecords(FDataSet));
+  Assert.AreEqual(50, FDataSet.FieldByName('Amount').AsInteger);
+end;
+
 procedure TVittixFilterEngineTests.FilterPopupRestoresOperatorFromSavedText;
 var
   OwnerForm: TForm;
@@ -310,6 +324,29 @@ begin
     Popup := TVittixDBGridFilterPopup.CreatePopup(OwnerForm, Info);
     try
       Assert.AreEqual(10, Popup.OperatorIndex);
+      Assert.AreEqual('150|300', Popup.FilterText);
+    finally
+      Popup.Free;
+    end;
+  finally
+    OwnerForm.Free;
+  end;
+end;
+
+procedure TVittixFilterEngineTests.FilterPopupRestoresNotBetweenOperatorFromSavedText;
+var
+  OwnerForm: TForm;
+  Info: TVittixDBGridColumnInfo;
+  Popup: TVittixDBGridFilterPopup;
+begin
+  OwnerForm := TForm.CreateNew(nil);
+  try
+    Info := FColumns.FindByFieldName('Amount');
+    Info.FilterText := '!..150|300';
+    Info.HasFilter := True;
+    Popup := TVittixDBGridFilterPopup.CreatePopup(OwnerForm, Info);
+    try
+      Assert.AreEqual(11, Popup.OperatorIndex);
       Assert.AreEqual('150|300', Popup.FilterText);
     finally
       Popup.Free;
