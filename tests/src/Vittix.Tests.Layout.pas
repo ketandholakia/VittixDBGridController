@@ -72,6 +72,8 @@ type
     procedure FooterCanClearAggregationThroughPublicApi;
     [Test]
     procedure ChooserResetRestoresOriginalLayout;
+    [Test]
+    procedure FooterCanClearAllAggregationsThroughPublicApi;
   end;
 
 implementation
@@ -561,6 +563,25 @@ begin
       OwnerForm.Free;
     end;
   finally
+  end;
+end;
+
+procedure TVittixLayoutTests.FooterCanClearAllAggregationsThroughPublicApi;
+var
+  Footer: TVittixDBGridFooterPanel;
+begin
+  Footer := TVittixDBGridFooterPanel.Create(FOwnerForm);
+  try
+    Footer.Attach(FGrid, nil);
+    FGrid.ColumnInfoByColumn(FGrid.Columns[1]).AggregationType := vatSum;
+    FGrid.ColumnInfoByColumn(FGrid.Columns[2]).AggregationType := vatMax;
+
+    Footer.ClearAllAggregations;
+
+    Assert.AreEqual(vatNone, FGrid.ColumnInfoByColumn(FGrid.Columns[1]).AggregationType);
+    Assert.AreEqual(vatNone, FGrid.ColumnInfoByColumn(FGrid.Columns[2]).AggregationType);
+  finally
+    Footer.Free;
   end;
 end;
 

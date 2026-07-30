@@ -46,6 +46,7 @@ type
     procedure BuildPopup;
     procedure PopupClick(Sender: TObject);
     procedure PopupClearClick(Sender: TObject);
+    procedure PopupClearAllClick(Sender: TObject);
     function HitTestColumn(X: Integer): TColumn;
     function GetIndicatorOffset: Integer;
     function GetIndicatorRect: TRect;
@@ -63,6 +64,7 @@ type
     );
     procedure SyncLayout;
     procedure ClearAggregationForColumn(AColumn: TColumn);
+    procedure ClearAllAggregations;
   end;
 
 implementation
@@ -370,6 +372,11 @@ begin
   FPopup.Items.Add(Item);
 
   Item := TMenuItem.Create(FPopup);
+  Item.Caption := 'Clear all aggregations';
+  Item.OnClick := PopupClearAllClick;
+  FPopup.Items.Add(Item);
+
+  Item := TMenuItem.Create(FPopup);
   Item.Caption := '-';
   FPopup.Items.Add(Item);
 
@@ -394,6 +401,11 @@ begin
   ClearAggregationForColumn(FContextColumn);
 end;
 
+procedure TVittixDBGridFooterPanel.PopupClearAllClick(Sender: TObject);
+begin
+  ClearAllAggregations;
+end;
+
 procedure TVittixDBGridFooterPanel.ClearAggregationForColumn(AColumn: TColumn);
 var
   Info: TVittixDBGridColumnInfo;
@@ -412,6 +424,16 @@ begin
     Invalidate;
     FGrid.Invalidate;
   end;
+end;
+
+procedure TVittixDBGridFooterPanel.ClearAllAggregations;
+var
+  I: Integer;
+begin
+  if not Assigned(FGrid) then Exit;
+
+  for I := 0 to FGrid.Columns.Count - 1 do
+    ClearAggregationForColumn(FGrid.Columns[I]);
 end;
 
 procedure TVittixDBGridFooterPanel.PopupClick(Sender: TObject);
