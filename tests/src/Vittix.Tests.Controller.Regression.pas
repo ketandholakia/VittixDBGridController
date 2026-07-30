@@ -47,6 +47,8 @@ type
     procedure GridCanRecreateWindowHandleWhileAttached;
     [Test]
     procedure FormCanOpenAndCloseRepeatedlyWithAttachedGrid;
+    [Test]
+    procedure GridCanStartWithoutDatasourceAndAttachLater;
   end;
 
 implementation
@@ -390,6 +392,39 @@ begin
     finally
       DataSet.Free;
     end;
+  end;
+end;
+
+procedure TVittixControllerRegressionTests.GridCanStartWithoutDatasourceAndAttachLater;
+var
+  DataSet: TClientDataSet;
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+begin
+  DataSet := CreateSampleDataSet;
+  try
+    OwnerForm := TForm.CreateNew(nil);
+    try
+      Grid := TVittixDBGrid.Create(OwnerForm);
+      try
+        Grid.Parent := OwnerForm;
+        Assert.IsTrue(Grid.DataSource = nil);
+        Grid.DataSource := TDataSource.Create(OwnerForm);
+        Grid.DataSource.DataSet := DataSet;
+        Assert.IsNotNull(Grid.DataSource);
+        Assert.AreSame(DataSet, Grid.DataSource.DataSet);
+      finally
+        OwnerForm.Free;
+      end;
+    except
+      on E: Exception do
+      begin
+        OwnerForm.Free;
+        raise;
+      end;
+    end;
+  finally
+    DataSet.Free;
   end;
 end;
 
