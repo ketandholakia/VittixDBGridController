@@ -35,6 +35,8 @@ type
     [Test]
     procedure DatasetCanCloseAndReopenWhileGridIsAttached;
     [Test]
+    procedure DatasetCanBeClosedAndReopenedRepeatedlyWhileAttached;
+    [Test]
     procedure DatasetCanBeDestroyedAfterGridDetach;
     [Test]
     procedure ControllerCanToggleActiveAndFooterRepeatedly;
@@ -198,6 +200,36 @@ begin
       DataSet.First;
       DataSet.Next;
       Assert.IsTrue(DataSet.RecNo > 1);
+    finally
+      OwnerForm.Free;
+    end;
+  finally
+    DataSet.Free;
+  end;
+end;
+
+procedure TVittixControllerRegressionTests.DatasetCanBeClosedAndReopenedRepeatedlyWhileAttached;
+var
+  DataSet: TClientDataSet;
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+  I: Integer;
+begin
+  DataSet := CreateSampleDataSet;
+  try
+    Grid := CreateHeadlessGrid(DataSet, OwnerForm);
+    try
+      Assert.IsNotNull(Grid);
+      for I := 1 to 5 do
+      begin
+        DataSet.Close;
+        Assert.IsFalse(DataSet.Active);
+        DataSet.Open;
+        Assert.IsTrue(DataSet.Active);
+        DataSet.First;
+        DataSet.Next;
+        Assert.IsTrue(DataSet.RecNo > 1);
+      end;
     finally
       OwnerForm.Free;
     end;
