@@ -8,6 +8,7 @@ uses
   System.IOUtils,
   Datasnap.DBClient,
   Vcl.Forms,
+  Vcl.DBGrids,
   DUnitX.TestFramework,
   Vittix.DBGrid,
   Vittix.DBGrid.ColumnInfo,
@@ -67,6 +68,8 @@ type
     procedure GridPersistenceFilesOverrideRootPathWhenSetAfterRoot;
     [Test]
     procedure GridCanSaveAndLoadLayoutToExplicitFile;
+    [Test]
+    procedure FooterCanClearAggregationThroughPublicApi;
   end;
 
 implementation
@@ -506,6 +509,25 @@ begin
   finally
     if FileExists(TempFile) then
       DeleteFile(TempFile);
+  end;
+end;
+
+procedure TVittixLayoutTests.FooterCanClearAggregationThroughPublicApi;
+var
+  Footer: TVittixDBGridFooterPanel;
+  Column: TColumn;
+begin
+  Footer := TVittixDBGridFooterPanel.Create(FOwnerForm);
+  try
+    Footer.Attach(FGrid, nil);
+    Column := FGrid.Columns[1];
+    FGrid.ColumnInfoByColumn(Column).AggregationType := vatSum;
+
+    Footer.ClearAggregationForColumn(Column);
+
+    Assert.AreEqual(vatNone, FGrid.ColumnInfoByColumn(Column).AggregationType);
+  finally
+    Footer.Free;
   end;
 end;
 

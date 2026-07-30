@@ -62,6 +62,7 @@ type
       AEngine: TVittixDBGridAggregationEngine
     );
     procedure SyncLayout;
+    procedure ClearAggregationForColumn(AColumn: TColumn);
   end;
 
 implementation
@@ -389,12 +390,18 @@ begin
 end;
 
 procedure TVittixDBGridFooterPanel.PopupClearClick(Sender: TObject);
+begin
+  ClearAggregationForColumn(FContextColumn);
+end;
+
+procedure TVittixDBGridFooterPanel.ClearAggregationForColumn(AColumn: TColumn);
 var
   Info: TVittixDBGridColumnInfo;
 begin
-  if not Assigned(FContextColumn) then Exit;
+  if not Assigned(AColumn) then Exit;
+  if not Assigned(FGrid) then Exit;
 
-  Info := FGrid.ColumnInfoByColumn(FContextColumn);
+  Info := FGrid.ColumnInfoByColumn(AColumn);
   if not Assigned(Info) then Exit;
 
   if Info.AggregationType <> vatNone then
