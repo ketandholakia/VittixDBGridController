@@ -115,6 +115,8 @@ type
     procedure ChooserEscapeClearsSearchText;
     [Test]
     procedure ChooserMoveSelectedItemReordersColumns;
+    [Test]
+    procedure ChooserReportsShortcutSummary;
   end;
 
 implementation
@@ -1168,6 +1170,34 @@ begin
         Chooser.SelectColumnIndex(1);
         Chooser.MoveSelectedItem(1);
         Assert.AreEqual(2, Grid.Columns[1].Index);
+      finally
+        Chooser.Free;
+      end;
+    finally
+      Grid.Free;
+      OwnerForm.Free;
+    end;
+  finally
+  end;
+end;
+
+procedure TVittixLayoutTests.ChooserReportsShortcutSummary;
+var
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+  Chooser: TVittixDBGridColumnChooserForm;
+begin
+  OwnerForm := TForm.CreateNew(nil);
+  try
+    Grid := TVittixDBGrid.Create(OwnerForm);
+    try
+      Grid.Parent := OwnerForm;
+      Chooser := TVittixDBGridColumnChooserForm.CreateChooser(OwnerForm, Grid);
+      try
+        Assert.AreEqual(
+          'Ctrl+A=Select All;Ctrl+N=Select None;Ctrl+R=Reset Layout;Ctrl+Plus=Increase Width;Ctrl+Minus=Decrease Width;Ctrl+F=Search;Ctrl+Up=Move Up;Ctrl+Down=Move Down;Esc=Clear Search',
+          Chooser.ShortcutSummaryText
+        );
       finally
         Chooser.Free;
       end;

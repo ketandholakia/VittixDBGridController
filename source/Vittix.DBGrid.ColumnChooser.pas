@@ -111,10 +111,12 @@ type
     procedure AdjustSelectedColumnWidth(Delta: Integer);
     procedure ClearSearchText;
     procedure MoveSelectedItem(Delta: Integer);
+    function GetShortcutSummaryText: string;
     
     property AllowReorder: Boolean read FAllowReorder write FAllowReorder;
     property SearchText: string read GetSearchText write SetSearchText;
     property SearchSummaryText: string read GetSearchSummaryText;
+    property ShortcutSummaryText: string read GetShortcutSummaryText;
   end;
 
 implementation
@@ -704,6 +706,11 @@ begin
     Result := FSearchSummary.Caption
   else
     Result := '';
+end;
+
+function TVittixDBGridColumnChooserForm.GetShortcutSummaryText: string;
+begin
+  Result := 'Ctrl+A=Select All;Ctrl+N=Select None;Ctrl+R=Reset Layout;Ctrl+Plus=Increase Width;Ctrl+Minus=Decrease Width;Ctrl+F=Search;Ctrl+Up=Move Up;Ctrl+Down=Move Down;Esc=Clear Search';
 end;
 
 procedure TVittixDBGridColumnChooserForm.ResetLayout;
