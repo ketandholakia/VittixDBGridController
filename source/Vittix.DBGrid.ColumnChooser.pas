@@ -65,6 +65,7 @@ type
     // FIX BUG 9: Snapshot of original column indices taken when dialog opens.
     // On Cancel, we roll back the live reorder that drag-drop applies immediately.
     FOriginalColumnOrder: TArray<Integer>;
+    FOriginalColumnWidths: TArray<Integer>;
 
     procedure BuildColumnList;
     procedure ApplySearchFilter;
@@ -80,6 +81,7 @@ type
     procedure DoReset(Sender: TObject);
     procedure DoGrowWidth(Sender: TObject);
     procedure DoShrinkWidth(Sender: TObject);
+    procedure RestoreOriginalColumnWidths;
     procedure CheckListMouseDown(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Integer);
     procedure CheckListDragOver(Sender, Source: TObject; X, Y: Integer;
@@ -122,8 +124,12 @@ begin
   // if the user clicks Cancel. Drag-drop applies reordering to the grid live,
   // so without this snapshot, Cancel cannot undo a reorder.
   SetLength(FOriginalColumnOrder, FGrid.Columns.Count);
+  SetLength(FOriginalColumnWidths, FGrid.Columns.Count);
   for var K := 0 to FGrid.Columns.Count - 1 do
+  begin
     FOriginalColumnOrder[K] := FGrid.Columns[K].Index;
+    FOriginalColumnWidths[K] := FGrid.Columns[K].Width;
+  end;
 
   Caption := 'Column Chooser';
   BorderStyle := bsSizeable; // Allow resizing
@@ -244,6 +250,17 @@ begin
        (FGrid.Columns[I].Index <> FOriginalColumnOrder[I]) then
       FGrid.Columns[I].Index := FOriginalColumnOrder[I];
   end;
+end;
+
+procedure TVittixDBGridColumnChooserForm.RestoreOriginalColumnWidths;
+var
+  I: Integer;
+begin
+  if not Assigned(FGrid) then Exit;
+  if Length(FOriginalColumnWidths) <> FGrid.Columns.Count then Exit;
+
+  for I := 0 to FGrid.Columns.Count - 1 do
+    FGrid.Columns[I].Width := FOriginalColumnWidths[I];
 end;
 
 procedure TVittixDBGridColumnChooserForm.BuildColumnList;
@@ -489,6 +506,7 @@ begin
   if not Assigned(FGrid) then Exit;
 
   RollbackColumnOrder;
+  RestoreOriginalColumnWidths;
 
   FCheckList.Items.BeginUpdate;
   try

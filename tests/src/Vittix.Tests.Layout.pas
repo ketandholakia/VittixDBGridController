@@ -550,6 +550,8 @@ begin
       Grid.Parent := OwnerForm;
       Chooser := TVittixDBGridColumnChooserForm.CreateChooser(OwnerForm, Grid);
       try
+        Grid.Columns[1].Width := 100;
+        Grid.Columns[2].Width := 180;
         Grid.Columns[0].Index := 2;
         Grid.Columns[1].Visible := False;
         Chooser.ResetLayout;
@@ -557,6 +559,8 @@ begin
         Assert.AreEqual(0, Grid.Columns[0].Index);
         Assert.IsTrue(Grid.Columns[1].Visible);
         Assert.IsTrue(Grid.Columns[2].Visible);
+        Assert.AreEqual(100, Grid.Columns[1].Width);
+        Assert.AreEqual(180, Grid.Columns[2].Width);
       finally
         Chooser.Free;
       end;
