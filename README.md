@@ -142,6 +142,25 @@ begin
   Grid := TVittixDBGrid.Create(Self);
   Grid.Parent := Self;
   Grid.Align := alClient;
-  Grid.DataSource := DataSource1;
+Grid.DataSource := DataSource1;
 end;
 ```
+
+---
+
+## Persistence Configuration
+
+`TVittixDBGrid` exposes a single persistence root plus per-feature file overrides:
+
+- `PersistenceRootPath`
+- `LayoutStorageFileName`
+- `ChooserStateFileName`
+- `FilterHistoryFileName`
+
+Use `PersistenceRootPath` when you want one folder for all saved grid state. Use the per-feature file properties when you want to direct a specific area to an explicit file.
+
+Current behavior:
+
+- explicit file properties take precedence when set
+- `PersistenceRootPath` acts as the shared fallback base
+- the component keeps persistence wiring internal; application code configures only `TVittixDBGrid`

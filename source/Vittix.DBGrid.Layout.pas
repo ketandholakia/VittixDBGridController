@@ -47,8 +47,6 @@ type
 
   TVittixDBGridLayoutJsonStorage = class(TInterfacedObject, IVittixDBGridLayoutStorage)
   public
-    class var StateFileName: string;
-    class var RootPath: string;
     procedure SaveToStream(const State: TVittixDBGridLayoutState; Stream: TStream);
     function LoadFromStream(Stream: TStream): TVittixDBGridLayoutState;
     class procedure SaveToFile(const State: TVittixDBGridLayoutState; const FileName: string = '');
@@ -218,10 +216,6 @@ var
 begin
   if FileName <> '' then
     TargetFile := FileName
-  else if StateFileName <> '' then
-    TargetFile := StateFileName
-  else if RootPath <> '' then
-    TargetFile := IncludeTrailingPathDelimiter(RootPath) + 'layout.json'
   else
     Exit;
 
@@ -248,10 +242,6 @@ begin
   Result := nil;
   if FileName <> '' then
     SourceFile := FileName
-  else if StateFileName <> '' then
-    SourceFile := StateFileName
-  else if RootPath <> '' then
-    SourceFile := IncludeTrailingPathDelimiter(RootPath) + 'layout.json'
   else
     Exit;
 

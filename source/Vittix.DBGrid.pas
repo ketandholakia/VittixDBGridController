@@ -288,21 +288,14 @@ end;
 procedure TVittixDBGrid.ApplyPersistenceSettings;
 begin
   if FPersistence.LayoutStorageFileName <> '' then
-    TVittixDBGridLayoutJsonStorage.StateFileName := FPersistence.LayoutStorageFileName
-  else
-    TVittixDBGridLayoutJsonStorage.StateFileName := '';
-  TVittixDBGridLayoutJsonStorage.RootPath := FPersistence.PersistenceRootPath;
+    ;
 
   if FPersistence.ChooserStateFileName <> '' then
-    TVittixDBGridColumnChooserForm.StateFileName := FPersistence.ChooserStateFileName
-  else
-    TVittixDBGridColumnChooserForm.StateFileName := '';
+    ;
   TVittixDBGridColumnChooserForm.RootPath := FPersistence.PersistenceRootPath;
 
   if FPersistence.FilterHistoryFileName <> '' then
-    TVittixDBGridFilterPopup.HistoryFileName := FPersistence.FilterHistoryFileName
-  else
-    TVittixDBGridFilterPopup.HistoryFileName := '';
+    ;
   TVittixDBGridFilterPopup.RootPath := FPersistence.PersistenceRootPath;
 end;
 
