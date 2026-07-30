@@ -117,12 +117,22 @@ begin
 
   FUpdating := True;
   try
-    FActive := Value;
-
-    if FActive then
-      ApplyFilter
+    if Value then
+    begin
+      FActive := True;
+      try
+        ApplyFilter;
+      except
+        FActive := False;
+        ClearFilter;
+        raise;
+      end;
+    end
     else
+    begin
       ClearFilter;
+      FActive := False;
+    end;
   finally
     FUpdating := False;
   end;

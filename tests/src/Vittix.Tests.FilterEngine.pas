@@ -40,6 +40,10 @@ type
     procedure FilterChainsToExistingHandler;
     [Test]
     procedure ClearResetsState;
+    [Test]
+    procedure InvalidFilterRollsBackActiveState;
+    [Test]
+    procedure ClearAllowsFilterToBeReapplied;
   end;
 
 implementation
@@ -168,6 +172,44 @@ begin
   Assert.AreEqual('', FEngine.GlobalSearchText);
   Assert.AreEqual('', FColumns.FindByFieldName('Name').FilterText);
   Assert.IsFalse(FColumns.FindByFieldName('Name').HasFilter);
+end;
+
+procedure TVittixFilterEngineTests.InvalidFilterRollsBackActiveState;
+begin
+  FColumns.FindByFieldName('Name').FilterText := 'bad';
+  FColumns.FindByFieldName('Name').HasFilter := True;
+  FEngine.OnValidateFilter := RejectAllFilters;
+
+  Assert.WillRaise(
+    procedure
+    begin
+      FEngine.Active := True;
+    end,
+    Exception
+  );
+
+  Assert.IsFalse(FEngine.Active);
+  Assert.IsFalse(FDataSet.Filtered);
+end;
+
+procedure TVittixFilterEngineTests.ClearAllowsFilterToBeReapplied;
+begin
+  FColumns.FindByFieldName('Name').FilterText := 'Alpha';
+  FColumns.FindByFieldName('Name').HasFilter := True;
+  FEngine.Active := True;
+  Assert.AreEqual(2, CountVisibleRecords(FDataSet));
+
+  FEngine.Clear;
+  Assert.IsFalse(FEngine.Active);
+  Assert.IsFalse(FDataSet.Filtered);
+
+  FColumns.FindByFieldName('Name').FilterText := 'beta';
+  FColumns.FindByFieldName('Name').HasFilter := True;
+  FEngine.Active := True;
+
+  Assert.IsTrue(FEngine.Active);
+  Assert.AreEqual(1, CountVisibleRecords(FDataSet));
+  Assert.AreEqual(2, FDataSet.FieldByName('ID').AsInteger);
 end;
 
 end.

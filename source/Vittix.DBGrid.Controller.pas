@@ -48,10 +48,24 @@ const
 type
   TVittixGridHelper = class(TCustomDBGrid);
 
+  TVittixDBGridController = class;
+
+  TVittixGridDataLink = class(TDataLink)
+  private
+    FController: TVittixDBGridController;
+  protected
+    procedure ActiveChanged; override;
+    procedure DataSetChanged; override;
+    procedure RecordChanged(Field: TField); override;
+  public
+    constructor Create(AController: TVittixDBGridController);
+  end;
+
   TVittixDBGridController = class(TComponent)
   private
     FGrid: TVittixDBGrid;
     FDataset: TDataSet;
+    FDataLink: TVittixGridDataLink;
 
     FActive: Boolean;
     FShowFooter: Boolean;
@@ -76,8 +90,6 @@ type
     FOldDblClick: TNotifyEvent;
     FOldKeyDown: TKeyEvent;
     FOldWindowProc: TWndMethod;
-    FOldAfterOpen, FOldAfterClose, FOldAfterScroll,
-    FOldAfterPost, FOldAfterDelete: TDataSetNotifyEvent;
 
     // Internal helpers
     function IsReady: Boolean;
@@ -93,6 +105,10 @@ type
     procedure HookDataSource;
     procedure UnhookDataSource;
 
+    procedure DataLinkActiveChanged;
+    procedure DataLinkDataSetChanged;
+    procedure DataLinkRecordChanged(Field: TField);
+
     procedure CreateEngines;
     procedure DestroyEngines;
 
@@ -106,13 +122,6 @@ type
       Shift: TShiftState; X, Y: Integer);
     procedure GridDblClick(Sender: TObject);
     procedure GridKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
-
-    // Dataset events
-    procedure DatasetAfterOpen(DataSet: TDataSet);
-    procedure DatasetAfterClose(DataSet: TDataSet);
-    procedure DatasetAfterScroll(DataSet: TDataSet);
-    procedure DatasetAfterPost(DataSet: TDataSet);
-    procedure DatasetAfterDelete(DataSet: TDataSet);
 
     procedure SetAggregationDirty;
 
@@ -156,6 +165,35 @@ type
 
 implementation
 
+{ TVittixGridDataLink }
+
+constructor TVittixGridDataLink.Create(AController: TVittixDBGridController);
+begin
+  inherited Create;
+  FController := AController;
+end;
+
+procedure TVittixGridDataLink.ActiveChanged;
+begin
+  inherited;
+  if Assigned(FController) then
+    FController.DataLinkActiveChanged;
+end;
+
+procedure TVittixGridDataLink.DataSetChanged;
+begin
+  inherited;
+  if Assigned(FController) then
+    FController.DataLinkDataSetChanged;
+end;
+
+procedure TVittixGridDataLink.RecordChanged(Field: TField);
+begin
+  inherited;
+  if Assigned(FController) then
+    FController.DataLinkRecordChanged(Field);
+end;
+
 procedure DebugMsg(const S: string);
 begin
   // OutputDebugString(PChar('[Vittix] ' + S));
@@ -177,11 +215,13 @@ begin
   FUpdating := False;
 
   FAggregationDirty := True;
+  FDataLink := TVittixGridDataLink.Create(Self);
 end;
 
 destructor TVittixDBGridController.Destroy;
 begin
   UnhookGrid;
+  FreeAndNil(FDataLink);
   DestroyEngines;
   inherited;
 end;
@@ -383,37 +423,59 @@ procedure TVittixDBGridController.HookDataSource;
 begin
   if not Assigned(FGrid) or not Assigned(FGrid.DataSource) then Exit;
 
-  FDataset := FGrid.DataSource.DataSet;
+  FDataLink.DataSource := FGrid.DataSource;
+  FDataset := FDataLink.DataSet;
   if not Assigned(FDataset) then Exit;
-
-  FOldAfterOpen := FDataset.AfterOpen;
-  FOldAfterClose := FDataset.AfterClose;
-  FOldAfterScroll := FDataset.AfterScroll;
-  FOldAfterPost := FDataset.AfterPost;
-  FOldAfterDelete := FDataset.AfterDelete;
-
-  FDataset.AfterOpen := DatasetAfterOpen;
-  FDataset.AfterClose := DatasetAfterClose;
-  FDataset.AfterScroll := DatasetAfterScroll;
-  FDataset.AfterPost := DatasetAfterPost;
-  FDataset.AfterDelete := DatasetAfterDelete;
-
-  // FIX: Force initialization if dataset is already open
   if FDataset.Active then
-    DatasetAfterOpen(FDataset);
+    DataLinkActiveChanged;
 end;
 
 procedure TVittixDBGridController.UnhookDataSource;
 begin
-  if not Assigned(FDataset) then Exit;
-
-  FDataset.AfterOpen := FOldAfterOpen;
-  FDataset.AfterClose := FOldAfterClose;
-  FDataset.AfterScroll := FOldAfterScroll;
-  FDataset.AfterPost := FOldAfterPost;
-  FDataset.AfterDelete := FOldAfterDelete;
-
+  if Assigned(FDataLink) then
+    FDataLink.DataSource := nil;
   FDataset := nil;
+end;
+
+procedure TVittixDBGridController.DataLinkActiveChanged;
+begin
+  if not Assigned(FDataLink) then Exit;
+  FDataset := FDataLink.DataSet;
+  if Assigned(FDataset) and FDataset.Active then
+    CreateEngines
+  else
+    DestroyEngines;
+
+  if Assigned(FDataset) and FDataset.Active then
+  begin
+    SetAggregationDirty;
+    Refresh;
+    GridLayoutChanged;
+  end;
+end;
+
+procedure TVittixDBGridController.DataLinkDataSetChanged;
+begin
+  FDataset := nil;
+  DestroyEngines;
+
+  if Assigned(FDataLink) then
+    FDataset := FDataLink.DataSet;
+
+  if Assigned(FDataset) and FDataset.Active then
+    DataLinkActiveChanged;
+end;
+
+procedure TVittixDBGridController.DataLinkRecordChanged(Field: TField);
+begin
+  if not Assigned(FDataset) then
+    Exit;
+
+  if FDataset.State in dsEditModes then
+    Exit;
+
+  SetAggregationDirty;
+  Refresh;
 end;
 
 { ============================================================================= }
@@ -636,50 +698,6 @@ end;
 { ============================================================================= }
 { DATASET EVENTS }
 { ============================================================================= }
-
-procedure TVittixDBGridController.DatasetAfterOpen(DataSet: TDataSet);
-begin
-  CreateEngines;
-  Refresh;
-
-  if Assigned(FOldAfterOpen) then
-    FOldAfterOpen(DataSet);
-end;
-
-procedure TVittixDBGridController.DatasetAfterClose(DataSet: TDataSet);
-begin
-  DestroyEngines;
-
-  if Assigned(FOldAfterClose) then
-    FOldAfterClose(DataSet);
-end;
-
-procedure TVittixDBGridController.DatasetAfterScroll(DataSet: TDataSet);
-begin
-  if Assigned(FGrid) then
-    FGrid.Invalidate;
-
-  if Assigned(FOldAfterScroll) then
-    FOldAfterScroll(DataSet);
-end;
-
-procedure TVittixDBGridController.DatasetAfterPost(DataSet: TDataSet);
-begin
-  SetAggregationDirty;
-  Refresh;
-
-  if Assigned(FOldAfterPost) then
-    FOldAfterPost(DataSet);
-end;
-
-procedure TVittixDBGridController.DatasetAfterDelete(DataSet: TDataSet);
-begin
-  SetAggregationDirty;
-  Refresh;
-
-  if Assigned(FOldAfterDelete) then
-    FOldAfterDelete(DataSet);
-end;
 
 { ============================================================================= }
 { PUBLIC API }

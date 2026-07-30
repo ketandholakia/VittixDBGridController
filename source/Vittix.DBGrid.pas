@@ -122,6 +122,8 @@ begin
   if Assigned(FController) and (FController is TVittixDBGridController) then
     TVittixDBGridController(FController).Detach;
 
+  FreeAndNil(FColumnsInfo);
+
   inherited;
 end;
 
