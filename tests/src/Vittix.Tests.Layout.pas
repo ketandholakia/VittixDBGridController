@@ -36,6 +36,8 @@ type
     [Test]
     procedure ApplyLayout_RestoresWidthAndVisibility;
     [Test]
+    procedure ApplyLayout_RestoresFooterCustomization;
+    [Test]
     procedure ApplyLayout_IgnoresMissingFields;
     [Test]
     procedure ApplyLayout_IgnoresUnknownSavedFields;
@@ -133,6 +135,28 @@ begin
     FController.ApplyLayout(State);
     Assert.AreEqual(State.Columns[1].Width, FGrid.Columns[1].Width);
     Assert.AreEqual(State.Columns[2].Visible, FGrid.Columns[2].Visible);
+  finally
+    State.Free;
+  end;
+end;
+
+procedure TVittixLayoutTests.ApplyLayout_RestoresFooterCustomization;
+var
+  State: TVittixDBGridLayoutState;
+begin
+  State := TVittixDBGridLayoutState.Create;
+  try
+    FController.CaptureLayout(State);
+
+    FController.ShowFooter := False;
+    FGrid.ColumnInfoByColumn(FGrid.Columns[1]).AggregationType := vatCount;
+    FGrid.ColumnInfoByColumn(FGrid.Columns[2]).AggregationType := vatMax;
+
+    FController.ApplyLayout(State);
+
+    Assert.IsTrue(FController.ShowFooter);
+    Assert.AreEqual(vatNone, FGrid.ColumnInfoByColumn(FGrid.Columns[1]).AggregationType);
+    Assert.AreEqual(vatNone, FGrid.ColumnInfoByColumn(FGrid.Columns[2]).AggregationType);
   finally
     State.Free;
   end;
