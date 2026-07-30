@@ -210,6 +210,7 @@ begin
   FOperatorCombo.Items.Add('Greater or Equal');
   FOperatorCombo.Items.Add('Less Than');
   FOperatorCombo.Items.Add('Less or Equal');
+  FOperatorCombo.Items.Add('Between');
   FOperatorCombo.ItemIndex := 0;
   
   // Load existing filter
@@ -229,6 +230,11 @@ begin
     else if Copy(FOriginalText, 1, 2) = '<>' then
     begin
       FOperatorCombo.ItemIndex := OperatorIndexFromPrefix('<>');
+      FRecentCombo.Text := Trim(Copy(FOriginalText, 3, MaxInt));
+    end
+    else if Copy(FOriginalText, 1, 2) = '..' then
+    begin
+      FOperatorCombo.ItemIndex := OperatorIndexFromPrefix('..');
       FRecentCombo.Text := Trim(Copy(FOriginalText, 3, MaxInt));
     end
     else if (FOriginalText[1] = '=') or (FOriginalText[1] = '^') or
@@ -362,6 +368,7 @@ begin
     7: Result := '>=';
     8: Result := '<';
     9: Result := '<=';
+    10: Result := '..';
   else
     Result := '';
   end;
@@ -379,6 +386,7 @@ begin
   if Prefix = '>=' then Exit(7);
   if Prefix = '<' then Exit(8);
   if Prefix = '<=' then Exit(9);
+  if Prefix = '..' then Exit(10);
   Result := 0;
 end;
 

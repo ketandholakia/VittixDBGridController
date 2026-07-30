@@ -20,7 +20,8 @@ type
 
   TVittixFilterMatchMode = (
     vfmContains, vfmEquals, vfmStartsWith, vfmEndsWith,
-    vfmNotEquals, vfmGreaterThan, vfmGreaterOrEqual, vfmLessThan, vfmLessOrEqual
+    vfmNotEquals, vfmGreaterThan, vfmGreaterOrEqual, vfmLessThan, vfmLessOrEqual,
+    vfmBetween
   );
 
   // NEW: Filter validation event
@@ -359,6 +360,7 @@ begin
   if Copy(Value, 1, 2) = '>=' then begin Mode := vfmGreaterOrEqual; Delete(Value, 1, 2); Exit; end;
   if Copy(Value, 1, 2) = '<=' then begin Mode := vfmLessOrEqual; Delete(Value, 1, 2); Exit; end;
   if Copy(Value, 1, 2) = '<>' then begin Mode := vfmNotEquals; Delete(Value, 1, 2); Exit; end;
+  if Copy(Value, 1, 2) = '..' then begin Mode := vfmBetween; Delete(Value, 1, 2); Exit; end;
   if Copy(Value, 1, 1) = '=' then begin Mode := vfmEquals; Delete(Value, 1, 1); Exit; end;
   if Copy(Value, 1, 1) = '!' then begin Mode := vfmNotEquals; Delete(Value, 1, 1); Exit; end;
   if Copy(Value, 1, 1) = '>' then begin Mode := vfmGreaterThan; Delete(Value, 1, 1); Exit; end;
@@ -370,9 +372,11 @@ end;
 function TVittixDBGridFilterEngine.MatchFilter(const FilterText, ValueText: string): Boolean;
 var
   Mode: TVittixFilterMatchMode;
-  Needle, Hay: string;
+  Needle, Hay, LowText, HighText: string;
   FN, VN: Extended;
   StartPos: Integer;
+  Parts: TArray<string>;
+  HighVal: Extended;
 begin
   if Trim(FilterText) = '' then
     Exit(True);
@@ -395,8 +399,28 @@ begin
     vfmGreaterThan,
     vfmGreaterOrEqual,
     vfmLessThan,
-    vfmLessOrEqual:
+    vfmLessOrEqual,
+    vfmBetween:
       begin
+        if Mode = vfmBetween then
+        begin
+          if Pos('|', Needle) = 0 then
+            Exit(False);
+
+          Parts := Needle.Split(['|']);
+          if Length(Parts) <> 2 then
+            Exit(False);
+
+          LowText := Trim(Parts[0]);
+          HighText := Trim(Parts[1]);
+          if TryStrToFloat(LowText, FN) and TryStrToFloat(Hay, VN) and
+             TryStrToFloat(HighText, HighVal) then
+            Result := (VN >= FN) and (VN <= HighVal)
+          else
+            Result := False;
+          Exit;
+        end;
+
         if TryStrToFloat(Needle, FN) and TryStrToFloat(Hay, VN) then
           case Mode of
             vfmGreaterThan: Result := VN > FN;
