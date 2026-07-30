@@ -50,13 +50,13 @@ type
     function GetIndicatorOffset: Integer;
     function GetIndicatorRect: TRect;
     function GetColumnRect(AColumn: TColumn): TRect;
-    function GetAggregationCaption(Agg: TVittixAggregationType): string;
   protected
     procedure Paint; override;
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
+    class function AggregationCaption(Agg: TVittixAggregationType): string;
     procedure Attach(
       AGrid: TVittixDBGrid;
       AEngine: TVittixDBGridAggregationEngine
@@ -193,7 +193,7 @@ begin
   );
 end;
 
-function TVittixDBGridFooterPanel.GetAggregationCaption(
+class function TVittixDBGridFooterPanel.AggregationCaption(
   Agg: TVittixAggregationType): string;
 begin
   case Agg of
@@ -375,7 +375,7 @@ begin
   for Agg := Low(TVittixAggregationType) to High(TVittixAggregationType) do
   begin
     Item := TMenuItem.Create(FPopup);
-    Item.Caption := GetAggregationCaption(Agg);
+    Item.Caption := AggregationCaption(Agg);
     Item.Tag := Ord(Agg);
     Item.RadioItem := True;
     Item.GroupIndex := 1;

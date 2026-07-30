@@ -11,6 +11,8 @@ uses
   Vittix.DBGrid,
   Vittix.DBGrid.ColumnInfo,
   Vittix.DBGrid.Controller,
+  Vittix.DBGrid.ColumnChooser,
+  Vittix.DBGrid.FooterPanel,
   Vittix.DBGrid.Layout;
 
 type
@@ -45,6 +47,10 @@ type
     procedure SaveLoadLayout_IsIdempotent;
     [Test]
     procedure LayoutWorksWithoutActiveDataset;
+    [Test]
+    procedure FooterCaptionHelperUsesReadableNames;
+    [Test]
+    procedure ChooserStateRoundTripsThroughIni;
   end;
 
 implementation
@@ -254,6 +260,50 @@ begin
     end;
   finally
     State.Free;
+  end;
+end;
+
+procedure TVittixLayoutTests.FooterCaptionHelperUsesReadableNames;
+begin
+  Assert.AreEqual('Clear aggregation', TVittixDBGridFooterPanel.AggregationCaption(vatNone));
+  Assert.AreEqual('Average', TVittixDBGridFooterPanel.AggregationCaption(vatAvg));
+  Assert.AreEqual('Maximum', TVittixDBGridFooterPanel.AggregationCaption(vatMax));
+end;
+
+procedure TVittixLayoutTests.ChooserStateRoundTripsThroughIni;
+var
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+  Chooser: TVittixDBGridColumnChooserForm;
+begin
+  OwnerForm := TForm.CreateNew(nil);
+  try
+    Grid := TVittixDBGrid.Create(OwnerForm);
+    try
+      Grid.Parent := OwnerForm;
+      Chooser := TVittixDBGridColumnChooserForm.CreateChooser(OwnerForm, Grid);
+      try
+        Chooser.Left := 123;
+        Chooser.Top := 234;
+        Chooser.Width := 345;
+        Chooser.Height := 456;
+        Chooser.SaveDialogState;
+        Chooser.Left := 1;
+        Chooser.Top := 2;
+        Chooser.Width := 3;
+        Chooser.Height := 4;
+        Chooser.LoadDialogState;
+        Assert.AreEqual(123, Chooser.Left);
+        Assert.AreEqual(234, Chooser.Top);
+        Assert.AreEqual(345, Chooser.Width);
+        Assert.AreEqual(456, Chooser.Height);
+      finally
+        Chooser.Free;
+      end;
+    finally
+      OwnerForm.Free;
+    end;
+  finally
   end;
 end;
 

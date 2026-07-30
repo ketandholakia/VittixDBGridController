@@ -23,6 +23,7 @@ type
   TVittixDBGridFilterPopup = class(TForm)
   private
     FRecentCombo: TComboBox;
+    FOperatorCombo: TComboBox;
     FButtonPanel: TPanel;
     FBtnOK: TButton;
     FBtnClear: TButton;
@@ -42,6 +43,7 @@ type
     procedure ComboChange(Sender: TObject);
     procedure LoadDistinctValues;
     function ValidateInput: Boolean;
+    function GetOperatorPrefix: string;
   public
     OnValidateFilterInput: TFilterValidationEvent;
 
@@ -163,6 +165,23 @@ begin
   FRecentCombo.AlignWithMargins := True;
   FRecentCombo.Margins.SetBounds(12, 6, 12, 0);
   FRecentCombo.Style := csDropDown;
+
+  FOperatorCombo := TComboBox.Create(Self);
+  FOperatorCombo.Parent := Self;
+  FOperatorCombo.Align := alTop;
+  FOperatorCombo.AlignWithMargins := True;
+  FOperatorCombo.Margins.SetBounds(12, 6, 12, 0);
+  FOperatorCombo.Style := csDropDownList;
+  FOperatorCombo.Items.Add('Contains');
+  FOperatorCombo.Items.Add('Equals');
+  FOperatorCombo.Items.Add('Starts With');
+  FOperatorCombo.Items.Add('Ends With');
+  FOperatorCombo.Items.Add('Not Equals');
+  FOperatorCombo.Items.Add('Greater Than');
+  FOperatorCombo.Items.Add('Greater or Equal');
+  FOperatorCombo.Items.Add('Less Than');
+  FOperatorCombo.Items.Add('Less or Equal');
+  FOperatorCombo.ItemIndex := 0;
   
   // Load existing filter
   FOriginalText := Trim(FColumnInfo.FilterText);
@@ -200,6 +219,22 @@ end;
 procedure TVittixDBGridFilterPopup.ComboChange(Sender: TObject);
 begin
   ValidateInput;
+end;
+
+function TVittixDBGridFilterPopup.GetOperatorPrefix: string;
+begin
+  case FOperatorCombo.ItemIndex of
+    1: Result := '=';
+    2: Result := '^';
+    3: Result := '$';
+    4: Result := '<>';
+    5: Result := '>';
+    6: Result := '>=';
+    7: Result := '<';
+    8: Result := '<=';
+  else
+    Result := '';
+  end;
 end;
 
 procedure TVittixDBGridFilterPopup.LoadDistinctValues;
@@ -294,7 +329,7 @@ begin
   // Only apply if valid
   if not ValidateInput then Exit;
 
-  NewText := Trim(FRecentCombo.Text);
+  NewText := GetOperatorPrefix + Trim(FRecentCombo.Text);
 
   // Update history
   if NewText <> '' then

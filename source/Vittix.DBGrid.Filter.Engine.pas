@@ -18,6 +18,11 @@ type
     Field: TField;
   end;
 
+  TVittixFilterMatchMode = (
+    vfmContains, vfmEquals, vfmStartsWith, vfmEndsWith,
+    vfmNotEquals, vfmGreaterThan, vfmGreaterOrEqual, vfmLessThan, vfmLessOrEqual
+  );
+
   // NEW: Filter validation event
   TFilterValidationEvent = procedure(
     Sender: TObject;
@@ -55,6 +60,9 @@ type
 
     function InternalAcceptRecord(DataSet: TDataSet): Boolean;
     function MatchText(const SearchUpper, ValueUpper: string): Boolean;
+    function ParseFilterMode(const FilterText: string; out Mode: TVittixFilterMatchMode;
+      out Value: string): Boolean;
+    function MatchFilter(const FilterText, ValueText: string): Boolean;
     function GetFieldDisplayText(AField: TField): string;
 
     procedure RebuildFieldCache;
@@ -286,7 +294,6 @@ function TVittixDBGridFilterEngine.InternalAcceptRecord(
 var
   I: Integer;
   ValueUpper: string;
-  SearchUpper: string;
   GlobalMatched: Boolean;
 begin
   Result := True;
@@ -307,10 +314,9 @@ begin
     // Check if this cached column has a filter active
     if FFieldCache[I].Info.HasFilter and (FFieldCache[I].Info.FilterText <> '') then
     begin
-      SearchUpper := UpperCase(FFieldCache[I].Info.FilterText);
       ValueUpper := UpperCase(GetFieldDisplayText(FFieldCache[I].Field));
 
-      if not MatchText(SearchUpper, ValueUpper) then
+      if not MatchFilter(FFieldCache[I].Info.FilterText, ValueUpper) then
         Exit(False); // Failed an AND condition
     end;
   end;
@@ -320,13 +326,12 @@ begin
   // ------------------------------------------------
   if FGlobalSearchText <> '' then
   begin
-    SearchUpper := UpperCase(FGlobalSearchText);
     GlobalMatched := False;
 
     for I := 0 to High(FFieldCache) do
     begin
       ValueUpper := UpperCase(GetFieldDisplayText(FFieldCache[I].Field));
-      if MatchText(SearchUpper, ValueUpper) then
+      if MatchText(UpperCase(FGlobalSearchText), ValueUpper) then
       begin
         GlobalMatched := True;
         Break; // Found a match in one column, so the row is valid
@@ -341,6 +346,71 @@ function TVittixDBGridFilterEngine.MatchText(
   const SearchUpper, ValueUpper: string): Boolean;
 begin
   Result := (SearchUpper = '') or (Pos(SearchUpper, ValueUpper) > 0);
+end;
+
+function TVittixDBGridFilterEngine.ParseFilterMode(const FilterText: string;
+  out Mode: TVittixFilterMatchMode; out Value: string): Boolean;
+begin
+  Value := Trim(FilterText);
+  Mode := vfmContains;
+  Result := True;
+  if Value = '' then Exit;
+
+  if Copy(Value, 1, 2) = '>=' then begin Mode := vfmGreaterOrEqual; Delete(Value, 1, 2); Exit; end;
+  if Copy(Value, 1, 2) = '<=' then begin Mode := vfmLessOrEqual; Delete(Value, 1, 2); Exit; end;
+  if Copy(Value, 1, 2) = '<>' then begin Mode := vfmNotEquals; Delete(Value, 1, 2); Exit; end;
+  if Copy(Value, 1, 1) = '=' then begin Mode := vfmEquals; Delete(Value, 1, 1); Exit; end;
+  if Copy(Value, 1, 1) = '>' then begin Mode := vfmGreaterThan; Delete(Value, 1, 1); Exit; end;
+  if Copy(Value, 1, 1) = '<' then begin Mode := vfmLessThan; Delete(Value, 1, 1); Exit; end;
+  if Copy(Value, 1, 1) = '^' then begin Mode := vfmStartsWith; Delete(Value, 1, 1); Exit; end;
+  if Copy(Value, 1, 1) = '$' then begin Mode := vfmEndsWith; Delete(Value, 1, 1); Exit; end;
+end;
+
+function TVittixDBGridFilterEngine.MatchFilter(const FilterText, ValueText: string): Boolean;
+var
+  Mode: TVittixFilterMatchMode;
+  Needle, Hay: string;
+  FN, VN: Extended;
+  StartPos: Integer;
+begin
+  if Trim(FilterText) = '' then
+    Exit(True);
+
+  ParseFilterMode(FilterText, Mode, Needle);
+  Hay := Trim(ValueText);
+
+  case Mode of
+    vfmContains: Result := Pos(UpperCase(Needle), UpperCase(Hay)) > 0;
+    vfmEquals: Result := SameText(Needle, Hay);
+    vfmStartsWith: Result := SameText(Copy(Hay, 1, Length(Needle)), Needle);
+    vfmEndsWith:
+      begin
+        StartPos := Length(Hay) - Length(Needle) + 1;
+        if StartPos < 1 then
+          StartPos := 1;
+        Result := SameText(Copy(Hay, StartPos, MaxInt), Needle);
+      end;
+    vfmNotEquals: Result := not SameText(Needle, Hay);
+    vfmGreaterThan,
+    vfmGreaterOrEqual,
+    vfmLessThan,
+    vfmLessOrEqual:
+      begin
+        if TryStrToFloat(Needle, FN) and TryStrToFloat(Hay, VN) then
+          case Mode of
+            vfmGreaterThan: Result := VN > FN;
+            vfmGreaterOrEqual: Result := VN >= FN;
+            vfmLessThan: Result := VN < FN;
+            vfmLessOrEqual: Result := VN <= FN;
+          else
+            Result := False;
+          end
+        else
+          Result := False;
+      end;
+  else
+    Result := False;
+  end;
 end;
 
 function TVittixDBGridFilterEngine.GetFieldDisplayText(

@@ -65,8 +65,6 @@ type
 
     procedure BuildColumnList;
     procedure ApplySearchFilter;
-    procedure LoadDialogState;
-    procedure SaveDialogState;
     procedure ApplySelection;
     procedure RollbackColumnOrder;
     function GetColumnCaption(AColumn: TColumn): string;
@@ -85,6 +83,8 @@ type
   public
     constructor CreateChooser(AOwner: TComponent; AGrid: TDBGrid); reintroduce;
     class function Execute(AGrid: TDBGrid): Boolean;
+    procedure LoadDialogState;
+    procedure SaveDialogState;
     
     property AllowReorder: Boolean read FAllowReorder write FAllowReorder;
   end;

@@ -44,6 +44,8 @@ type
     procedure InvalidFilterRollsBackActiveState;
     [Test]
     procedure ClearAllowsFilterToBeReapplied;
+    [Test]
+    procedure FilterOperatorsSupportEqualsAndComparisonModes;
   end;
 
 implementation
@@ -210,6 +212,21 @@ begin
   Assert.IsTrue(FEngine.Active);
   Assert.AreEqual(1, CountVisibleRecords(FDataSet));
   Assert.AreEqual(2, FDataSet.FieldByName('ID').AsInteger);
+end;
+
+procedure TVittixFilterEngineTests.FilterOperatorsSupportEqualsAndComparisonModes;
+begin
+  FColumns.FindByFieldName('Name').FilterText := '=Beta';
+  FColumns.FindByFieldName('Name').HasFilter := True;
+  FEngine.Active := True;
+  Assert.AreEqual(1, CountVisibleRecords(FDataSet));
+  Assert.AreEqual(2, FDataSet.FieldByName('ID').AsInteger);
+
+  FEngine.Clear;
+  FColumns.FindByFieldName('Amount').FilterText := '>250';
+  FColumns.FindByFieldName('Amount').HasFilter := True;
+  FEngine.Active := True;
+  Assert.AreEqual(3, CountVisibleRecords(FDataSet));
 end;
 
 end.
