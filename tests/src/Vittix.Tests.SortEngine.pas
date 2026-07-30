@@ -4,6 +4,7 @@ interface
 
 uses
   System.Classes,
+  System.TypInfo,
   Datasnap.DBClient,
   Vcl.Forms,
   Vcl.DBGrids,
@@ -41,6 +42,8 @@ type
     procedure ClearSortingResetsMetadataAndDatasetIndex;
     [Test]
     procedure SortIndicesAreNormalizedWhenMiddleColumnRemoved;
+    [Test]
+    procedure ClearSortingRestoresOriginalDatasetIndexState;
   end;
 
 implementation
@@ -159,6 +162,21 @@ begin
   Assert.AreEqual(-1, FColumns.FindByFieldName('Amount').SortIndex);
   Assert.AreEqual(0, FColumns.FindByFieldName('Name').SortIndex);
   Assert.AreEqual(1, FColumns.FindByFieldName('Score').SortIndex);
+end;
+
+procedure TVittixSortEngineTests.ClearSortingRestoresOriginalDatasetIndexState;
+begin
+  FDataSet.IndexFieldNames := 'Name';
+  Assert.AreEqual('Name', FDataSet.IndexFieldNames);
+
+  FEngine.ToggleSort(FGrid.Columns[2], False);
+  Assert.AreNotEqual('Name', FDataSet.IndexFieldNames);
+
+  FEngine.ClearSorting;
+
+  Assert.AreEqual('Name', FDataSet.IndexFieldNames);
+  Assert.AreEqual(vsoNone, FColumns.FindByFieldName('Amount').SortOrder);
+  Assert.AreEqual(-1, FColumns.FindByFieldName('Amount').SortIndex);
 end;
 
 end.

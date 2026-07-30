@@ -28,10 +28,16 @@ type
   private
     FDataSet: TDataSet;
     FColumns: TVittixDBGridColumns;
+    FOriginalIndexName: string;
+    FOriginalIndexFieldNames: string;
+    FOriginalIndexCaptured: Boolean;
+    FTempIndexCreated: Boolean;
     FOnFieldValidation: TFieldValidationEvent;
 
     function DataSetSupportsIndexFieldNames: Boolean;
     function BuildIndexFieldNames: string;
+    procedure CaptureOriginalIndexState;
+    procedure RestoreOriginalIndexState;
     procedure ApplyClientDataSetSorting;
     procedure NormalizeSortIndices;
 
@@ -56,6 +62,8 @@ begin
   inherited Create;
   FDataSet := ADataSet;
   FColumns := AColumns;
+  FOriginalIndexCaptured := False;
+  FTempIndexCreated := False;
 end;
 
 function TVittixDBGridSortEngine.DataSetSupportsIndexFieldNames: Boolean;
@@ -162,6 +170,8 @@ var
 begin
   if not Assigned(FDataSet) or not FDataSet.Active then Exit;
 
+  CaptureOriginalIndexState;
+
   if FDataSet is TCustomClientDataSet then
   begin
     ApplyClientDataSetSorting;
@@ -178,6 +188,57 @@ begin
     SetPropValue(FDataSet, 'IndexFieldNames', IndexFields);
   finally
     FDataSet.EnableControls;
+  end;
+end;
+
+procedure TVittixDBGridSortEngine.CaptureOriginalIndexState;
+begin
+  if FOriginalIndexCaptured then
+    Exit;
+
+  if Assigned(FDataSet) then
+  begin
+    if FDataSet is TClientDataSet then
+      FOriginalIndexName := TClientDataSet(FDataSet).IndexName;
+
+    if DataSetSupportsIndexFieldNames then
+      FOriginalIndexFieldNames := GetPropValue(FDataSet, 'IndexFieldNames', True);
+  end;
+
+  FOriginalIndexCaptured := True;
+end;
+
+procedure TVittixDBGridSortEngine.RestoreOriginalIndexState;
+begin
+  if not Assigned(FDataSet) then
+    Exit;
+
+  if FDataSet is TCustomClientDataSet then
+  begin
+    TCustomClientDataSet(FDataSet).DisableControls;
+    try
+      if FDataSet is TClientDataSet then
+        TClientDataSet(FDataSet).IndexName := FOriginalIndexName;
+      TCustomClientDataSet(FDataSet).IndexFieldNames := FOriginalIndexFieldNames;
+      if FTempIndexCreated then
+      begin
+        try
+          TCustomClientDataSet(FDataSet).DeleteIndex(TEMP_CLIENT_DATASET_INDEX);
+        except
+        end;
+      end;
+    finally
+      TCustomClientDataSet(FDataSet).EnableControls;
+    end;
+  end
+  else if DataSetSupportsIndexFieldNames then
+  begin
+    FDataSet.DisableControls;
+    try
+      SetPropValue(FDataSet, 'IndexFieldNames', FOriginalIndexFieldNames);
+    finally
+      FDataSet.EnableControls;
+    end;
   end;
 end;
 
@@ -253,6 +314,7 @@ begin
         DescFields.DelimitedText
       );
       SetPropValue(ClientDataSet, 'IndexName', TEMP_CLIENT_DATASET_INDEX);
+      FTempIndexCreated := True;
     finally
       ClientDataSet.EnableControls;
     end;
@@ -276,31 +338,9 @@ begin
 
   if not Assigned(FDataSet) or not FDataSet.Active then Exit;
 
-  // Clear dataset sorting
-  if FDataSet is TCustomClientDataSet then
-  begin
-    TCustomClientDataSet(FDataSet).DisableControls;
-    try
-      SetPropValue(FDataSet, 'IndexName', '');
-      TCustomClientDataSet(FDataSet).IndexFieldNames := '';
-      try
-        TCustomClientDataSet(FDataSet).DeleteIndex(TEMP_CLIENT_DATASET_INDEX);
-      except
-        // Ignore if the temporary index was never created.
-      end;
-    finally
-      TCustomClientDataSet(FDataSet).EnableControls;
-    end;
-  end
-  else if DataSetSupportsIndexFieldNames then
-  begin
-    FDataSet.DisableControls;
-    try
-      SetPropValue(FDataSet, 'IndexFieldNames', '');
-    finally
-      FDataSet.EnableControls;
-    end;
-  end;
+  RestoreOriginalIndexState;
+
+  FTempIndexCreated := False;
 end;
 
 procedure TVittixDBGridSortEngine.ToggleSort(
