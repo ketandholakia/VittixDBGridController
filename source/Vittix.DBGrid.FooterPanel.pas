@@ -31,7 +31,6 @@ uses
   Winapi.Messages,
   Vcl.Menus,
   Data.DB,
-  TypInfo,
   Vittix.DBGrid,
   Vittix.DBGrid.ColumnInfo,
   Vittix.DBGrid.Aggregation.Engine;
@@ -46,10 +45,12 @@ type
 
     procedure BuildPopup;
     procedure PopupClick(Sender: TObject);
+    procedure PopupClearClick(Sender: TObject);
     function HitTestColumn(X: Integer): TColumn;
     function GetIndicatorOffset: Integer;
     function GetIndicatorRect: TRect;
     function GetColumnRect(AColumn: TColumn): TRect;
+    function GetAggregationCaption(Agg: TVittixAggregationType): string;
   protected
     procedure Paint; override;
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
@@ -190,6 +191,21 @@ begin
     GridRect.Right,
     Height
   );
+end;
+
+function TVittixDBGridFooterPanel.GetAggregationCaption(
+  Agg: TVittixAggregationType): string;
+begin
+  case Agg of
+    vatNone:  Result := 'Clear aggregation';
+    vatCount: Result := 'Count';
+    vatSum:   Result := 'Sum';
+    vatAvg:   Result := 'Average';
+    vatMin:   Result := 'Minimum';
+    vatMax:   Result := 'Maximum';
+  else
+    Result := 'Aggregation';
+  end;
 end;
 
 procedure TVittixDBGridFooterPanel.Paint;
@@ -346,10 +362,20 @@ begin
 
   Info := FGrid.ColumnInfoByColumn(FContextColumn);
 
+  Item := TMenuItem.Create(FPopup);
+  Item.Caption := 'Clear aggregation';
+  Item.Tag := Ord(vatNone);
+  Item.OnClick := PopupClearClick;
+  FPopup.Items.Add(Item);
+
+  Item := TMenuItem.Create(FPopup);
+  Item.Caption := '-';
+  FPopup.Items.Add(Item);
+
   for Agg := Low(TVittixAggregationType) to High(TVittixAggregationType) do
   begin
     Item := TMenuItem.Create(FPopup);
-    Item.Caption := GetEnumName(TypeInfo(TVittixAggregationType), Ord(Agg));
+    Item.Caption := GetAggregationCaption(Agg);
     Item.Tag := Ord(Agg);
     Item.RadioItem := True;
     Item.GroupIndex := 1;
@@ -359,6 +385,25 @@ begin
       Item.Checked := True;
 
     FPopup.Items.Add(Item);
+  end;
+end;
+
+procedure TVittixDBGridFooterPanel.PopupClearClick(Sender: TObject);
+var
+  Info: TVittixDBGridColumnInfo;
+begin
+  if not Assigned(FContextColumn) then Exit;
+
+  Info := FGrid.ColumnInfoByColumn(FContextColumn);
+  if not Assigned(Info) then Exit;
+
+  if Info.AggregationType <> vatNone then
+  begin
+    Info.AggregationType := vatNone;
+    if Assigned(FAggregationEngine) then
+      FAggregationEngine.Recalculate;
+    Invalidate;
+    FGrid.Invalidate;
   end;
 end;
 
