@@ -262,6 +262,7 @@ var
   State1, State2: TVittixDBGridLayoutState;
   Stream: TMemoryStream;
   Storage: IVittixDBGridLayoutStorage;
+  ColState: TVittixDBGridLayoutColumnState;
 begin
   State1 := TVittixDBGridLayoutState.Create;
   State2 := nil;
@@ -269,6 +270,13 @@ begin
   Storage := TVittixDBGridLayoutJsonStorage.Create;
   try
     FController.CaptureLayout(State1);
+    State1.FooterVisible := False;
+    ColState := State1.Columns[1];
+    ColState.AggregationType := vatSum;
+    State1.Columns[1] := ColState;
+    ColState := State1.Columns[2];
+    ColState.AggregationType := vatMax;
+    State1.Columns[2] := ColState;
     Storage.SaveToStream(State1, Stream);
     Stream.Position := 0;
     State2 := Storage.LoadFromStream(Stream);
@@ -276,6 +284,8 @@ begin
     Assert.AreEqual(State1.FooterVisible, State2.FooterVisible);
     Assert.AreEqual(State1.AlternatingRowColors, State2.AlternatingRowColors);
     Assert.AreEqual(State1.AlternateRowColor, State2.AlternateRowColor);
+    Assert.AreEqual(State1.Columns[1].AggregationType, State2.Columns[1].AggregationType);
+    Assert.AreEqual(State1.Columns[2].AggregationType, State2.Columns[2].AggregationType);
   finally
     State2.Free;
     Stream.Free;
