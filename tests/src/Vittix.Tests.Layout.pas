@@ -103,6 +103,8 @@ type
     procedure ChooserClampsToMinimumSizeOnResize;
     [Test]
     procedure ChooserSearchSummaryReflectsMatches;
+    [Test]
+    procedure ChooserSearchMatchesAllTerms;
   end;
 
 implementation
@@ -1029,6 +1031,34 @@ begin
       try
         Chooser.SearchText := 'am';
         Assert.AreEqual('1 matches', Chooser.SearchSummaryText);
+      finally
+        Chooser.Free;
+      end;
+    finally
+      Grid.Free;
+      OwnerForm.Free;
+    end;
+  finally
+  end;
+end;
+
+procedure TVittixLayoutTests.ChooserSearchMatchesAllTerms;
+var
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+  Chooser: TVittixDBGridColumnChooserForm;
+begin
+  OwnerForm := TForm.CreateNew(nil);
+  try
+    Grid := TVittixDBGrid.Create(OwnerForm);
+    try
+      Grid.Parent := OwnerForm;
+      Chooser := TVittixDBGridColumnChooserForm.CreateChooser(OwnerForm, Grid);
+      try
+        Chooser.SearchText := 'am';
+        Assert.AreEqual('1 matches', Chooser.SearchSummaryText);
+        Chooser.SearchText := 'am um';
+        Assert.AreEqual('0 matches', Chooser.SearchSummaryText);
       finally
         Chooser.Free;
       end;

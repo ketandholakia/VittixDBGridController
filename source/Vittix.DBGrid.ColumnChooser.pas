@@ -314,11 +314,15 @@ procedure TVittixDBGridColumnChooserForm.ApplySearchFilter;
 var
   I: Integer;
   Query: string;
+  Terms: TArray<string>;
+  Term: string;
   Col: TColumn;
   CaptionText: string;
   MatchCount: Integer;
+  MatchesAllTerms: Boolean;
 begin
   Query := Trim(FSearchEdit.Text).ToLower;
+  Terms := Query.Split([' '], TStringSplitOptions.ExcludeEmpty);
   MatchCount := 0;
   FCheckList.Items.BeginUpdate;
   try
@@ -326,10 +330,19 @@ begin
     begin
       Col := TColumn(FCheckList.Items.Objects[I]);
       CaptionText := LowerCase(FCheckList.Items[I]);
-      FCheckList.ItemEnabled[I] :=
-        (Query = '') or
-        CaptionText.Contains(Query) or
-        LowerCase(Col.FieldName).Contains(Query);
+      MatchesAllTerms := Length(Terms) = 0;
+      if Length(Terms) > 0 then
+      begin
+        MatchesAllTerms := True;
+        for Term in Terms do
+          if not (CaptionText.Contains(Term) or LowerCase(Col.FieldName).Contains(Term)) then
+          begin
+            MatchesAllTerms := False;
+            Break;
+          end;
+      end;
+
+      FCheckList.ItemEnabled[I] := MatchesAllTerms;
       if FCheckList.ItemEnabled[I] then
         Inc(MatchCount);
     end;
