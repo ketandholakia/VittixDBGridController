@@ -47,6 +47,7 @@ type
     procedure SetChooserStateFileName(const Value: string);
     procedure SetFilterHistoryFileName(const Value: string);
     procedure SetPersistenceRootPath(const Value: string);
+    procedure ApplyPersistenceSettings;
 
   protected
     procedure Loaded; override;
@@ -142,6 +143,8 @@ begin
   // and Loaded will do the actual hooking at the right time.
   Ctrl.ShowFooter := FFooterVisible;
   Ctrl.Grid := Self;
+
+  ApplyPersistenceSettings;
 end;
 
 procedure TVittixDBGrid.BeforeDestruction;
@@ -251,7 +254,7 @@ begin
   if FPersistence.LayoutStorageFileName <> Value then
   begin
     FPersistence.LayoutStorageFileName := Value;
-    TVittixDBGridLayoutJsonStorage.StateFileName := Value;
+    ApplyPersistenceSettings;
   end;
 end;
 
@@ -260,7 +263,7 @@ begin
   if FPersistence.ChooserStateFileName <> Value then
   begin
     FPersistence.ChooserStateFileName := Value;
-    TVittixDBGridColumnChooserForm.StateFileName := Value;
+    ApplyPersistenceSettings;
   end;
 end;
 
@@ -269,7 +272,7 @@ begin
   if FPersistence.FilterHistoryFileName <> Value then
   begin
     FPersistence.FilterHistoryFileName := Value;
-    TVittixDBGridFilterPopup.HistoryFileName := Value;
+    ApplyPersistenceSettings;
   end;
 end;
 
@@ -278,10 +281,29 @@ begin
   if FPersistence.PersistenceRootPath <> Value then
   begin
     FPersistence.PersistenceRootPath := Value;
-    TVittixDBGridLayoutJsonStorage.RootPath := Value;
-    TVittixDBGridColumnChooserForm.RootPath := Value;
-    TVittixDBGridFilterPopup.RootPath := Value;
+    ApplyPersistenceSettings;
   end;
+end;
+
+procedure TVittixDBGrid.ApplyPersistenceSettings;
+begin
+  if FPersistence.LayoutStorageFileName <> '' then
+    TVittixDBGridLayoutJsonStorage.StateFileName := FPersistence.LayoutStorageFileName
+  else
+    TVittixDBGridLayoutJsonStorage.StateFileName := '';
+  TVittixDBGridLayoutJsonStorage.RootPath := FPersistence.PersistenceRootPath;
+
+  if FPersistence.ChooserStateFileName <> '' then
+    TVittixDBGridColumnChooserForm.StateFileName := FPersistence.ChooserStateFileName
+  else
+    TVittixDBGridColumnChooserForm.StateFileName := '';
+  TVittixDBGridColumnChooserForm.RootPath := FPersistence.PersistenceRootPath;
+
+  if FPersistence.FilterHistoryFileName <> '' then
+    TVittixDBGridFilterPopup.HistoryFileName := FPersistence.FilterHistoryFileName
+  else
+    TVittixDBGridFilterPopup.HistoryFileName := '';
+  TVittixDBGridFilterPopup.RootPath := FPersistence.PersistenceRootPath;
 end;
 
 procedure TVittixDBGrid.Loaded;
