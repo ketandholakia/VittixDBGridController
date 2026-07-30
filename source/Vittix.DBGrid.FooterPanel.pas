@@ -58,6 +58,7 @@ type
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
     class function AggregationCaption(Agg: TVittixAggregationType): string;
+    function GetPopupShortcutSummaryText: string;
     procedure Attach(
       AGrid: TVittixDBGrid;
       AEngine: TVittixDBGridAggregationEngine
@@ -374,12 +375,14 @@ begin
 
   Item := TMenuItem.Create(FPopup);
   Item.Caption := 'Clear aggregation';
+  Item.ShortCut := TextToShortCut('Del');
   Item.Tag := Ord(vatNone);
   Item.OnClick := PopupClearClick;
   FPopup.Items.Add(Item);
 
   Item := TMenuItem.Create(FPopup);
   Item.Caption := 'Clear all aggregations';
+  Item.ShortCut := TextToShortCut('Ctrl+Del');
   Item.OnClick := PopupClearAllClick;
   FPopup.Items.Add(Item);
 
@@ -401,6 +404,11 @@ begin
 
     FPopup.Items.Add(Item);
   end;
+end;
+
+function TVittixDBGridFooterPanel.GetPopupShortcutSummaryText: string;
+begin
+  Result := 'Clear aggregation=Del;Clear all aggregations=Ctrl+Del';
 end;
 
 procedure TVittixDBGridFooterPanel.PopupClearClick(Sender: TObject);

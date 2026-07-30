@@ -90,6 +90,8 @@ type
     [Test]
     procedure FooterClearAllAggregationsIsNoOpWhenAlreadyEmpty;
     [Test]
+    procedure FooterPopupReportsShortcutSummary;
+    [Test]
     procedure ChooserAllowReorderDisablesDragOverWhenFalse;
     [Test]
     procedure CellConditionMatcherSupportsTextAndNumericRules;
@@ -844,6 +846,21 @@ begin
     Footer.ClearAllAggregations;
     Assert.AreEqual(vatNone, FGrid.ColumnInfoByColumn(FGrid.Columns[1]).AggregationType);
     Assert.AreEqual(vatNone, FGrid.ColumnInfoByColumn(FGrid.Columns[2]).AggregationType);
+  finally
+    Footer.Free;
+  end;
+end;
+
+procedure TVittixLayoutTests.FooterPopupReportsShortcutSummary;
+var
+  Footer: TVittixDBGridFooterPanel;
+begin
+  Footer := TVittixDBGridFooterPanel.Create(FOwnerForm);
+  try
+    Assert.AreEqual(
+      'Clear aggregation=Del;Clear all aggregations=Ctrl+Del',
+      Footer.GetPopupShortcutSummaryText
+    );
   finally
     Footer.Free;
   end;
