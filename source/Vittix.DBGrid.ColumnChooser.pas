@@ -91,6 +91,7 @@ type
     procedure CheckListDragDrop(Sender, Source: TObject; X, Y: Integer);
     procedure SearchEditChange(Sender: TObject);
     procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+    procedure FormResize(Sender: TObject);
   public
     class var StateFileName: string;
     class var RootPath: string;
@@ -145,6 +146,7 @@ begin
   Height := 450;
   KeyPreview := True;
   OnKeyDown := FormKeyDown;
+  OnResize := FormResize;
   
   // Set minimum size constraints
   Constraints.MinWidth := 250;
@@ -367,6 +369,14 @@ begin
     FocusSearchBox;
     Key := 0;
   end;
+end;
+
+procedure TVittixDBGridColumnChooserForm.FormResize(Sender: TObject);
+begin
+  if Width < Constraints.MinWidth then
+    Width := Constraints.MinWidth;
+  if Height < Constraints.MinHeight then
+    Height := Constraints.MinHeight;
 end;
 
 procedure TVittixDBGridColumnChooserForm.LoadDialogState;

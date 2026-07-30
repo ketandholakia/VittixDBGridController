@@ -99,6 +99,8 @@ type
     procedure ChooserCanAdjustColumnWidthThroughPublicApi;
     [Test]
     procedure ChooserFocusSearchBoxSelectsSearchEdit;
+    [Test]
+    procedure ChooserClampsToMinimumSizeOnResize;
   end;
 
 implementation
@@ -968,6 +970,35 @@ begin
         Chooser.FocusSearchBox;
         Assert.IsTrue(Assigned(Chooser.ActiveControl));
         Assert.AreEqual('abc', Chooser.SearchText);
+      finally
+        Chooser.Free;
+      end;
+    finally
+      Grid.Free;
+      OwnerForm.Free;
+    end;
+  finally
+  end;
+end;
+
+procedure TVittixLayoutTests.ChooserClampsToMinimumSizeOnResize;
+var
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+  Chooser: TVittixDBGridColumnChooserForm;
+begin
+  OwnerForm := TForm.CreateNew(nil);
+  try
+    Grid := TVittixDBGrid.Create(OwnerForm);
+    try
+      Grid.Parent := OwnerForm;
+      Chooser := TVittixDBGridColumnChooserForm.CreateChooser(OwnerForm, Grid);
+      try
+        Chooser.Width := 10;
+        Chooser.Height := 10;
+        Chooser.SetBounds(Chooser.Left, Chooser.Top, 10, 10);
+        Assert.IsTrue(Chooser.Width >= 250);
+        Assert.IsTrue(Chooser.Height >= 300);
       finally
         Chooser.Free;
       end;
