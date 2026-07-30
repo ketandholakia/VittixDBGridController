@@ -8,6 +8,7 @@ uses
   System.Zip,
   Datasnap.DBClient,
   Vcl.Forms,
+  Vcl.Clipbrd,
   DUnitX.TestFramework,
   Vittix.DBGrid,
   Vittix.DBGrid.Export.Engine;
@@ -53,6 +54,8 @@ type
     procedure TsvNeutralizesFormulaLeadingValues;
     [Test]
     procedure XlsxReportsProgressDuringExport;
+    [Test]
+    procedure ClipboardExportWritesExpectedText;
   end;
 
 implementation
@@ -332,6 +335,15 @@ begin
   Assert.IsTrue(FProgressCount > 0);
   Assert.IsTrue(FLastProgressCurrent > 0);
   Assert.IsTrue(FLastProgressTotal > 0);
+end;
+
+procedure TVittixExportEngineTests.ClipboardExportWritesExpectedText;
+begin
+  Clipboard.AsText := '';
+  FExporter.ExportToClipboard(vefTSV);
+
+  Assert.IsTrue(Clipboard.AsText.Contains('ID'#9'Name'#9'Amount'));
+  Assert.IsTrue(Clipboard.AsText.Contains('1'#9'Alpha'));
 end;
 
 end.
