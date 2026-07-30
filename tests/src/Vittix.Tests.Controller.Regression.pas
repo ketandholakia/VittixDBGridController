@@ -152,15 +152,19 @@ var
   DataSet1, DataSet2: TClientDataSet;
   OwnerForm: TForm;
   Grid: TVittixDBGrid;
+  Controller: TVittixDBGridController;
 begin
   DataSet1 := CreateSampleDataSet;
   DataSet2 := CreateSampleDataSet;
   try
     Grid := CreateHeadlessGrid(DataSet1, OwnerForm);
+    Controller := TVittixDBGridController(Grid.Controller);
     try
       Assert.IsNotNull(Grid.DataSource);
       Grid.DataSource.DataSet := DataSet2;
       Assert.AreSame(DataSet2, Grid.DataSource.DataSet);
+      Controller.Refresh;
+      Assert.IsTrue(Controller.Active);
       DataSet2.First;
       DataSet2.Next;
       Assert.IsTrue(DataSet2.RecNo > 1);
