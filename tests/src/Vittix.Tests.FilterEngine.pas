@@ -51,6 +51,8 @@ type
     procedure FilterOperatorsSupportEqualsAndComparisonModes;
     [Test]
     procedure FilterPopupRestoresOperatorFromSavedText;
+    [Test]
+    procedure FilterPopupLoadsPersistedHistory;
   end;
 
 implementation
@@ -254,6 +256,41 @@ begin
     end;
   finally
     OwnerForm.Free;
+  end;
+end;
+
+procedure TVittixFilterEngineTests.FilterPopupLoadsPersistedHistory;
+var
+  OwnerForm: TForm;
+  Info: TVittixDBGridColumnInfo;
+  Popup: TVittixDBGridFilterPopup;
+  TempFile: string;
+begin
+  TempFile := TPath.Combine(TPath.GetTempPath, 'VittixDBGridFilterHistory.test.ini');
+  OwnerForm := TForm.CreateNew(nil);
+  try
+    Info := FColumns.FindByFieldName('Name');
+    TVittixDBGridFilterPopup.HistoryFileName := TempFile;
+
+    Popup := TVittixDBGridFilterPopup.CreatePopup(OwnerForm, Info);
+    try
+      Popup.PersistHistory;
+    finally
+      Popup.Free;
+    end;
+
+    Popup := TVittixDBGridFilterPopup.CreatePopup(OwnerForm, Info);
+    try
+      Assert.AreEqual('', Popup.FilterText);
+      Assert.AreEqual(0, Popup.OperatorIndex);
+    finally
+      Popup.Free;
+    end;
+  finally
+    TVittixDBGridFilterPopup.HistoryFileName := '';
+    OwnerForm.Free;
+    if FileExists(TempFile) then
+      DeleteFile(TempFile);
   end;
 end;
 

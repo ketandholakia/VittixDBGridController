@@ -48,6 +48,8 @@ type
     function OperatorIndexFromPrefix(const Prefix: string): Integer;
     function GetOperatorIndex: Integer;
     function GetFilterText: string;
+    procedure LoadPersistedHistory;
+    function GetHistoryPath: string;
   public
     class var HistoryFileName: string;
     class var RootPath: string;
@@ -242,6 +244,7 @@ begin
   end;
 
   LoadDistinctValues;
+  LoadPersistedHistory;
   
   // Select all text so user can type to replace immediately
   FRecentCombo.SelectAll;
@@ -255,12 +258,41 @@ begin
   ApplyChanges;
 end;
 
-function HistoryPath: string;
+procedure TVittixDBGridFilterPopup.LoadPersistedHistory;
+var
+  Ini: TIniFile;
+  FileName: string;
+  SavedText: string;
+  SavedOperator: Integer;
 begin
-  if TVittixDBGridFilterPopup.HistoryFileName <> '' then
-    Exit(TVittixDBGridFilterPopup.HistoryFileName);
-  if TVittixDBGridFilterPopup.RootPath <> '' then
-    Exit(TPath.Combine(TVittixDBGridFilterPopup.RootPath, 'filter.ini'));
+  FileName := GetHistoryPath;
+  if (FileName = '') or not FileExists(FileName) then
+    Exit;
+
+  Ini := TIniFile.Create(FileName);
+  try
+    SavedText := Ini.ReadString(FHistoryKey, 'LastFilter', '');
+    SavedOperator := Ini.ReadInteger(FHistoryKey, 'OperatorIndex', FOperatorCombo.ItemIndex);
+
+    if SavedText <> '' then
+      FRecentCombo.Text := SavedText;
+
+    if SavedOperator < 0 then
+      SavedOperator := 0;
+    if SavedOperator > FOperatorCombo.Items.Count - 1 then
+      SavedOperator := FOperatorCombo.Items.Count - 1;
+    FOperatorCombo.ItemIndex := SavedOperator;
+  finally
+    Ini.Free;
+  end;
+end;
+
+function TVittixDBGridFilterPopup.GetHistoryPath: string;
+begin
+  if HistoryFileName <> '' then
+    Exit(HistoryFileName);
+  if RootPath <> '' then
+    Exit(TPath.Combine(RootPath, 'filter.ini'));
   Result := IncludeTrailingPathDelimiter(ExtractFilePath(ParamStr(0))) + 'VittixDBGridFilterHistory.ini';
 end;
 
@@ -455,7 +487,7 @@ begin
   FOriginalText := NewText;
 
   try
-    with TIniFile.Create(HistoryPath) do
+    with TIniFile.Create(GetHistoryPath) do
     try
       WriteString(FHistoryKey, 'LastFilter', NewText);
       WriteInteger(FHistoryKey, 'OperatorIndex', FOperatorCombo.ItemIndex);
