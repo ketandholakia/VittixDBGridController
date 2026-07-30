@@ -63,6 +63,8 @@ type
     procedure GridPersistenceRootPathFanOutsToHelpers;
     [Test]
     procedure ExplicitPersistenceFilesOverrideRootPath;
+    [Test]
+    procedure GridPersistenceFilesOverrideRootPathWhenSetAfterRoot;
   end;
 
 implementation
@@ -437,6 +439,30 @@ begin
   Assert.AreEqual('C:\temp\layout.json', TVittixDBGridLayoutJsonStorage.StateFileName);
   Assert.AreEqual('C:\temp\chooser.ini', TVittixDBGridColumnChooserForm.StateFileName);
   Assert.AreEqual('C:\temp\filter.ini', TVittixDBGridFilterPopup.HistoryFileName);
+end;
+
+procedure TVittixLayoutTests.GridPersistenceFilesOverrideRootPathWhenSetAfterRoot;
+var
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+begin
+  OwnerForm := TForm.CreateNew(nil);
+  try
+    Grid := TVittixDBGrid.Create(OwnerForm);
+    try
+      Grid.PersistenceRootPath := 'C:\temp\vittix-root';
+      Grid.LayoutStorageFileName := 'C:\temp\layout.json';
+      Grid.ChooserStateFileName := 'C:\temp\chooser.ini';
+      Grid.FilterHistoryFileName := 'C:\temp\filter.ini';
+
+      Assert.AreEqual('C:\temp\layout.json', TVittixDBGridLayoutJsonStorage.StateFileName);
+      Assert.AreEqual('C:\temp\chooser.ini', TVittixDBGridColumnChooserForm.StateFileName);
+      Assert.AreEqual('C:\temp\filter.ini', TVittixDBGridFilterPopup.HistoryFileName);
+    finally
+      OwnerForm.Free;
+    end;
+  finally
+  end;
 end;
 
 end.
