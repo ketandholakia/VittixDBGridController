@@ -31,6 +31,7 @@ type
     FBtnCancel: TButton;
     FLabelTitle: TLabel;
     FValidationLabel: TLabel;
+    FUseDistinctValuesOnly: Boolean;
 
     FColumnInfo: TVittixDBGridColumnInfo;
     FOriginalText: string;
@@ -50,6 +51,7 @@ type
     function OperatorIndexFromPrefix(const Prefix: string): Integer;
     function GetOperatorIndex: Integer;
     function GetFilterText: string;
+    procedure SetFilterText(const Value: string);
     procedure LoadPersistedHistory;
     function GetHistoryPath: string;
   public
@@ -69,9 +71,11 @@ type
     ): Boolean;
     procedure PersistHistory;
     procedure ClearHistory;
+    function ValidateCurrentInput: Boolean;
 
     property OperatorIndex: Integer read GetOperatorIndex;
-    property FilterText: string read GetFilterText;
+    property FilterText: string read GetFilterText write SetFilterText;
+    property UseDistinctValuesOnly: Boolean read FUseDistinctValuesOnly write FUseDistinctValuesOnly;
   end;
 
 implementation
@@ -101,6 +105,7 @@ begin
 
   FColumnInfo := AColumnInfo;
   FOriginalText := '';
+  FUseDistinctValuesOnly := False;
 
   // FIX BUG 12: Build a scoped history key using owner's class name so that
   // two grids on the same form don't share filter history for the same field.
@@ -278,6 +283,11 @@ begin
   ApplyChanges;
 end;
 
+function TVittixDBGridFilterPopup.ValidateCurrentInput: Boolean;
+begin
+  Result := ValidateInput;
+end;
+
 procedure TVittixDBGridFilterPopup.ClearHistory;
 var
   LHistory: TStringList;
@@ -400,6 +410,11 @@ begin
   Result := FRecentCombo.Text;
 end;
 
+procedure TVittixDBGridFilterPopup.SetFilterText(const Value: string);
+begin
+  FRecentCombo.Text := Value;
+end;
+
 procedure TVittixDBGridFilterPopup.LoadDistinctValues;
 var
   Grid: TDBGrid;
@@ -451,6 +466,8 @@ function TVittixDBGridFilterPopup.ValidateInput: Boolean;
 var
   IsValid: Boolean;
   ErrMsg: string;
+  I: Integer;
+  Found: Boolean;
 begin
   IsValid := True;
   ErrMsg := '';
@@ -464,6 +481,22 @@ begin
       IsValid,
       ErrMsg
     );
+  end;
+
+  if IsValid and FUseDistinctValuesOnly and (Trim(FRecentCombo.Text) <> '') then
+  begin
+    Found := False;
+    for I := 0 to FRecentCombo.Items.Count - 1 do
+      if SameText(FRecentCombo.Items[I], FRecentCombo.Text) then
+      begin
+        Found := True;
+        Break;
+      end;
+    if not Found then
+    begin
+      IsValid := False;
+      ErrMsg := 'Value must match one of the available items.';
+    end;
   end;
 
   if IsValid then
