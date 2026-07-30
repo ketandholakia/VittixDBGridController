@@ -61,6 +61,8 @@ type
     procedure FilterPopupClearHistoryClearsInMemoryState;
     [Test]
     procedure FilterPopupUsesConfiguredFileName;
+    [Test]
+    procedure FilterPopupFileNameOverridesRootPath;
   end;
 
 implementation
@@ -449,6 +451,45 @@ begin
     OwnerForm.Free;
     if FileExists(TempFile) then
       DeleteFile(TempFile);
+  end;
+end;
+
+procedure TVittixFilterEngineTests.FilterPopupFileNameOverridesRootPath;
+var
+  OwnerForm: TForm;
+  Info: TVittixDBGridColumnInfo;
+  Popup: TVittixDBGridFilterPopup;
+  RootPath: string;
+  ExplicitFile: string;
+  RootFile: string;
+begin
+  RootPath := TPath.Combine(TPath.GetTempPath, 'VittixDBGridFilterRoot.override.test');
+  ExplicitFile := TPath.Combine(TPath.GetTempPath, 'VittixDBGridFilterExplicit.override.ini');
+  RootFile := TPath.Combine(RootPath, 'filter.ini');
+  ForceDirectories(RootPath);
+  OwnerForm := TForm.CreateNew(nil);
+  try
+    Info := FColumns.FindByFieldName('Name');
+    TVittixDBGridFilterPopup.RootPath := RootPath;
+    TVittixDBGridFilterPopup.HistoryFileName := ExplicitFile;
+    Popup := TVittixDBGridFilterPopup.CreatePopup(OwnerForm, Info);
+    try
+      Popup.PersistHistory;
+      Assert.IsTrue(FileExists(ExplicitFile));
+      Assert.IsFalse(FileExists(RootFile));
+    finally
+      Popup.Free;
+    end;
+  finally
+    TVittixDBGridFilterPopup.RootPath := '';
+    TVittixDBGridFilterPopup.HistoryFileName := '';
+    OwnerForm.Free;
+    if FileExists(ExplicitFile) then
+      DeleteFile(ExplicitFile);
+    if FileExists(RootFile) then
+      DeleteFile(RootFile);
+    if TDirectory.Exists(RootPath) then
+      TDirectory.Delete(RootPath, True);
   end;
 end;
 
