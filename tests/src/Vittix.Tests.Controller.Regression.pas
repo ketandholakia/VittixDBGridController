@@ -6,6 +6,7 @@ uses
   Datasnap.DBClient,
   Data.DB,
   Vcl.Forms,
+  Vcl.Controls,
   System.SysUtils,
   DUnitX.TestFramework,
   Vittix.DBGrid,
@@ -42,12 +43,17 @@ type
     procedure ControllerCanToggleActiveAndFooterRepeatedly;
     [Test]
     procedure ControllerCanBeFreedBeforeGridWithoutAV;
+    [Test]
+    procedure GridCanRecreateWindowHandleWhileAttached;
   end;
 
 implementation
 
 uses
   Vittix.Tests.TestData;
+
+type
+  TWinControlAccess = class(TWinControl);
 
 procedure TVittixControllerRegressionTests.DatasetAfterPost(DataSet: TDataSet);
 begin
@@ -116,13 +122,16 @@ begin
   DataSet := CreateSampleDataSet;
   try
     CreateHeadlessGrid(DataSet, OwnerForm);
-    Assert.WillNotRaise(
-      procedure
-      begin
-        OwnerForm.Free;
-      end
-    );
+    try
+      OwnerForm.Free;
+      OwnerForm := nil;
+    except
+      on E: Exception do
+        Assert.Fail(E.ClassName + ': ' + E.Message);
+    end;
   finally
+    if Assigned(OwnerForm) then
+      OwnerForm.Free;
     DataSet.Free;
   end;
 end;
@@ -312,15 +321,46 @@ begin
       Assert.IsNotNull(Controller);
       Controller.Free;
       Assert.IsTrue(Grid.Controller = nil);
-      Assert.WillNotRaise(
-        procedure
-        begin
-          OwnerForm.Free;
-        end
-      );
+      try
+        OwnerForm.Free;
+        OwnerForm := nil;
+      except
+        on E: Exception do
+          Assert.Fail(E.ClassName + ': ' + E.Message);
+      end;
     finally
       if Assigned(OwnerForm) then
         OwnerForm.Free;
+    end;
+  finally
+    DataSet.Free;
+  end;
+end;
+
+procedure TVittixControllerRegressionTests.GridCanRecreateWindowHandleWhileAttached;
+var
+  DataSet: TClientDataSet;
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+  Controller: TVittixDBGridController;
+begin
+  DataSet := CreateSampleDataSet;
+  try
+    Grid := CreateHeadlessGrid(DataSet, OwnerForm);
+    Controller := TVittixDBGridController(Grid.Controller);
+    try
+      Assert.IsNotNull(Grid);
+      Assert.IsNotNull(Controller);
+      TWinControlAccess(Grid).RecreateWnd;
+      Controller.Refresh;
+      Assert.IsTrue(Controller.Active);
+      Assert.IsNotNull(Grid.DataSource);
+      Assert.AreSame(DataSet, Grid.DataSource.DataSet);
+      DataSet.First;
+      DataSet.Next;
+      Assert.IsTrue(DataSet.RecNo > 1);
+    finally
+      OwnerForm.Free;
     end;
   finally
     DataSet.Free;
