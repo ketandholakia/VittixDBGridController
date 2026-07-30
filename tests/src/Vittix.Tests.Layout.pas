@@ -356,16 +356,20 @@ end;
 
 procedure TVittixLayoutTests.LayoutStorageUsesConfiguredFileName;
 var
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
   TempFile: string;
   State: TVittixDBGridLayoutState;
   Loaded: TVittixDBGridLayoutState;
 begin
   TempFile := TPath.Combine(TPath.GetTempPath, 'VittixDBGridLayout.test.json');
+  OwnerForm := TForm.CreateNew(nil);
+  Grid := TVittixDBGrid.Create(OwnerForm);
   State := TVittixDBGridLayoutState.Create;
   Loaded := nil;
   try
-    FController.CaptureLayout(State);
-    FGrid.LayoutStorageFileName := TempFile;
+    Grid.LayoutStorageFileName := TempFile;
+    TVittixDBGridController(Grid.Controller).CaptureLayout(State);
     TVittixDBGridLayoutJsonStorage.SaveToFile(State);
     Assert.IsTrue(FileExists(TempFile));
 
@@ -375,6 +379,8 @@ begin
   finally
     Loaded.Free;
     State.Free;
+    Grid.Free;
+    OwnerForm.Free;
     if FileExists(TempFile) then
       DeleteFile(TempFile);
   end;
@@ -423,18 +429,28 @@ begin
 end;
 
 procedure TVittixLayoutTests.ExplicitPersistenceFilesOverrideRootPath;
+var
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
 begin
-  TVittixDBGridLayoutJsonStorage.RootPath := 'C:\temp\vittix-root';
-  TVittixDBGridColumnChooserForm.RootPath := 'C:\temp\vittix-root';
-  TVittixDBGridFilterPopup.RootPath := 'C:\temp\vittix-root';
+  OwnerForm := TForm.CreateNew(nil);
+  try
+    Grid := TVittixDBGrid.Create(OwnerForm);
+    try
+      Grid.PersistenceRootPath := 'C:\temp\vittix-root';
+      Grid.LayoutStorageFileName := 'C:\temp\layout.json';
+      Grid.ChooserStateFileName := 'C:\temp\chooser.ini';
+      Grid.FilterHistoryFileName := 'C:\temp\filter.ini';
 
-  TVittixDBGridLayoutJsonStorage.StateFileName := 'C:\temp\layout.json';
-  TVittixDBGridColumnChooserForm.StateFileName := 'C:\temp\chooser.ini';
-  TVittixDBGridFilterPopup.HistoryFileName := 'C:\temp\filter.ini';
-
-  Assert.AreEqual('C:\temp\layout.json', TVittixDBGridLayoutJsonStorage.StateFileName);
-  Assert.AreEqual('C:\temp\chooser.ini', TVittixDBGridColumnChooserForm.StateFileName);
-  Assert.AreEqual('C:\temp\filter.ini', TVittixDBGridFilterPopup.HistoryFileName);
+      Assert.AreEqual('C:\temp\layout.json', Grid.LayoutStorageFileName);
+      Assert.AreEqual('C:\temp\chooser.ini', Grid.ChooserStateFileName);
+      Assert.AreEqual('C:\temp\filter.ini', Grid.FilterHistoryFileName);
+    finally
+      Grid.Free;
+      OwnerForm.Free;
+    end;
+  finally
+  end;
 end;
 
 procedure TVittixLayoutTests.GridPersistenceFilesOverrideRootPathWhenSetAfterRoot;
