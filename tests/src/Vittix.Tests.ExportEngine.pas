@@ -20,7 +20,12 @@ type
     FOwnerForm: TForm;
     FGrid: TVittixDBGrid;
     FExporter: TVittixDBGridExporter;
+    FProgressCount: Integer;
+    FLastProgressCurrent: Integer;
+    FLastProgressTotal: Integer;
     procedure CancelAtFirstProgress(Sender: TObject; Current, Total: Integer;
+      var Cancel: Boolean);
+    procedure RecordProgress(Sender: TObject; Current, Total: Integer;
       var Cancel: Boolean);
     function ExtractSheetXml(Stream: TMemoryStream): string;
   public
@@ -46,6 +51,8 @@ type
     procedure CsvNeutralizesFormulaLeadingValues;
     [Test]
     procedure TsvNeutralizesFormulaLeadingValues;
+    [Test]
+    procedure XlsxReportsProgressDuringExport;
   end;
 
 implementation
@@ -72,6 +79,14 @@ procedure TVittixExportEngineTests.CancelAtFirstProgress(Sender: TObject;
   Current, Total: Integer; var Cancel: Boolean);
 begin
   Cancel := True;
+end;
+
+procedure TVittixExportEngineTests.RecordProgress(Sender: TObject;
+  Current, Total: Integer; var Cancel: Boolean);
+begin
+  Inc(FProgressCount);
+  FLastProgressCurrent := Current;
+  FLastProgressTotal := Total;
 end;
 
 function TVittixExportEngineTests.ExtractSheetXml(Stream: TMemoryStream): string;
@@ -297,6 +312,26 @@ begin
   Output := FExporter.ExportToString(vefTSV);
 
   Assert.IsTrue(Output.Contains('''+SUM(1,2)'));
+end;
+
+procedure TVittixExportEngineTests.XlsxReportsProgressDuringExport;
+var
+  Stream: TMemoryStream;
+begin
+  FProgressCount := 0;
+  FLastProgressCurrent := 0;
+  FLastProgressTotal := 0;
+  FExporter.OnProgress := RecordProgress;
+  Stream := TMemoryStream.Create;
+  try
+    FExporter.ExportToStream(Stream, vefExcelXLSX);
+  finally
+    Stream.Free;
+  end;
+
+  Assert.IsTrue(FProgressCount > 0);
+  Assert.IsTrue(FLastProgressCurrent > 0);
+  Assert.IsTrue(FLastProgressTotal > 0);
 end;
 
 end.
