@@ -172,22 +172,27 @@ begin
 
   CaptureOriginalIndexState;
 
-  if FDataSet is TCustomClientDataSet then
-  begin
-    ApplyClientDataSetSorting;
-    Exit;
-  end;
-
-  if not DataSetSupportsIndexFieldNames then Exit;
-
-  IndexFields := BuildIndexFieldNames;
-
-  FDataSet.DisableControls;
   try
-    // Use RTTI to set the property safely
-    SetPropValue(FDataSet, 'IndexFieldNames', IndexFields);
-  finally
-    FDataSet.EnableControls;
+    if FDataSet is TCustomClientDataSet then
+    begin
+      ApplyClientDataSetSorting;
+      Exit;
+    end;
+
+    if not DataSetSupportsIndexFieldNames then Exit;
+
+    IndexFields := BuildIndexFieldNames;
+
+    FDataSet.DisableControls;
+    try
+      // Use RTTI to set the property safely
+      SetPropValue(FDataSet, 'IndexFieldNames', IndexFields);
+    finally
+      FDataSet.EnableControls;
+    end;
+  except
+    RestoreOriginalIndexState;
+    raise;
   end;
 end;
 
