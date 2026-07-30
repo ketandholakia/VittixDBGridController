@@ -54,12 +54,14 @@ type
   protected
     procedure Paint; override;
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
+    procedure DblClick; override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
     class function AggregationCaption(Agg: TVittixAggregationType): string;
     function GetPopupShortcutSummaryText: string;
     function GetPopupCaptionSummaryText: string;
+    procedure ClearAggregationAtClientX(X: Integer);
     procedure Attach(
       AGrid: TVittixDBGrid;
       AEngine: TVittixDBGridAggregationEngine
@@ -361,6 +363,21 @@ begin
   BuildPopup;
   P := ClientToScreen(Point(X, Y));
   FPopup.Popup(P.X, P.Y);
+end;
+
+procedure TVittixDBGridFooterPanel.DblClick;
+begin
+  inherited;
+  ClearAggregationAtClientX(ScreenToClient(Mouse.CursorPos).X);
+end;
+
+procedure TVittixDBGridFooterPanel.ClearAggregationAtClientX(X: Integer);
+var
+  Col: TColumn;
+begin
+  Col := HitTestColumn(X);
+  if Assigned(Col) then
+    ClearAggregationForColumn(Col);
 end;
 
 procedure TVittixDBGridFooterPanel.BuildPopup;

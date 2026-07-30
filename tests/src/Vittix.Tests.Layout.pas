@@ -94,6 +94,8 @@ type
     [Test]
     procedure FooterPopupReportsCaptionSummary;
     [Test]
+    procedure FooterCanClearAggregationAtClientX;
+    [Test]
     procedure ChooserAllowReorderDisablesDragOverWhenFalse;
     [Test]
     procedure CellConditionMatcherSupportsTextAndNumericRules;
@@ -880,6 +882,21 @@ begin
       'Clear aggregation|Clear all aggregations|-|Count|Sum|Average|Minimum|Maximum',
       Footer.GetPopupCaptionSummaryText
     );
+  finally
+    Footer.Free;
+  end;
+end;
+
+procedure TVittixLayoutTests.FooterCanClearAggregationAtClientX;
+var
+  Footer: TVittixDBGridFooterPanel;
+begin
+  Footer := TVittixDBGridFooterPanel.Create(FOwnerForm);
+  try
+    Footer.Attach(FGrid, nil);
+    FGrid.ColumnInfoByColumn(FGrid.Columns[1]).AggregationType := vatSum;
+    Footer.ClearAggregationAtClientX(10);
+    Assert.AreEqual(vatNone, FGrid.ColumnInfoByColumn(FGrid.Columns[1]).AggregationType);
   finally
     Footer.Free;
   end;
