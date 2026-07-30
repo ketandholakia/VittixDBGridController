@@ -5,6 +5,7 @@ interface
 uses
   System.SysUtils,
   System.Classes,
+  System.IOUtils,
   Datasnap.DBClient,
   Vcl.Forms,
   DUnitX.TestFramework,
@@ -51,6 +52,8 @@ type
     procedure FooterCaptionHelperUsesReadableNames;
     [Test]
     procedure ChooserStateRoundTripsThroughIni;
+    [Test]
+    procedure ChooserStateUsesConfiguredFileName;
   end;
 
 implementation
@@ -304,6 +307,40 @@ begin
       OwnerForm.Free;
     end;
   finally
+  end;
+end;
+
+procedure TVittixLayoutTests.ChooserStateUsesConfiguredFileName;
+var
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+  Chooser: TVittixDBGridColumnChooserForm;
+  TempFile: string;
+begin
+  TempFile := TPath.Combine(TPath.GetTempPath, 'VittixDBGridChooser.test.ini');
+  TVittixDBGridColumnChooserForm.StateFileName := TempFile;
+  OwnerForm := TForm.CreateNew(nil);
+  try
+    Grid := TVittixDBGrid.Create(OwnerForm);
+    try
+      Grid.Parent := OwnerForm;
+      Chooser := TVittixDBGridColumnChooserForm.CreateChooser(OwnerForm, Grid);
+      try
+        Chooser.Left := 77;
+        Chooser.Top := 88;
+        Chooser.SaveDialogState;
+      finally
+        Chooser.Free;
+      end;
+
+      Assert.IsTrue(FileExists(TempFile));
+    finally
+      OwnerForm.Free;
+    end;
+  finally
+    TVittixDBGridColumnChooserForm.StateFileName := '';
+    if FileExists(TempFile) then
+      DeleteFile(TempFile);
   end;
 end;
 

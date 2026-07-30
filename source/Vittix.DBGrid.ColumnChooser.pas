@@ -81,6 +81,7 @@ type
     procedure CheckListDragDrop(Sender, Source: TObject; X, Y: Integer);
     procedure SearchEditChange(Sender: TObject);
   public
+    class var StateFileName: string;
     constructor CreateChooser(AOwner: TComponent; AGrid: TDBGrid); reintroduce;
     class function Execute(AGrid: TDBGrid): Boolean;
     procedure LoadDialogState;
@@ -298,7 +299,10 @@ var
   Ini: TIniFile;
   FileName: string;
 begin
-  FileName := TPath.Combine(ExtractFilePath(ParamStr(0)), 'VittixDBGridChooser.ini');
+  if StateFileName <> '' then
+    FileName := StateFileName
+  else
+    FileName := TPath.Combine(ExtractFilePath(ParamStr(0)), 'VittixDBGridChooser.ini');
   Ini := TIniFile.Create(FileName);
   try
     Left := Ini.ReadInteger('Chooser', 'Left', Left);
@@ -317,7 +321,10 @@ var
   Ini: TIniFile;
   FileName: string;
 begin
-  FileName := TPath.Combine(ExtractFilePath(ParamStr(0)), 'VittixDBGridChooser.ini');
+  if StateFileName <> '' then
+    FileName := StateFileName
+  else
+    FileName := TPath.Combine(ExtractFilePath(ParamStr(0)), 'VittixDBGridChooser.ini');
   Ini := TIniFile.Create(FileName);
   try
     Ini.WriteInteger('Chooser', 'Left', Left);
