@@ -72,6 +72,8 @@ type
     procedure ApplySelection;
     procedure RollbackColumnOrder;
     function GetColumnCaption(AColumn: TColumn): string;
+    function GetSearchText: string;
+    procedure SetSearchText(const Value: string);
     
     // Event Handlers
     procedure CheckListDblClick(Sender: TObject);
@@ -101,6 +103,7 @@ type
     procedure SaveDialogState;
     
     property AllowReorder: Boolean read FAllowReorder write FAllowReorder;
+    property SearchText: string read GetSearchText write SetSearchText;
   end;
 
 implementation
@@ -323,6 +326,16 @@ begin
     Result := AColumn.FieldName;
   if Result = '' then
     Result := Format('Column %d', [AColumn.Index]);
+end;
+
+function TVittixDBGridColumnChooserForm.GetSearchText: string;
+begin
+  Result := FSearchEdit.Text;
+end;
+
+procedure TVittixDBGridColumnChooserForm.SetSearchText(const Value: string);
+begin
+  FSearchEdit.Text := Value;
 end;
 
 procedure TVittixDBGridColumnChooserForm.CheckListDblClick(Sender: TObject);

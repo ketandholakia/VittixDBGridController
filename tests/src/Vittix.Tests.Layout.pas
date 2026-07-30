@@ -6,6 +6,7 @@ uses
   System.SysUtils,
   System.Classes,
   System.IOUtils,
+  System.IniFiles,
   Datasnap.DBClient,
   Vcl.Forms,
   Vcl.DBGrids,
@@ -300,35 +301,56 @@ var
   OwnerForm: TForm;
   Grid: TVittixDBGrid;
   Chooser: TVittixDBGridColumnChooserForm;
+  TempFile: string;
+  Ini: TIniFile;
 begin
+  TempFile := TPath.Combine(TPath.GetTempPath, 'VittixDBGridChooser.test.ini');
   OwnerForm := TForm.CreateNew(nil);
   try
     Grid := TVittixDBGrid.Create(OwnerForm);
     try
       Grid.Parent := OwnerForm;
+      TVittixDBGridColumnChooserForm.StateFileName := TempFile;
       Chooser := TVittixDBGridColumnChooserForm.CreateChooser(OwnerForm, Grid);
       try
         Chooser.Left := 123;
         Chooser.Top := 234;
         Chooser.Width := 345;
         Chooser.Height := 456;
+        Chooser.SearchText := 'Amount';
+        Chooser.AllowReorder := False;
         Chooser.SaveDialogState;
         Chooser.Left := 1;
         Chooser.Top := 2;
         Chooser.Width := 3;
         Chooser.Height := 4;
+        Chooser.SearchText := '';
+        Chooser.AllowReorder := True;
         Chooser.LoadDialogState;
         Assert.AreEqual(123, Chooser.Left);
         Assert.AreEqual(234, Chooser.Top);
         Assert.AreEqual(345, Chooser.Width);
         Assert.AreEqual(456, Chooser.Height);
+        Assert.AreEqual('Amount', Chooser.SearchText);
+        Assert.IsFalse(Chooser.AllowReorder);
       finally
         Chooser.Free;
       end;
+
+      Ini := TIniFile.Create(TempFile);
+      try
+        Assert.AreEqual('Amount', Ini.ReadString('Chooser', 'SearchText', ''));
+        Assert.IsFalse(Ini.ReadBool('Chooser', 'AllowReorder', True));
+      finally
+        Ini.Free;
+      end;
     finally
+      TVittixDBGridColumnChooserForm.StateFileName := '';
       OwnerForm.Free;
     end;
   finally
+    if FileExists(TempFile) then
+      DeleteFile(TempFile);
   end;
 end;
 
