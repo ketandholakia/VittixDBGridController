@@ -289,12 +289,7 @@ end;
 
 procedure TVittixDBGrid.ApplyPersistenceSettings;
 begin
-  if FPersistence.ChooserStateFileName <> '' then
-    ;
   TVittixDBGridColumnChooserForm.RootPath := FPersistence.PersistenceRootPath;
-
-  if FPersistence.FilterHistoryFileName <> '' then
-    ;
   TVittixDBGridFilterPopup.RootPath := FPersistence.PersistenceRootPath;
 end;
 
