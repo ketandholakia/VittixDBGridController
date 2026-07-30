@@ -16,15 +16,19 @@ uses
   Vittix.DBGrid.Layout;
 
 type
+  TVittixDBGridPersistenceSettings = record
+    LayoutStorageFileName: string;
+    ChooserStateFileName: string;
+    FilterHistoryFileName: string;
+    PersistenceRootPath: string;
+  end;
+
   TVittixDBGrid = class(TDBGrid)
   private
     FColumnsInfo: TVittixDBGridColumns;
     FController: TComponent;
     FFooterVisible: Boolean;
-    FLayoutStorageFileName: string;
-    FChooserStateFileName: string;
-    FFilterHistoryFileName: string;
-    FPersistenceRootPath: string;
+    FPersistence: TVittixDBGridPersistenceSettings;
 
     // Local storage for design-time properties before Controller is ready
     FAlternatingRowColors: Boolean;
@@ -69,16 +73,16 @@ type
       read GetAlternateRowColor write SetAlternateRowColor default $00F7F7F7;
 
     property LayoutStorageFileName: string
-      read FLayoutStorageFileName write SetLayoutStorageFileName;
+      read FPersistence.LayoutStorageFileName write SetLayoutStorageFileName;
 
     property ChooserStateFileName: string
-      read FChooserStateFileName write SetChooserStateFileName;
+      read FPersistence.ChooserStateFileName write SetChooserStateFileName;
 
     property FilterHistoryFileName: string
-      read FFilterHistoryFileName write SetFilterHistoryFileName;
+      read FPersistence.FilterHistoryFileName write SetFilterHistoryFileName;
 
     property PersistenceRootPath: string
-      read FPersistenceRootPath write SetPersistenceRootPath;
+      read FPersistence.PersistenceRootPath write SetPersistenceRootPath;
 
     property DataSource: TDataSource read GetDataSource write SetDataSource;
 
@@ -244,36 +248,36 @@ end;
 
 procedure TVittixDBGrid.SetLayoutStorageFileName(const Value: string);
 begin
-  if FLayoutStorageFileName <> Value then
+  if FPersistence.LayoutStorageFileName <> Value then
   begin
-    FLayoutStorageFileName := Value;
+    FPersistence.LayoutStorageFileName := Value;
     TVittixDBGridLayoutJsonStorage.StateFileName := Value;
   end;
 end;
 
 procedure TVittixDBGrid.SetChooserStateFileName(const Value: string);
 begin
-  if FChooserStateFileName <> Value then
+  if FPersistence.ChooserStateFileName <> Value then
   begin
-    FChooserStateFileName := Value;
+    FPersistence.ChooserStateFileName := Value;
     TVittixDBGridColumnChooserForm.StateFileName := Value;
   end;
 end;
 
 procedure TVittixDBGrid.SetFilterHistoryFileName(const Value: string);
 begin
-  if FFilterHistoryFileName <> Value then
+  if FPersistence.FilterHistoryFileName <> Value then
   begin
-    FFilterHistoryFileName := Value;
+    FPersistence.FilterHistoryFileName := Value;
     TVittixDBGridFilterPopup.HistoryFileName := Value;
   end;
 end;
 
 procedure TVittixDBGrid.SetPersistenceRootPath(const Value: string);
 begin
-  if FPersistenceRootPath <> Value then
+  if FPersistence.PersistenceRootPath <> Value then
   begin
-    FPersistenceRootPath := Value;
+    FPersistence.PersistenceRootPath := Value;
     TVittixDBGridLayoutJsonStorage.RootPath := Value;
     TVittixDBGridColumnChooserForm.RootPath := Value;
     TVittixDBGridFilterPopup.RootPath := Value;
