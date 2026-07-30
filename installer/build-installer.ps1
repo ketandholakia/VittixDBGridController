@@ -37,13 +37,15 @@ $installerDir = $PSScriptRoot
 $payloadRoot = Join-Path $installerDir $PayloadFolder
 $payloadBplDir = Join-Path $payloadRoot "Bpl"
 $payloadDcpDir = Join-Path $payloadRoot "Dcp"
+$studioRoot = "C:\Program Files (x86)\Embarcadero\Studio\$DelphiVersion"
+$publicDocs = Join-Path $env:PUBLIC "Documents\Embarcadero\Studio\$DelphiVersion"
 
 $rsvars = Resolve-ToolPath @(
-  "C:\Program Files (x86)\Embarcadero\Studio\23.0\bin\rsvars.bat"
+  (Join-Path $studioRoot "bin\rsvars.bat")
 )
 
 $msbuild = Resolve-ToolPath @(
-  "C:\Program Files (x86)\Embarcadero\Studio\23.0\bin\msbuild.exe",
+  (Join-Path $studioRoot "bin\msbuild.exe"),
   "C:\Windows\Microsoft.NET\Framework\v4.0.30319\MSBuild.exe"
 )
 
@@ -61,7 +63,7 @@ if (-not $SkipPackageBuild) {
     throw "MSBuild not found. Install RAD Studio/MSBuild or update installer\build-installer.ps1."
   }
 
-  Write-Host "Building runtime and design-time packages for Delphi 12..."
+  Write-Host "Building runtime and design-time packages for Delphi $DelphiVersion..."
 
   $runtimeProj = Join-Path $packagesDir "VittixDBGridControllerR.dproj"
   $designProj = Join-Path $packagesDir "VittixDBGridControllerD.dproj"
@@ -80,7 +82,6 @@ if errorlevel 1 exit /b 1
   }
 }
 
-$publicDocs = Join-Path $env:PUBLIC "Documents\Embarcadero\Studio\23.0"
 $sourceBplDir = Join-Path $publicDocs "Bpl"
 $sourceDcpDir = Join-Path $publicDocs "Dcp"
 
