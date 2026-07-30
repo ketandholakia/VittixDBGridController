@@ -40,6 +40,8 @@ type
     procedure XlsxUsesColumnLettersPastZ;
     [Test]
     procedure CancelStopsExportEarly;
+    [Test]
+    procedure CancelledFileExportDoesNotOverwriteExistingFile;
   end;
 
 implementation
@@ -223,6 +225,47 @@ begin
   end;
 
   Assert.IsTrue(LineCount < 251);
+end;
+
+procedure TVittixExportEngineTests.CancelledFileExportDoesNotOverwriteExistingFile;
+var
+  TempFileName: string;
+  OriginalText: string;
+  LargeDataSet: TClientDataSet;
+  LargeForm: TForm;
+  LargeGrid: TVittixDBGrid;
+  LargeExporter: TVittixDBGridExporter;
+begin
+  TempFileName := TPath.Combine(TPath.GetTempPath, TGuid.NewGuid.ToString + '.csv');
+  OriginalText := 'keep me';
+  TFile.WriteAllText(TempFileName, OriginalText, TEncoding.UTF8);
+
+  LargeDataSet := CreateLargeDataSet(250);
+  try
+    LargeGrid := CreateHeadlessGrid(LargeDataSet, LargeForm);
+    try
+      LargeExporter := TVittixDBGridExporter.Create(LargeGrid);
+      try
+        LargeExporter.OnProgress := CancelAtFirstProgress;
+        Assert.WillRaise(
+          procedure
+          begin
+            LargeExporter.ExportToCSV(TempFileName);
+          end,
+          EAbort
+        );
+      finally
+        LargeExporter.Free;
+      end;
+    finally
+      LargeForm.Free;
+    end;
+  finally
+    LargeDataSet.Free;
+  end;
+
+  Assert.AreEqual(OriginalText, TFile.ReadAllText(TempFileName, TEncoding.UTF8));
+  TFile.Delete(TempFileName);
 end;
 
 end.

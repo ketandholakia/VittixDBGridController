@@ -131,6 +131,7 @@ type
     procedure CheckProgress(Current, Total: Integer);
     function SanitizeXMLTagName(const TagName: string): string; // Helper for XML tag names
     procedure ExportToTextStream(Stream: TStream); // Implementation for vefText
+    procedure ExportToFileAtomic(const FileName: string; const ExportProc: TProc<TStream>);
 
   public
     constructor Create(AGrid: TVittixDBGrid); reintroduce;
@@ -416,15 +417,34 @@ end;
 
 procedure TVittixDBGridExporter.ExportToFile(const FileName: string; 
   Format: TVittixExportFormat);
-var
-  Stream: TFileStream;
 begin
-  Stream := TFileStream.Create(FileName, fmCreate);
+  ExportToFileAtomic(
+    FileName,
+    procedure(Stream: TStream)
+    begin
+      ExportToStream(Stream, Format);
+    end);
+end;
+
+procedure TVittixDBGridExporter.ExportToFileAtomic(const FileName: string;
+  const ExportProc: TProc<TStream>);
+var
+  TempFileName: string;
+  TempStream: TFileStream;
+begin
+  TempFileName := TPath.GetTempFileName;
+  TempStream := TFileStream.Create(TempFileName, fmCreate);
   try
-    ExportToStream(Stream, Format);
+    ExportProc(TempStream);
+    if FCancelled then
+      raise EAbort.Create('Export cancelled');
   finally
-    Stream.Free;
+    TempStream.Free;
   end;
+
+  if TFile.Exists(FileName) then
+    TFile.Delete(FileName);
+  TFile.Move(TempFileName, FileName);
 end;
 
 procedure TVittixDBGridExporter.ExportToStream(Stream: TStream; 
@@ -471,15 +491,13 @@ end;
 { CSV Export }
 
 procedure TVittixDBGridExporter.ExportToCSV(const FileName: string);
-var
-  Stream: TFileStream;
 begin
-  Stream := TFileStream.Create(FileName, fmCreate);
-  try
-    ExportToCSVStream(Stream);
-  finally
-    Stream.Free;
-  end;
+  ExportToFileAtomic(
+    FileName,
+    procedure(Stream: TStream)
+    begin
+      ExportToCSVStream(Stream);
+    end);
 end;
 
 procedure TVittixDBGridExporter.ExportToCSVStream(Stream: TStream);
@@ -680,15 +698,13 @@ end;
 { HTML Export }
 
 procedure TVittixDBGridExporter.ExportToHTML(const FileName: string);
-var
-  Stream: TFileStream;
 begin
-  Stream := TFileStream.Create(FileName, fmCreate);
-  try
-    ExportToHTMLStream(Stream);
-  finally
-    Stream.Free;
-  end;
+  ExportToFileAtomic(
+    FileName,
+    procedure(Stream: TStream)
+    begin
+      ExportToHTMLStream(Stream);
+    end);
 end;
 
 procedure TVittixDBGridExporter.ExportToHTMLStream(Stream: TStream);
@@ -787,15 +803,13 @@ end;
 { XML Export }
 
 procedure TVittixDBGridExporter.ExportToXML(const FileName: string);
-var
-  Stream: TFileStream;
 begin
-  Stream := TFileStream.Create(FileName, fmCreate);
-  try
-    ExportToXMLStream(Stream);
-  finally
-    Stream.Free;
-  end;
+  ExportToFileAtomic(
+    FileName,
+    procedure(Stream: TStream)
+    begin
+      ExportToXMLStream(Stream);
+    end);
 end;
 
 procedure TVittixDBGridExporter.ExportToXMLStream(Stream: TStream);
@@ -870,15 +884,13 @@ end;
 { JSON Export }
 
 procedure TVittixDBGridExporter.ExportToJSON(const FileName: string);
-var
-  Stream: TFileStream;
 begin
-  Stream := TFileStream.Create(FileName, fmCreate);
-  try
-    ExportToJSONStream(Stream);
-  finally
-    Stream.Free;
-  end;
+  ExportToFileAtomic(
+    FileName,
+    procedure(Stream: TStream)
+    begin
+      ExportToJSONStream(Stream);
+    end);
 end;
 
 procedure TVittixDBGridExporter.ExportToJSONStream(Stream: TStream);
@@ -960,24 +972,23 @@ end;
 { Excel Export }
 
 procedure TVittixDBGridExporter.ExportToExcel(const FileName: string);
-var
-  Stream: TFileStream;
-  ExcelExporter: TVittixExcelExporter;
 begin
   if not SameText(TPath.GetExtension(FileName), '.xlsx') then
     raise Exception.Create('Only .xlsx export is supported');
 
-  Stream := TFileStream.Create(FileName, fmCreate);
-  try
-    ExcelExporter := TVittixExcelExporter.Create(Self);
-    try
-      ExcelExporter.ExportToXLSX(Stream);
-    finally
-      ExcelExporter.Free;
-    end;
-  finally
-    Stream.Free;
-  end;
+  ExportToFileAtomic(
+    FileName,
+    procedure(Stream: TStream)
+    var
+      ExcelExporter: TVittixExcelExporter;
+    begin
+      ExcelExporter := TVittixExcelExporter.Create(Self);
+      try
+        ExcelExporter.ExportToXLSX(Stream);
+      finally
+        ExcelExporter.Free;
+      end;
+    end);
 end;
 
 { Clipboard Export }
