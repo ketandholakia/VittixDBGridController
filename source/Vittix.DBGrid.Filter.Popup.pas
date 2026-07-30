@@ -72,6 +72,7 @@ type
     procedure PersistHistory;
     procedure ClearHistory;
     function ValidateCurrentInput: Boolean;
+    procedure CommitCurrentValue;
 
     property OperatorIndex: Integer read GetOperatorIndex;
     property FilterText: string read GetFilterText write SetFilterText;
@@ -348,6 +349,12 @@ begin
     ModalResult := mrCancel;
     Key := 0;
   end;
+  if Key = VK_RETURN then
+  begin
+    ApplyChanges;
+    ModalResult := mrOk;
+    Key := 0;
+  end;
 end;
 
 procedure TVittixDBGridFilterPopup.BtnClearClick(Sender: TObject);
@@ -355,6 +362,11 @@ begin
   FRecentCombo.Text := '';
   ApplyChanges;
   ModalResult := mrOk;
+end;
+
+procedure TVittixDBGridFilterPopup.CommitCurrentValue;
+begin
+  ApplyChanges;
 end;
 
 procedure TVittixDBGridFilterPopup.BtnClearHistoryClick(Sender: TObject);
