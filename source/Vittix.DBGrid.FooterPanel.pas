@@ -392,14 +392,14 @@ begin
   Info := FGrid.ColumnInfoByColumn(FContextColumn);
 
   Item := TMenuItem.Create(FPopup);
-  Item.Caption := 'Clear aggregation';
+  Item.Caption := '&Clear aggregation';
   Item.ShortCut := TextToShortCut('Del');
   Item.Tag := Ord(vatNone);
   Item.OnClick := PopupClearClick;
   FPopup.Items.Add(Item);
 
   Item := TMenuItem.Create(FPopup);
-  Item.Caption := 'Clear all aggregations';
+  Item.Caption := 'Clear &all aggregations';
   Item.ShortCut := TextToShortCut('Ctrl+Del');
   Item.OnClick := PopupClearAllClick;
   FPopup.Items.Add(Item);
@@ -431,7 +431,7 @@ end;
 
 function TVittixDBGridFooterPanel.GetPopupCaptionSummaryText: string;
 begin
-  Result := 'Clear aggregation|Clear all aggregations|-|Count|Sum|Average|Minimum|Maximum';
+  Result := '&Clear aggregation|Clear &all aggregations|-|Count|Sum|Average|Minimum|Maximum';
 end;
 
 procedure TVittixDBGridFooterPanel.PopupClearClick(Sender: TObject);

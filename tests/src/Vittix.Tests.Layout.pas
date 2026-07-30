@@ -864,7 +864,7 @@ begin
   Footer := TVittixDBGridFooterPanel.Create(FOwnerForm);
   try
     Assert.AreEqual(
-      'Clear aggregation=Del;Clear all aggregations=Ctrl+Del',
+      '&Clear aggregation=Del;Clear all aggregations=Ctrl+Del',
       Footer.GetPopupShortcutSummaryText
     );
   finally
@@ -879,7 +879,7 @@ begin
   Footer := TVittixDBGridFooterPanel.Create(FOwnerForm);
   try
     Assert.AreEqual(
-      'Clear aggregation|Clear all aggregations|-|Count|Sum|Average|Minimum|Maximum',
+      '&Clear aggregation|Clear &all aggregations|-|Count|Sum|Average|Minimum|Maximum',
       Footer.GetPopupCaptionSummaryText
     );
   finally
