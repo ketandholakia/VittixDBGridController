@@ -15,12 +15,6 @@ unit Vittix.DBGrid.ColumnChooser;
 /// 1. Fixed TPoint.Create compilation error (use Point() function)
 /// 2. Added safety checks for column operations
 /// 3. Added live reordering during drag-drop
-///
-/// TODO (Future Enhancements):
-/// - Add search/filter capability for many columns
-/// - Add form state persistence (size, position)
-/// - Add minimum size constraints
-/// - Add column width adjustment
 /// </summary>
 {$ENDREGION}
 
