@@ -45,6 +45,8 @@ type
     procedure ControllerCanBeFreedBeforeGridWithoutAV;
     [Test]
     procedure GridCanRecreateWindowHandleWhileAttached;
+    [Test]
+    procedure FormCanOpenAndCloseRepeatedlyWithAttachedGrid;
   end;
 
 implementation
@@ -364,6 +366,30 @@ begin
     end;
   finally
     DataSet.Free;
+  end;
+end;
+
+procedure TVittixControllerRegressionTests.FormCanOpenAndCloseRepeatedlyWithAttachedGrid;
+var
+  I: Integer;
+  DataSet: TClientDataSet;
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+begin
+  for I := 1 to 10 do
+  begin
+    DataSet := CreateSampleDataSet;
+    try
+      Grid := CreateHeadlessGrid(DataSet, OwnerForm);
+      try
+        Assert.IsNotNull(Grid);
+        Assert.IsNotNull(OwnerForm);
+      finally
+        OwnerForm.Free;
+      end;
+    finally
+      DataSet.Free;
+    end;
   end;
 end;
 
