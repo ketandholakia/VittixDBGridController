@@ -47,8 +47,11 @@ type
 
   TVittixDBGridLayoutJsonStorage = class(TInterfacedObject, IVittixDBGridLayoutStorage)
   public
+    class var StateFileName: string;
     procedure SaveToStream(const State: TVittixDBGridLayoutState; Stream: TStream);
     function LoadFromStream(Stream: TStream): TVittixDBGridLayoutState;
+    class procedure SaveToFile(const State: TVittixDBGridLayoutState; const FileName: string = '');
+    class function LoadFromFile(const FileName: string = ''): TVittixDBGridLayoutState;
   end;
 
 function SortOrderToString(Value: TVittixSortOrder): string;
@@ -202,6 +205,64 @@ begin
       end;
   finally
     Root.Free;
+  end;
+end;
+
+class procedure TVittixDBGridLayoutJsonStorage.SaveToFile(
+  const State: TVittixDBGridLayoutState; const FileName: string);
+var
+  Stream: TFileStream;
+  TargetFile: string;
+  Storage: TVittixDBGridLayoutJsonStorage;
+begin
+  if FileName <> '' then
+    TargetFile := FileName
+  else if StateFileName <> '' then
+    TargetFile := StateFileName
+  else
+    Exit;
+
+  Storage := TVittixDBGridLayoutJsonStorage.Create;
+  try
+    Stream := TFileStream.Create(TargetFile, fmCreate);
+    try
+      Storage.SaveToStream(State, Stream);
+    finally
+      Stream.Free;
+    end;
+  finally
+    Storage.Free;
+  end;
+end;
+
+class function TVittixDBGridLayoutJsonStorage.LoadFromFile(
+  const FileName: string): TVittixDBGridLayoutState;
+var
+  Stream: TFileStream;
+  SourceFile: string;
+  Storage: TVittixDBGridLayoutJsonStorage;
+begin
+  Result := nil;
+  if FileName <> '' then
+    SourceFile := FileName
+  else if StateFileName <> '' then
+    SourceFile := StateFileName
+  else
+    Exit;
+
+  if not FileExists(SourceFile) then
+    Exit;
+
+  Storage := TVittixDBGridLayoutJsonStorage.Create;
+  try
+    Stream := TFileStream.Create(SourceFile, fmOpenRead or fmShareDenyWrite);
+    try
+      Result := Storage.LoadFromStream(Stream);
+    finally
+      Stream.Free;
+    end;
+  finally
+    Storage.Free;
   end;
 end;
 

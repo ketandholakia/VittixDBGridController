@@ -54,6 +54,8 @@ type
     procedure ChooserStateRoundTripsThroughIni;
     [Test]
     procedure ChooserStateUsesConfiguredFileName;
+    [Test]
+    procedure LayoutStorageUsesConfiguredFileName;
   end;
 
 implementation
@@ -339,6 +341,33 @@ begin
     end;
   finally
     TVittixDBGridColumnChooserForm.StateFileName := '';
+    if FileExists(TempFile) then
+      DeleteFile(TempFile);
+  end;
+end;
+
+procedure TVittixLayoutTests.LayoutStorageUsesConfiguredFileName;
+var
+  TempFile: string;
+  State: TVittixDBGridLayoutState;
+  Loaded: TVittixDBGridLayoutState;
+begin
+  TempFile := TPath.Combine(TPath.GetTempPath, 'VittixDBGridLayout.test.json');
+  TVittixDBGridLayoutJsonStorage.StateFileName := TempFile;
+  State := TVittixDBGridLayoutState.Create;
+  Loaded := nil;
+  try
+    FController.CaptureLayout(State);
+    TVittixDBGridLayoutJsonStorage.SaveToFile(State);
+    Assert.IsTrue(FileExists(TempFile));
+
+    Loaded := TVittixDBGridLayoutJsonStorage.LoadFromFile;
+    Assert.IsNotNull(Loaded);
+    Assert.AreEqual(State.Columns.Count, Loaded.Columns.Count);
+  finally
+    Loaded.Free;
+    State.Free;
+    TVittixDBGridLayoutJsonStorage.StateFileName := '';
     if FileExists(TempFile) then
       DeleteFile(TempFile);
   end;
