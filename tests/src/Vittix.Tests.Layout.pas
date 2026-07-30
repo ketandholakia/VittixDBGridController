@@ -92,6 +92,8 @@ type
     [Test]
     procedure FooterPopupReportsShortcutSummary;
     [Test]
+    procedure FooterPopupReportsCaptionSummary;
+    [Test]
     procedure ChooserAllowReorderDisablesDragOverWhenFalse;
     [Test]
     procedure CellConditionMatcherSupportsTextAndNumericRules;
@@ -862,6 +864,21 @@ begin
     Assert.AreEqual(
       'Clear aggregation=Del;Clear all aggregations=Ctrl+Del',
       Footer.GetPopupShortcutSummaryText
+    );
+  finally
+    Footer.Free;
+  end;
+end;
+
+procedure TVittixLayoutTests.FooterPopupReportsCaptionSummary;
+var
+  Footer: TVittixDBGridFooterPanel;
+begin
+  Footer := TVittixDBGridFooterPanel.Create(FOwnerForm);
+  try
+    Assert.AreEqual(
+      'Clear aggregation|Clear all aggregations|-|Count|Sum|Average|Minimum|Maximum',
+      Footer.GetPopupCaptionSummaryText
     );
   finally
     Footer.Free;

@@ -59,6 +59,7 @@ type
     destructor Destroy; override;
     class function AggregationCaption(Agg: TVittixAggregationType): string;
     function GetPopupShortcutSummaryText: string;
+    function GetPopupCaptionSummaryText: string;
     procedure Attach(
       AGrid: TVittixDBGrid;
       AEngine: TVittixDBGridAggregationEngine
@@ -409,6 +410,11 @@ end;
 function TVittixDBGridFooterPanel.GetPopupShortcutSummaryText: string;
 begin
   Result := 'Clear aggregation=Del;Clear all aggregations=Ctrl+Del';
+end;
+
+function TVittixDBGridFooterPanel.GetPopupCaptionSummaryText: string;
+begin
+  Result := 'Clear aggregation|Clear all aggregations|-|Count|Sum|Average|Minimum|Maximum';
 end;
 
 procedure TVittixDBGridFooterPanel.PopupClearClick(Sender: TObject);
