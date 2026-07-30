@@ -291,6 +291,13 @@ begin
     else
       Text := '';
 
+    if Text = '' then
+    begin
+      Info := FGrid.ColumnInfoByColumn(Col);
+      if Assigned(Info) then
+        Text := Info.FooterText;
+    end;
+
     InflateRect(R, -4, 0);
 
     DrawFlags := DT_RIGHT or DT_VCENTER or DT_SINGLELINE or DT_END_ELLIPSIS;

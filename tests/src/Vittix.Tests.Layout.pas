@@ -46,6 +46,8 @@ type
     [Test]
     procedure ApplyLayout_RestoresFooterVisible;
     [Test]
+    procedure ApplyLayout_RestoresFooterText;
+    [Test]
     procedure ApplyLayout_IgnoresMissingFields;
     [Test]
     procedure ApplyLayout_IgnoresUnknownSavedFields;
@@ -223,6 +225,25 @@ begin
   end;
 end;
 
+procedure TVittixLayoutTests.ApplyLayout_RestoresFooterText;
+var
+  State: TVittixDBGridLayoutState;
+begin
+  State := TVittixDBGridLayoutState.Create;
+  try
+    FController.CaptureLayout(State);
+    FGrid.ColumnInfoByColumn(FGrid.Columns[1]).FooterText := 'Total A';
+    FGrid.ColumnInfoByColumn(FGrid.Columns[2]).FooterText := 'Total B';
+
+    FController.ApplyLayout(State);
+
+    Assert.AreEqual('', FGrid.ColumnInfoByColumn(FGrid.Columns[1]).FooterText);
+    Assert.AreEqual('', FGrid.ColumnInfoByColumn(FGrid.Columns[2]).FooterText);
+  finally
+    State.Free;
+  end;
+end;
+
 procedure TVittixLayoutTests.ApplyLayout_IgnoresMissingFields;
 var
   State: TVittixDBGridLayoutState;
@@ -283,9 +304,11 @@ begin
     State1.FooterVisible := False;
     ColState := State1.Columns[1];
     ColState.AggregationType := vatSum;
+    ColState.FooterText := 'Total A';
     State1.Columns[1] := ColState;
     ColState := State1.Columns[2];
     ColState.AggregationType := vatMax;
+    ColState.FooterText := 'Total B';
     State1.Columns[2] := ColState;
     Storage.SaveToStream(State1, Stream);
     Stream.Position := 0;
@@ -296,6 +319,8 @@ begin
     Assert.AreEqual(State1.AlternateRowColor, State2.AlternateRowColor);
     Assert.AreEqual(State1.Columns[1].AggregationType, State2.Columns[1].AggregationType);
     Assert.AreEqual(State1.Columns[2].AggregationType, State2.Columns[2].AggregationType);
+    Assert.AreEqual(State1.Columns[1].FooterText, State2.Columns[1].FooterText);
+    Assert.AreEqual(State1.Columns[2].FooterText, State2.Columns[2].FooterText);
   finally
     State2.Free;
     Stream.Free;

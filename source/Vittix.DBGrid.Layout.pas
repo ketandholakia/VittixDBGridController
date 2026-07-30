@@ -19,6 +19,7 @@ type
     SortOrder: TVittixSortOrder;
     SortIndex: Integer;
     AggregationType: TVittixAggregationType;
+    FooterText: string;
   end;
 
   TVittixDBGridLayoutState = class
@@ -152,6 +153,7 @@ begin
       ColumnObj.AddPair('sortOrder', SortOrderToString(Col.SortOrder));
       ColumnObj.AddPair('sortIndex', TJSONNumber.Create(Col.SortIndex));
       ColumnObj.AddPair('aggregationType', AggregationTypeToString(Col.AggregationType));
+      ColumnObj.AddPair('footerText', Col.FooterText);
       Columns.AddElement(ColumnObj);
     end;
 
@@ -200,6 +202,7 @@ begin
         Col.SortOrder := StringToSortOrder(ColObj.GetValue<string>('sortOrder', 'None'));
         Col.SortIndex := ColObj.GetValue<Integer>('sortIndex', -1);
         Col.AggregationType := StringToAggregationType(ColObj.GetValue<string>('aggregationType', 'None'));
+        Col.FooterText := ColObj.GetValue<string>('footerText', '');
         Result.Columns.Add(Col);
       end;
   finally

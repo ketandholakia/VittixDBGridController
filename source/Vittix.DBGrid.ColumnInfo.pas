@@ -60,6 +60,7 @@ type
     FFilterText: string;
     FHasFilter: Boolean;
     FAggregationType: TVittixAggregationType;
+    FFooterText: string;
   protected
     function GetDisplayName: string; override;
   public
@@ -86,6 +87,9 @@ type
 
     property AggregationType: TVittixAggregationType
       read FAggregationType write FAggregationType default vatNone;
+
+    property FooterText: string
+      read FFooterText write FFooterText;
   end;
 
   // ------------------------------------------------------------
@@ -178,6 +182,7 @@ constructor TVittixDBGridColumnInfo.Create(Collection: TCollection);
 begin
   inherited;
   FAggregationType := vatNone;
+  FFooterText := '';
   FSortOrder := vsoNone;
   FSortIndex := -1;
   Aggregation.Clear;
@@ -196,6 +201,7 @@ begin
     FFilterText := Src.FilterText;
     FHasFilter := Src.HasFilter;
     FAggregationType := Src.AggregationType;
+    FFooterText := Src.FooterText;
     // We do NOT copy the runtime Aggregation results, only metadata
   end
   else

@@ -878,6 +878,7 @@ begin
       Item.SortOrder := Info.SortOrder;
       Item.SortIndex := Info.SortIndex;
       Item.AggregationType := Info.AggregationType;
+      Item.FooterText := Info.FooterText;
     end;
     State.Columns.Add(Item);
   end;
@@ -910,6 +911,7 @@ begin
         Info.SortOrder := Item.SortOrder;
         Info.SortIndex := Item.SortIndex;
         Info.AggregationType := Item.AggregationType;
+        Info.FooterText := Item.FooterText;
       end;
     end;
     ApplyState;
