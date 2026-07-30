@@ -109,6 +109,7 @@ type
     procedure FocusSearchBox;
     function GetSearchSummaryText: string;
     procedure AdjustSelectedColumnWidth(Delta: Integer);
+    procedure ClearSearchText;
     
     property AllowReorder: Boolean read FAllowReorder write FAllowReorder;
     property SearchText: string read GetSearchText write SetSearchText;
@@ -402,6 +403,11 @@ begin
     FocusSearchBox;
     Key := 0;
   end;
+  if Key = VK_ESCAPE then
+  begin
+    FSearchEdit.Text := '';
+    Key := 0;
+  end;
 end;
 
 procedure TVittixDBGridColumnChooserForm.FormResize(Sender: TObject);
@@ -631,6 +637,11 @@ begin
       FSearchEdit.SetFocus;
     FSearchEdit.SelectAll;
   end;
+end;
+
+procedure TVittixDBGridColumnChooserForm.ClearSearchText;
+begin
+  FSearchEdit.Text := '';
 end;
 
 procedure TVittixDBGridColumnChooserForm.AdjustSelectedColumnWidth(Delta: Integer);

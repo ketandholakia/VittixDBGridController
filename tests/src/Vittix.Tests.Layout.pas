@@ -107,6 +107,8 @@ type
     procedure ChooserSearchSummaryReflectsMatches;
     [Test]
     procedure ChooserSearchMatchesAllTerms;
+    [Test]
+    procedure ChooserEscapeClearsSearchText;
   end;
 
 implementation
@@ -1076,6 +1078,33 @@ begin
         Assert.AreEqual('1 matches', Chooser.SearchSummaryText);
         Chooser.SearchText := 'am um';
         Assert.AreEqual('0 matches', Chooser.SearchSummaryText);
+      finally
+        Chooser.Free;
+      end;
+    finally
+      Grid.Free;
+      OwnerForm.Free;
+    end;
+  finally
+  end;
+end;
+
+procedure TVittixLayoutTests.ChooserEscapeClearsSearchText;
+var
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+  Chooser: TVittixDBGridColumnChooserForm;
+begin
+  OwnerForm := TForm.CreateNew(nil);
+  try
+    Grid := TVittixDBGrid.Create(OwnerForm);
+    try
+      Grid.Parent := OwnerForm;
+      Chooser := TVittixDBGridColumnChooserForm.CreateChooser(OwnerForm, Grid);
+      try
+        Chooser.SearchText := 'Amount';
+        Chooser.ClearSearchText;
+        Assert.AreEqual('', Chooser.SearchText);
       finally
         Chooser.Free;
       end;
