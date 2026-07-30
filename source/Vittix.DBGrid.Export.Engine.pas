@@ -402,7 +402,8 @@ begin
   S := StringReplace(S, '-', '_', [rfReplaceAll]);
   S := StringReplace(S, '.', '_', [rfReplaceAll]);
   // Ensure it doesn't start with a number or invalid char
-  if (Length(S) > 0) and (S[1] in ['0'..'9']) then S := '_' + S;
+  if (Length(S) > 0) and CharInSet(S[1], ['0'..'9']) then
+    S := '_' + S;
   Result := S;
 end;
 
