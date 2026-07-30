@@ -46,6 +46,8 @@ type
     function ValidateInput: Boolean;
     function GetOperatorPrefix: string;
     function OperatorIndexFromPrefix(const Prefix: string): Integer;
+    function GetOperatorIndex: Integer;
+    function GetFilterText: string;
   public
     OnValidateFilterInput: TFilterValidationEvent;
 
@@ -59,6 +61,9 @@ type
       AColumnInfo: TVittixDBGridColumnInfo;
       AOnValidate: TFilterValidationEvent = nil
     ): Boolean;
+
+    property OperatorIndex: Integer read GetOperatorIndex;
+    property FilterText: string read GetFilterText;
   end;
 
 implementation
@@ -189,14 +194,42 @@ begin
   
   // Load existing filter
   FOriginalText := Trim(FColumnInfo.FilterText);
-  FRecentCombo.Text := FOriginalText;
+  if FOriginalText <> '' then
+  begin
+    if Copy(FOriginalText, 1, 2) = '>=' then
+    begin
+      FOperatorCombo.ItemIndex := OperatorIndexFromPrefix('>=');
+      FRecentCombo.Text := Trim(Copy(FOriginalText, 3, MaxInt));
+    end
+    else if Copy(FOriginalText, 1, 2) = '<=' then
+    begin
+      FOperatorCombo.ItemIndex := OperatorIndexFromPrefix('<=');
+      FRecentCombo.Text := Trim(Copy(FOriginalText, 3, MaxInt));
+    end
+    else if Copy(FOriginalText, 1, 2) = '<>' then
+    begin
+      FOperatorCombo.ItemIndex := OperatorIndexFromPrefix('<>');
+      FRecentCombo.Text := Trim(Copy(FOriginalText, 3, MaxInt));
+    end
+    else if (FOriginalText[1] = '=') or (FOriginalText[1] = '^') or
+      (FOriginalText[1] = '$') or (FOriginalText[1] = '>') or
+      (FOriginalText[1] = '<') then
+    begin
+      FOperatorCombo.ItemIndex := OperatorIndexFromPrefix(FOriginalText[1]);
+      FRecentCombo.Text := Trim(Copy(FOriginalText, 2, MaxInt));
+    end
+    else
+      FRecentCombo.Text := FOriginalText;
+  end
+  else
+    FRecentCombo.Text := '';
 
   if GFilterHistory.TryGetValue(FHistoryKey, LHistory) then
     FRecentCombo.Items.Assign(LHistory);
 
-if GFilterHistory.TryGetValue(FOperatorHistoryKey, LHistory) and (LHistory.Count > 0) then
+  if GFilterHistory.TryGetValue(FOperatorHistoryKey, LHistory) and (LHistory.Count > 0) then
   begin
-    FOperatorCombo.ItemIndex := StrToIntDef(LHistory[0], 0);
+    FOperatorCombo.ItemIndex := StrToIntDef(LHistory[0], FOperatorCombo.ItemIndex);
     if FOperatorCombo.ItemIndex < 0 then
       FOperatorCombo.ItemIndex := 0;
     if FOperatorCombo.ItemIndex > FOperatorCombo.Items.Count - 1 then
@@ -262,6 +295,16 @@ begin
   if Prefix = '<' then Exit(7);
   if Prefix = '<=' then Exit(8);
   Result := 0;
+end;
+
+function TVittixDBGridFilterPopup.GetOperatorIndex: Integer;
+begin
+  Result := FOperatorCombo.ItemIndex;
+end;
+
+function TVittixDBGridFilterPopup.GetFilterText: string;
+begin
+  Result := FRecentCombo.Text;
 end;
 
 procedure TVittixDBGridFilterPopup.LoadDistinctValues;

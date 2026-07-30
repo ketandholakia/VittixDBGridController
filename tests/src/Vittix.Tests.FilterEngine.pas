@@ -6,8 +6,10 @@ uses
   System.SysUtils,
   Datasnap.DBClient,
   Data.DB,
+  Vcl.Forms,
   DUnitX.TestFramework,
   Vittix.DBGrid.ColumnInfo,
+  Vittix.DBGrid.Filter.Popup,
   Vittix.DBGrid.Filter.Engine;
 
 type
@@ -46,6 +48,8 @@ type
     procedure ClearAllowsFilterToBeReapplied;
     [Test]
     procedure FilterOperatorsSupportEqualsAndComparisonModes;
+    [Test]
+    procedure FilterPopupRestoresOperatorFromSavedText;
   end;
 
 implementation
@@ -227,6 +231,29 @@ begin
   FColumns.FindByFieldName('Amount').HasFilter := True;
   FEngine.Active := True;
   Assert.AreEqual(3, CountVisibleRecords(FDataSet));
+end;
+
+procedure TVittixFilterEngineTests.FilterPopupRestoresOperatorFromSavedText;
+var
+  OwnerForm: TForm;
+  Info: TVittixDBGridColumnInfo;
+  Popup: TVittixDBGridFilterPopup;
+begin
+  OwnerForm := TForm.CreateNew(nil);
+  try
+    Info := FColumns.FindByFieldName('Amount');
+    Info.FilterText := '>=250';
+    Info.HasFilter := True;
+    Popup := TVittixDBGridFilterPopup.CreatePopup(OwnerForm, Info);
+    try
+      Assert.AreEqual(6, Popup.OperatorIndex);
+      Assert.AreEqual('250', Popup.FilterText);
+    finally
+      Popup.Free;
+    end;
+  finally
+    OwnerForm.Free;
+  end;
 end;
 
 end.
