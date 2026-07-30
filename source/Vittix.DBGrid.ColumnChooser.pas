@@ -30,6 +30,7 @@ uses
   System.Classes,
   System.SysUtils,
   System.Types,        // For TPoint
+  System.IOUtils,
   Winapi.Windows,      // For VK_ constants
   Vcl.Forms,
   Vcl.ExtCtrls,
@@ -38,7 +39,8 @@ uses
   Vcl.CheckLst,
   Vcl.DBGrids,
   Vcl.Menus,
-  Vcl.Dialogs;
+  Vcl.Dialogs,
+  System.IniFiles;
 
 type
   /// <summary>
@@ -63,6 +65,8 @@ type
 
     procedure BuildColumnList;
     procedure ApplySearchFilter;
+    procedure LoadDialogState;
+    procedure SaveDialogState;
     procedure ApplySelection;
     procedure RollbackColumnOrder;
     function GetColumnCaption(AColumn: TColumn): string;
@@ -192,6 +196,7 @@ begin
   FCheckList.OnDragDrop := CheckListDragDrop;
 
   BuildColumnList;
+  LoadDialogState;
 end;
 
 procedure TVittixDBGridColumnChooserForm.RollbackColumnOrder;
@@ -286,6 +291,44 @@ end;
 procedure TVittixDBGridColumnChooserForm.SearchEditChange(Sender: TObject);
 begin
   ApplySearchFilter;
+end;
+
+procedure TVittixDBGridColumnChooserForm.LoadDialogState;
+var
+  Ini: TIniFile;
+  FileName: string;
+begin
+  FileName := TPath.Combine(ExtractFilePath(ParamStr(0)), 'VittixDBGridChooser.ini');
+  Ini := TIniFile.Create(FileName);
+  try
+    Left := Ini.ReadInteger('Chooser', 'Left', Left);
+    Top := Ini.ReadInteger('Chooser', 'Top', Top);
+    Width := Ini.ReadInteger('Chooser', 'Width', Width);
+    Height := Ini.ReadInteger('Chooser', 'Height', Height);
+    FSearchEdit.Text := Ini.ReadString('Chooser', 'SearchText', '');
+    FAllowReorder := Ini.ReadBool('Chooser', 'AllowReorder', FAllowReorder);
+  finally
+    Ini.Free;
+  end;
+end;
+
+procedure TVittixDBGridColumnChooserForm.SaveDialogState;
+var
+  Ini: TIniFile;
+  FileName: string;
+begin
+  FileName := TPath.Combine(ExtractFilePath(ParamStr(0)), 'VittixDBGridChooser.ini');
+  Ini := TIniFile.Create(FileName);
+  try
+    Ini.WriteInteger('Chooser', 'Left', Left);
+    Ini.WriteInteger('Chooser', 'Top', Top);
+    Ini.WriteInteger('Chooser', 'Width', Width);
+    Ini.WriteInteger('Chooser', 'Height', Height);
+    Ini.WriteString('Chooser', 'SearchText', FSearchEdit.Text);
+    Ini.WriteBool('Chooser', 'AllowReorder', FAllowReorder);
+  finally
+    Ini.Free;
+  end;
 end;
 
 procedure TVittixDBGridColumnChooserForm.CheckListKeyDown(
@@ -433,9 +476,10 @@ begin
 
   Frm := TVittixDBGridColumnChooserForm.CreateChooser(nil, AGrid);
   try
-    if Frm.ShowModal = mrOk then
+  if Frm.ShowModal = mrOk then
     begin
       Frm.ApplySelection;
+      Frm.SaveDialogState;
       Result := True;
     end
     else
