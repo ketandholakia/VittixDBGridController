@@ -265,6 +265,8 @@ begin
     if Assigned(FController) and (FController is TVittixDBGridController) then
       TVittixDBGridController(FController).DataSourceChanged;
   end;
+  if (Operation = opRemove) and (AComponent = FController) then
+    FController := nil;
 end;
 
 procedure TVittixDBGrid.SyncColumnInfo;

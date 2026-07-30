@@ -40,6 +40,8 @@ type
     procedure DatasetCanBeDestroyedAfterGridDetach;
     [Test]
     procedure ControllerCanToggleActiveAndFooterRepeatedly;
+    [Test]
+    procedure ControllerCanBeFreedBeforeGridWithoutAV;
   end;
 
 implementation
@@ -289,6 +291,36 @@ begin
       Assert.AreSame(DataSet, Grid.DataSource.DataSet);
     finally
       OwnerForm.Free;
+    end;
+  finally
+    DataSet.Free;
+  end;
+end;
+
+procedure TVittixControllerRegressionTests.ControllerCanBeFreedBeforeGridWithoutAV;
+var
+  DataSet: TClientDataSet;
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+  Controller: TVittixDBGridController;
+begin
+  DataSet := CreateSampleDataSet;
+  try
+    Grid := CreateHeadlessGrid(DataSet, OwnerForm);
+    Controller := TVittixDBGridController(Grid.Controller);
+    try
+      Assert.IsNotNull(Controller);
+      Controller.Free;
+      Assert.IsTrue(Grid.Controller = nil);
+      Assert.WillNotRaise(
+        procedure
+        begin
+          OwnerForm.Free;
+        end
+      );
+    finally
+      if Assigned(OwnerForm) then
+        OwnerForm.Free;
     end;
   finally
     DataSet.Free;
