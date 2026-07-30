@@ -61,6 +61,8 @@ type
     procedure GridSurfaceConfiguresAllPersistencePaths;
     [Test]
     procedure GridPersistenceRootPathFanOutsToHelpers;
+    [Test]
+    procedure ExplicitPersistenceFilesOverrideRootPath;
   end;
 
 implementation
@@ -420,6 +422,21 @@ begin
     end;
   finally
   end;
+end;
+
+procedure TVittixLayoutTests.ExplicitPersistenceFilesOverrideRootPath;
+begin
+  TVittixDBGridLayoutJsonStorage.RootPath := 'C:\temp\vittix-root';
+  TVittixDBGridColumnChooserForm.RootPath := 'C:\temp\vittix-root';
+  TVittixDBGridFilterPopup.RootPath := 'C:\temp\vittix-root';
+
+  TVittixDBGridLayoutJsonStorage.StateFileName := 'C:\temp\layout.json';
+  TVittixDBGridColumnChooserForm.StateFileName := 'C:\temp\chooser.ini';
+  TVittixDBGridFilterPopup.HistoryFileName := 'C:\temp\filter.ini';
+
+  Assert.AreEqual('C:\temp\layout.json', TVittixDBGridLayoutJsonStorage.StateFileName);
+  Assert.AreEqual('C:\temp\chooser.ini', TVittixDBGridColumnChooserForm.StateFileName);
+  Assert.AreEqual('C:\temp\filter.ini', TVittixDBGridFilterPopup.HistoryFileName);
 end;
 
 end.

@@ -62,15 +62,6 @@ function StringToAggregationType(const Value: string): TVittixAggregationType;
 
 implementation
 
-function LayoutFileName(const ExplicitFileName, RootPath, DefaultName: string): string;
-begin
-  if ExplicitFileName <> '' then
-    Exit(ExplicitFileName);
-  if RootPath <> '' then
-    Exit(IncludeTrailingPathDelimiter(RootPath) + DefaultName);
-  Result := '';
-end;
-
 function SortOrderToString(Value: TVittixSortOrder): string;
 begin
   case Value of
