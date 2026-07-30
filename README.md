@@ -1,10 +1,10 @@
 # Vittix.DBGrid
 
-**Vittix.DBGrid** is a modern, feature-rich replacement for Delphi’s standard `TDBGrid`, built for professional VCL applications that need advanced data visualization, extensibility, and performance.
+**Vittix.DBGrid** is a modern, feature-rich replacement for Delphi's standard `TDBGrid`, built for professional VCL applications that need advanced data visualization, extensibility, and performance.
 
 ---
 
-## 📸 Screenshot
+## Screenshot
 
 ![Vittix DBGrid Screenshot](docs/ss1.png)
 ![Vittix DBGrid Screenshot](docs/ss2.png)
@@ -14,27 +14,27 @@
 
 ---
 
-## ✨ Features
+## Features
 
-- 🔀 Multi-column sorting engine
--  Advanced filtering with popup UI
-- 📊 Aggregation engine (SUM, COUNT, AVG, MIN, MAX)
-- 📌 Footer panel with live calculations
-- 🧩 Runtime column chooser
-- ✏️ Custom in-place editors
-- 🎛 Controller-based architecture
-- ⚡ Optimized for large datasets
-- 🧱 Pure Object Pascal (Delphi VCL)
+- Multi-column sorting engine
+- Advanced filtering with popup UI
+- Aggregation engine (SUM, COUNT, AVG, MIN, MAX)
+- Footer panel with live calculations
+- Runtime column chooser
+- Custom in-place editors
+- Controller-based architecture
+- Optimized for large datasets
+- Pure Object Pascal (Delphi VCL)
 
 ---
 
-## 📦 Package Structure
+## Package Structure
 
-The component is delivered using **Delphi runtime and design-time packages**.
+The component is delivered using Delphi runtime and design-time packages.
 
-### 🔹 Runtime Package
+### Runtime Package
 
-```yaml
+```text
 VittixDBGridControllerR.dpk
 ```
 
@@ -45,16 +45,17 @@ Contains all runtime logic required by applications:
 - Filtering engine
 - Aggregation engine
 - Footer panel logic
-- Column metadata & controller logic
+- Column metadata and controller logic
 - Custom editors
+- Export engine and dialogs
 
-This package **must be included** with your application.
+This package must be included with your application.
 
 ---
 
-### 🔹 Design-Time Package
+### Design-Time Package
 
-```markdown
+```text
 VittixDBGridControllerD.dpk
 ```
 
@@ -66,70 +67,70 @@ Provides IDE integration and component registration:
 
 ---
 
-## 📦 Main Units
+## Main Units
 
 - `Vittix.DBGrid.pas`
 - `Vittix.DBGrid.Controller.pas`
 - `Vittix.DBGrid.ColumnInfo.pas`
 - `Vittix.DBGrid.ColumnChooser.pas`
 - `Vittix.DBGrid.Sort.Engine.pas`
-- `Vittix.DBGrid.Filter.Engine.pas` – Filtering engine
-- `Vittix.DBGrid.Filter.Popup.pas` – Filter popup UI
-- `Vittix.DBGrid.Aggregation.Engine.pas` – Aggregation engine
-- `Vittix.DBGrid.FooterPanel.pas` – Footer rendering
-- `Vittix.DBGrid.Editors.pas` – Custom editors
-- `Vittix.DBGrid.Reg.pas` – Design-time registration
+- `Vittix.DBGrid.Filter.Engine.pas` - Filtering engine
+- `Vittix.DBGrid.Filter.Popup.pas` - Filter popup UI
+- `Vittix.DBGrid.Aggregation.Engine.pas` - Aggregation engine
+- `Vittix.DBGrid.FooterPanel.pas` - Footer rendering
+- `Vittix.DBGrid.Editors.pas` - Custom editors
+- `Vittix.DBGrid.Export.Engine.pas` - Export engine
+- `Vittix.DBGrid.Export.Dialog.pas` - Export dialog
+- `Vittix.DBGrid.Reg.pas` - Design-time registration
 
 ---
 
-## 🧰 Requirements
+## Requirements
 
-- Delphi XE7 or newer (tested up to Delphi 11/12)
+- Delphi 10.3 or newer
 - VCL framework
-- Any `TDataSet` descendant (FireDAC, dbExpress, etc.)
 - `Vcl.DBGrids`
-- Any `TDataSet` descendant:
-  - FireDAC
-  - dbExpress
-  - BDE
-  - ClientDataSet
-  - Third-party datasets
+- `TDataSet` descendants such as FireDAC, dbExpress, BDE, ClientDataSet, and third-party datasets
 
 ---
 
-## 🚀 Installation
+## Installation
 
-### ✅ Recommended (Package Installation)
+### Recommended (Package Installation)
 
 1. Open the runtime package:
-```lua
+
+```text
 VittixDBGridControllerR.dpk
 ```
+
 Build the package.
 
 2. Open the design-time package:
-```yaml
+
+```text
 VittixDBGridControllerD.dpk
 ```
+
 Install the package.
 
 3. Restart Delphi.
 
-The **Vittix.DBGrid** component will appear in the Tool Palette.
+The `Vittix.DBGrid` component will appear in the Tool Palette.
 
 ---
 
-### ⚙ Manual Installation (Source Only)
+### Manual Installation (Source Only)
 
-1. Add the source folder to **Library Path**
-2. Add required units to your project
-3. Compile
+1. Add the source folder to the Library Path.
+2. Add the required units to your project.
+3. Compile.
 
-> ⚠ Manual installation does **not** include design-time support.
+> Manual installation does not include design-time support.
 
 ---
 
-## 🧪 Basic Usage
+## Basic Usage
 
 ```pascal
 uses
@@ -143,3 +144,4 @@ begin
   Grid.Align := alClient;
   Grid.DataSource := DataSource1;
 end;
+```
