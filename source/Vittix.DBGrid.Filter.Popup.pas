@@ -36,6 +36,7 @@ type
     // FIX BUG 12: Scoped history key prevents two grids sharing history for
     // same-named fields. Key is "OwnerClassName.FieldName".
     FHistoryKey: string;
+    FOperatorHistoryKey: string;
 
     procedure BtnClearClick(Sender: TObject);
     procedure ApplyChanges;
@@ -44,6 +45,7 @@ type
     procedure LoadDistinctValues;
     function ValidateInput: Boolean;
     function GetOperatorPrefix: string;
+    function OperatorIndexFromPrefix(const Prefix: string): Integer;
   public
     OnValidateFilterInput: TFilterValidationEvent;
 
@@ -63,6 +65,7 @@ implementation
 
 uses
   Data.DB,
+  System.Math,
   System.Generics.Collections;
 
 var
@@ -90,6 +93,7 @@ begin
     FHistoryKey := AOwner.ClassName + '.' + AColumnInfo.FieldName
   else
     FHistoryKey := AColumnInfo.FieldName;
+  FOperatorHistoryKey := FHistoryKey + '.operator';
 
   // Dialog Setup
   Caption := 'Filter Column';
@@ -190,6 +194,15 @@ begin
   if GFilterHistory.TryGetValue(FHistoryKey, LHistory) then
     FRecentCombo.Items.Assign(LHistory);
 
+if GFilterHistory.TryGetValue(FOperatorHistoryKey, LHistory) and (LHistory.Count > 0) then
+  begin
+    FOperatorCombo.ItemIndex := StrToIntDef(LHistory[0], 0);
+    if FOperatorCombo.ItemIndex < 0 then
+      FOperatorCombo.ItemIndex := 0;
+    if FOperatorCombo.ItemIndex > FOperatorCombo.Items.Count - 1 then
+      FOperatorCombo.ItemIndex := FOperatorCombo.Items.Count - 1;
+  end;
+
   LoadDistinctValues;
   
   // Select all text so user can type to replace immediately
@@ -235,6 +248,20 @@ begin
   else
     Result := '';
   end;
+end;
+
+function TVittixDBGridFilterPopup.OperatorIndexFromPrefix(
+  const Prefix: string): Integer;
+begin
+  if Prefix = '=' then Exit(1);
+  if Prefix = '^' then Exit(2);
+  if Prefix = '$' then Exit(3);
+  if Prefix = '<>' then Exit(4);
+  if Prefix = '>' then Exit(5);
+  if Prefix = '>=' then Exit(6);
+  if Prefix = '<' then Exit(7);
+  if Prefix = '<=' then Exit(8);
+  Result := 0;
 end;
 
 procedure TVittixDBGridFilterPopup.LoadDistinctValues;
@@ -348,6 +375,14 @@ begin
     while LHistory.Count > 5 do
       LHistory.Delete(LHistory.Count - 1);
   end;
+
+  if not GFilterHistory.TryGetValue(FOperatorHistoryKey, LHistory) then
+  begin
+    LHistory := TStringList.Create;
+    GFilterHistory.Add(FOperatorHistoryKey, LHistory);
+  end;
+  LHistory.Clear;
+  LHistory.Add(IntToStr(FOperatorCombo.ItemIndex));
 
   // Optimistic update: Only change if different
   if NewText = FOriginalText then Exit;
