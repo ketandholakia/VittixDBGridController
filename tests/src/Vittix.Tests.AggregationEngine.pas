@@ -31,6 +31,8 @@ type
     procedure OnAcceptRecordRestrictsAggregation;
     [Test]
     procedure EmptyDatasetDoesNotRaise;
+    [Test]
+    procedure ActiveAggregationSummaryReportsFieldModes;
   end;
 
 implementation
@@ -124,6 +126,17 @@ begin
   );
 
   Assert.IsTrue(VarIsNull(FEngine.GetAggregation(Info)));
+end;
+
+procedure TVittixAggregationEngineTests.ActiveAggregationSummaryReportsFieldModes;
+begin
+  FColumns.FindByFieldName('Amount').AggregationType := vatSum;
+  FColumns.FindByFieldName('Name').AggregationType := vatMax;
+
+  Assert.AreEqual(
+    'Amount:Sum,Name:Max',
+    FEngine.GetActiveAggregationSummaryText
+  );
 end;
 
 end.

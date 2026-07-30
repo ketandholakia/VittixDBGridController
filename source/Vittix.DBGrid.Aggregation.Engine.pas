@@ -76,6 +76,8 @@ type
       Info: TVittixDBGridColumnInfo
     ): string;
 
+    function GetActiveAggregationSummaryText: string;
+
     property OnAcceptRecord: TFunc<Boolean>
       read FAcceptRecord write FAcceptRecord;
 
@@ -84,6 +86,19 @@ type
   end;
 
 implementation
+
+function LocalAggregationTypeToString(Value: TVittixAggregationType): string;
+begin
+  case Value of
+    vatCount: Result := 'Count';
+    vatSum: Result := 'Sum';
+    vatAvg: Result := 'Avg';
+    vatMin: Result := 'Min';
+    vatMax: Result := 'Max';
+  else
+    Result := 'None';
+  end;
+end;
 
 { TVittixDBGridAggregationEngine }
 
@@ -347,6 +362,26 @@ begin
     vatAvg:   Result := FormatFloat('#,##0.00', V);
     vatMin,
     vatMax:   Result := VarToStr(V);
+  end;
+end;
+
+function TVittixDBGridAggregationEngine.GetActiveAggregationSummaryText: string;
+var
+  Parts: TStringList;
+  I: Integer;
+  Info: TVittixDBGridColumnInfo;
+begin
+  Parts := TStringList.Create;
+  try
+    for I := 0 to FColumns.Count - 1 do
+    begin
+      Info := FColumns[I];
+      if Info.AggregationType <> vatNone then
+        Parts.Add(Format('%s:%s', [Info.FieldName, LocalAggregationTypeToString(Info.AggregationType)]));
+    end;
+    Result := Parts.CommaText;
+  finally
+    Parts.Free;
   end;
 end;
 
