@@ -63,6 +63,8 @@ type
     procedure FilterPopupUsesConfiguredFileName;
     [Test]
     procedure FilterPopupFileNameOverridesRootPath;
+    [Test]
+    procedure FilterPopupLoadsExplicitFileBeforeRootPath;
   end;
 
 implementation
@@ -488,6 +490,52 @@ begin
       DeleteFile(ExplicitFile);
     if FileExists(RootFile) then
       DeleteFile(RootFile);
+    if TDirectory.Exists(RootPath) then
+      TDirectory.Delete(RootPath, True);
+  end;
+end;
+
+procedure TVittixFilterEngineTests.FilterPopupLoadsExplicitFileBeforeRootPath;
+var
+  OwnerForm: TForm;
+  Info: TVittixDBGridColumnInfo;
+  Popup: TVittixDBGridFilterPopup;
+  RootPath: string;
+  ExplicitFile: string;
+begin
+  RootPath := TPath.Combine(TPath.GetTempPath, 'VittixDBGridFilterRoot.load.test');
+  ExplicitFile := TPath.Combine(TPath.GetTempPath, 'VittixDBGridFilterExplicit.load.ini');
+  ForceDirectories(RootPath);
+  OwnerForm := TForm.CreateNew(nil);
+  try
+    Info := FColumns.FindByFieldName('Name');
+    TVittixDBGridFilterPopup.RootPath := RootPath;
+    TVittixDBGridFilterPopup.HistoryFileName := ExplicitFile;
+
+    Info.FilterText := '=Alpha';
+    Info.HasFilter := True;
+    Popup := TVittixDBGridFilterPopup.CreatePopup(OwnerForm, Info);
+    try
+      Popup.PersistHistory;
+    finally
+      Popup.Free;
+    end;
+
+    Info.FilterText := '';
+    Info.HasFilter := False;
+    Popup := TVittixDBGridFilterPopup.CreatePopup(OwnerForm, Info);
+    try
+      Assert.AreEqual('Alpha', Popup.FilterText);
+      Assert.AreEqual(1, Popup.OperatorIndex);
+    finally
+      Popup.Free;
+    end;
+  finally
+    TVittixDBGridFilterPopup.RootPath := '';
+    TVittixDBGridFilterPopup.HistoryFileName := '';
+    OwnerForm.Free;
+    if FileExists(ExplicitFile) then
+      DeleteFile(ExplicitFile);
     if TDirectory.Exists(RootPath) then
       TDirectory.Delete(RootPath, True);
   end;
