@@ -74,6 +74,8 @@ type
     procedure ChooserResetRestoresOriginalLayout;
     [Test]
     procedure FooterCanClearAllAggregationsThroughPublicApi;
+    [Test]
+    procedure ChooserCanAdjustColumnWidthThroughPublicApi;
   end;
 
 implementation
@@ -582,6 +584,39 @@ begin
     Assert.AreEqual(vatNone, FGrid.ColumnInfoByColumn(FGrid.Columns[2]).AggregationType);
   finally
     Footer.Free;
+  end;
+end;
+
+procedure TVittixLayoutTests.ChooserCanAdjustColumnWidthThroughPublicApi;
+var
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+  Chooser: TVittixDBGridColumnChooserForm;
+  Column: TColumn;
+begin
+  OwnerForm := TForm.CreateNew(nil);
+  try
+    Grid := TVittixDBGrid.Create(OwnerForm);
+    try
+      Grid.Parent := OwnerForm;
+      Chooser := TVittixDBGridColumnChooserForm.CreateChooser(OwnerForm, Grid);
+      try
+        Column := Grid.Columns[1];
+        Column.Width := 100;
+        Chooser.ResetLayout;
+        Chooser.SelectColumnIndex(1);
+        Chooser.IncreaseSelectedColumnWidth;
+        Assert.IsTrue(Column.Width > 100);
+        Chooser.DecreaseSelectedColumnWidth;
+        Assert.IsTrue(Column.Width <= 116);
+      finally
+        Chooser.Free;
+      end;
+    finally
+      Grid.Free;
+      OwnerForm.Free;
+    end;
+  finally
   end;
 end;
 

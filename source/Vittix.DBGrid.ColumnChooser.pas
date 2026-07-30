@@ -58,6 +58,8 @@ type
     FMenuItemSelectAll: TMenuItem;
     FMenuItemSelectNone: TMenuItem;
     FMenuItemReset: TMenuItem;
+    FMenuItemGrow: TMenuItem;
+    FMenuItemShrink: TMenuItem;
     FAllowReorder: Boolean;
     FDraggedIndex: Integer;
     // FIX BUG 9: Snapshot of original column indices taken when dialog opens.
@@ -76,6 +78,8 @@ type
     procedure DoSelectAll(Sender: TObject);
     procedure DoSelectNone(Sender: TObject);
     procedure DoReset(Sender: TObject);
+    procedure DoGrowWidth(Sender: TObject);
+    procedure DoShrinkWidth(Sender: TObject);
     procedure CheckListMouseDown(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Integer);
     procedure CheckListDragOver(Sender, Source: TObject; X, Y: Integer;
@@ -88,6 +92,9 @@ type
     constructor CreateChooser(AOwner: TComponent; AGrid: TDBGrid); reintroduce;
     class function Execute(AGrid: TDBGrid): Boolean;
     procedure ResetLayout;
+    procedure SelectColumnIndex(AIndex: Integer);
+    procedure IncreaseSelectedColumnWidth;
+    procedure DecreaseSelectedColumnWidth;
     procedure LoadDialogState;
     procedure SaveDialogState;
     
@@ -148,6 +155,18 @@ begin
   FMenuItemReset.ShortCut := TextToShortCut('Ctrl+R');
   FMenuItemReset.OnClick := DoReset;
   FPopupMenu.Items.Add(FMenuItemReset);
+
+  FMenuItemGrow := TMenuItem.Create(FPopupMenu);
+  FMenuItemGrow.Caption := 'Increase &Width';
+  FMenuItemGrow.ShortCut := TextToShortCut('Ctrl+Plus');
+  FMenuItemGrow.OnClick := DoGrowWidth;
+  FPopupMenu.Items.Add(FMenuItemGrow);
+
+  FMenuItemShrink := TMenuItem.Create(FPopupMenu);
+  FMenuItemShrink.Caption := 'Decrease Width';
+  FMenuItemShrink.ShortCut := TextToShortCut('Ctrl+Minus');
+  FMenuItemShrink.OnClick := DoShrinkWidth;
+  FPopupMenu.Items.Add(FMenuItemShrink);
 
   // Button Panel
   FSearchEdit := TEdit.Create(Self);
@@ -483,9 +502,51 @@ begin
     FGrid.Columns[I].Visible := True;
 end;
 
+procedure TVittixDBGridColumnChooserForm.DoGrowWidth(Sender: TObject);
+begin
+  IncreaseSelectedColumnWidth;
+end;
+
+procedure TVittixDBGridColumnChooserForm.DoShrinkWidth(Sender: TObject);
+begin
+  DecreaseSelectedColumnWidth;
+end;
+
+procedure TVittixDBGridColumnChooserForm.IncreaseSelectedColumnWidth;
+var
+  Col: TColumn;
+begin
+  if FCheckList.ItemIndex < 0 then Exit;
+  Col := TColumn(FCheckList.Items.Objects[FCheckList.ItemIndex]);
+  if not Assigned(Col) then Exit;
+  Col.Width := Col.Width + 16;
+end;
+
+procedure TVittixDBGridColumnChooserForm.DecreaseSelectedColumnWidth;
+var
+  Col: TColumn;
+begin
+  if FCheckList.ItemIndex < 0 then Exit;
+  Col := TColumn(FCheckList.Items.Objects[FCheckList.ItemIndex]);
+  if not Assigned(Col) then Exit;
+  if Col.Width > 24 then
+    Col.Width := Col.Width - 16;
+end;
+
 procedure TVittixDBGridColumnChooserForm.ResetLayout;
 begin
   DoReset(Self);
+end;
+
+procedure TVittixDBGridColumnChooserForm.SelectColumnIndex(AIndex: Integer);
+begin
+  if (AIndex < 0) or (AIndex >= FCheckList.Items.Count) then
+  begin
+    FCheckList.ItemIndex := -1;
+    Exit;
+  end;
+
+  FCheckList.ItemIndex := AIndex;
 end;
 
 procedure TVittixDBGridColumnChooserForm.ApplySelection;
