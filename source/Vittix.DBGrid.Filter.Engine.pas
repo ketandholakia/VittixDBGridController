@@ -360,6 +360,7 @@ begin
   if Copy(Value, 1, 2) = '<=' then begin Mode := vfmLessOrEqual; Delete(Value, 1, 2); Exit; end;
   if Copy(Value, 1, 2) = '<>' then begin Mode := vfmNotEquals; Delete(Value, 1, 2); Exit; end;
   if Copy(Value, 1, 1) = '=' then begin Mode := vfmEquals; Delete(Value, 1, 1); Exit; end;
+  if Copy(Value, 1, 1) = '!' then begin Mode := vfmNotEquals; Delete(Value, 1, 1); Exit; end;
   if Copy(Value, 1, 1) = '>' then begin Mode := vfmGreaterThan; Delete(Value, 1, 1); Exit; end;
   if Copy(Value, 1, 1) = '<' then begin Mode := vfmLessThan; Delete(Value, 1, 1); Exit; end;
   if Copy(Value, 1, 1) = '^' then begin Mode := vfmStartsWith; Delete(Value, 1, 1); Exit; end;
@@ -390,7 +391,7 @@ begin
           StartPos := 1;
         Result := SameText(Copy(Hay, StartPos, MaxInt), Needle);
       end;
-    vfmNotEquals: Result := not SameText(Needle, Hay);
+    vfmNotEquals: Result := Pos(UpperCase(Needle), UpperCase(Hay)) = 0;
     vfmGreaterThan,
     vfmGreaterOrEqual,
     vfmLessThan,

@@ -232,6 +232,13 @@ begin
   Assert.AreEqual(2, FDataSet.FieldByName('ID').AsInteger);
 
   FEngine.Clear;
+  FColumns.FindByFieldName('Name').FilterText := '!Alpha';
+  FColumns.FindByFieldName('Name').HasFilter := True;
+  FEngine.Active := True;
+  Assert.AreEqual(1, CountVisibleRecords(FDataSet));
+  Assert.AreEqual(2, FDataSet.FieldByName('ID').AsInteger);
+
+  FEngine.Clear;
   FColumns.FindByFieldName('Amount').FilterText := '>250';
   FColumns.FindByFieldName('Amount').HasFilter := True;
   FEngine.Active := True;
@@ -251,7 +258,7 @@ begin
     Info.HasFilter := True;
     Popup := TVittixDBGridFilterPopup.CreatePopup(OwnerForm, Info);
     try
-      Assert.AreEqual(6, Popup.OperatorIndex);
+      Assert.AreEqual(7, Popup.OperatorIndex);
       Assert.AreEqual('250', Popup.FilterText);
     finally
       Popup.Free;

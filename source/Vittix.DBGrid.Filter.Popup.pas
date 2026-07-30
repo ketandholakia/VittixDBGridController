@@ -204,6 +204,7 @@ begin
   FOperatorCombo.Items.Add('Equals');
   FOperatorCombo.Items.Add('Starts With');
   FOperatorCombo.Items.Add('Ends With');
+  FOperatorCombo.Items.Add('Does Not Contain');
   FOperatorCombo.Items.Add('Not Equals');
   FOperatorCombo.Items.Add('Greater Than');
   FOperatorCombo.Items.Add('Greater or Equal');
@@ -231,7 +232,8 @@ begin
       FRecentCombo.Text := Trim(Copy(FOriginalText, 3, MaxInt));
     end
     else if (FOriginalText[1] = '=') or (FOriginalText[1] = '^') or
-      (FOriginalText[1] = '$') or (FOriginalText[1] = '>') or
+      (FOriginalText[1] = '$') or (FOriginalText[1] = '!') or
+      (FOriginalText[1] = '>') or
       (FOriginalText[1] = '<') then
     begin
       FOperatorCombo.ItemIndex := OperatorIndexFromPrefix(FOriginalText[1]);
@@ -354,11 +356,12 @@ begin
     1: Result := '=';
     2: Result := '^';
     3: Result := '$';
-    4: Result := '<>';
-    5: Result := '>';
-    6: Result := '>=';
-    7: Result := '<';
-    8: Result := '<=';
+    4: Result := '!';
+    5: Result := '<>';
+    6: Result := '>';
+    7: Result := '>=';
+    8: Result := '<';
+    9: Result := '<=';
   else
     Result := '';
   end;
@@ -370,11 +373,12 @@ begin
   if Prefix = '=' then Exit(1);
   if Prefix = '^' then Exit(2);
   if Prefix = '$' then Exit(3);
-  if Prefix = '<>' then Exit(4);
-  if Prefix = '>' then Exit(5);
-  if Prefix = '>=' then Exit(6);
-  if Prefix = '<' then Exit(7);
-  if Prefix = '<=' then Exit(8);
+  if Prefix = '!' then Exit(4);
+  if Prefix = '<>' then Exit(5);
+  if Prefix = '>' then Exit(6);
+  if Prefix = '>=' then Exit(7);
+  if Prefix = '<' then Exit(8);
+  if Prefix = '<=' then Exit(9);
   Result := 0;
 end;
 
