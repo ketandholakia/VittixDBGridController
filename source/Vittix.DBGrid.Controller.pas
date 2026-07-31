@@ -84,6 +84,7 @@ type
     FAggregationDirty: Boolean;
     FEnginesCreated: Boolean;
     FFooterPanel: TVittixDBGridFooterPanel;
+    FAggregationBusy: Boolean;
 
     // Event hooks
     FOldTitleClick: TDBGridClickEvent;
@@ -149,6 +150,7 @@ type
     procedure SetColumnAggregation(Column: TColumn; Aggregation: TVittixAggregationType);
     procedure CaptureLayout(State: TVittixDBGridLayoutState);
     procedure ApplyLayout(State: TVittixDBGridLayoutState);
+    function IsUpdating: Boolean;
     procedure SaveLayoutToStream(Stream: TStream);
     procedure LoadLayoutFromStream(Stream: TStream);
     procedure SaveLayoutToFile(const FileName: string = '');
@@ -210,12 +212,17 @@ begin
   // OutputDebugString(PChar('[Vittix] ' + S));
 end;
 
+procedure TraceController(const Msg: string);
+begin
+end;
+
 { ============================================================================= }
 { LIFECYCLE }
 { ============================================================================= }
 
 constructor TVittixDBGridController.Create(AOwner: TComponent);
 begin
+  TraceController('Create');
   inherited;
 
   FActive := True;
@@ -244,6 +251,7 @@ end;
 
 procedure TVittixDBGridController.InstallWindowProc;
 begin
+  TraceController('InstallWindowProc');
   // Called from TVittixDBGrid.CreateWnd — only install if we're hooked
   // but the WindowProc was skipped because no handle existed yet.
   if not Assigned(FGrid) then Exit;
@@ -268,12 +276,14 @@ end;
 
 procedure TVittixDBGridController.Loaded;
 begin
+  TraceController('Loaded enter');
   inherited;
   // DESIGN-TIME SAFETY: Do not hook anything while the IDE is loading.
   if csDesigning in ComponentState then Exit;
 
   if FActive and Assigned(FGrid) then
     HookGrid;
+  TraceController('Loaded exit');
 end;
 
 procedure TVittixDBGridController.Notification(
@@ -297,6 +307,7 @@ end;
 
 procedure TVittixDBGridController.DataSourceChanged;
 begin
+  TraceController('DataSourceChanged');
   // DESIGN-TIME SAFETY: Never touch datasets or engines in the IDE.
   if Assigned(FGrid) and (csDesigning in FGrid.ComponentState) then Exit;
 
@@ -325,6 +336,7 @@ end;
 
 procedure TVittixDBGridController.SetGrid(const Value: TVittixDBGrid);
 begin
+  TraceController('SetGrid');
   if FGrid = Value then Exit;
 
   UnhookGrid;
@@ -343,6 +355,7 @@ end;
 
 procedure TVittixDBGridController.SetActive(const Value: Boolean);
 begin
+  TraceController('SetActive');
   if FActive = Value then Exit;
   FActive := Value;
 
@@ -357,6 +370,7 @@ end;
 
 procedure TVittixDBGridController.SetShowFooter(const Value: Boolean);
 begin
+  TraceController('SetShowFooter');
   if FShowFooter = Value then Exit;
   FShowFooter := Value;
 
@@ -379,6 +393,7 @@ end;
 
 procedure TVittixDBGridController.HookGrid;
 begin
+  TraceController('HookGrid enter');
   if not Assigned(FGrid) then Exit;
 
   // PRIMARY GATE: In Delphi 12.2 the IDE sets csDesigning reliably before
@@ -414,10 +429,12 @@ begin
 
   HookDataSource;
   CreateEngines;
+  TraceController('HookGrid exit');
 end;
 
 procedure TVittixDBGridController.UnhookGrid;
 begin
+  TraceController('UnhookGrid');
   UnhookDataSource;
 
   if not Assigned(FGrid) then Exit;
@@ -432,6 +449,7 @@ end;
 
 procedure TVittixDBGridController.HookDataSource;
 begin
+  TraceController('HookDataSource');
   if not Assigned(FGrid) or not Assigned(FGrid.DataSource) then Exit;
 
   FDataLink.DataSource := FGrid.DataSource;
@@ -443,6 +461,7 @@ end;
 
 procedure TVittixDBGridController.UnhookDataSource;
 begin
+  TraceController('UnhookDataSource');
   if Assigned(FDataLink) then
     FDataLink.DataSource := nil;
   FDataset := nil;
@@ -450,7 +469,9 @@ end;
 
 procedure TVittixDBGridController.DataLinkActiveChanged;
 begin
+  TraceController('DataLinkActiveChanged');
   if not Assigned(FDataLink) then Exit;
+  if FAggregationBusy then Exit;
   FDataset := FDataLink.DataSet;
   if Assigned(FDataset) and FDataset.Active then
     CreateEngines
@@ -467,6 +488,8 @@ end;
 
 procedure TVittixDBGridController.DataLinkDataSetChanged;
 begin
+  TraceController('DataLinkDataSetChanged');
+  if FAggregationBusy then Exit;
   FDataset := nil;
   DestroyEngines;
 
@@ -479,10 +502,14 @@ end;
 
 procedure TVittixDBGridController.DataLinkRecordChanged(Field: TField);
 begin
+  TraceController('DataLinkRecordChanged');
   if not Assigned(FDataset) then
     Exit;
 
   if FDataset.State in dsEditModes then
+    Exit;
+
+  if FAggregationBusy then
     Exit;
 
   SetAggregationDirty;
@@ -495,6 +522,7 @@ end;
 
 procedure TVittixDBGridController.CreateEngines;
 begin
+  TraceController('CreateEngines enter');
   if FEnginesCreated or not IsReady then Exit;
 
   FSortEngine :=
@@ -523,10 +551,12 @@ begin
   FEnginesCreated := True;
   SetAggregationDirty;
   Refresh;
+  TraceController('CreateEngines exit');
 end;
 
 procedure TVittixDBGridController.DestroyEngines;
 begin
+  TraceController('DestroyEngines');
   FreeAndNil(FFooterPanel);
   FreeAndNil(FSortEngine);
   FreeAndNil(FFilterEngine);
@@ -745,13 +775,18 @@ end;
 
 procedure TVittixDBGridController.Refresh;
 begin
-  // FIX: Add re-entrance guard for refresh operations
-  if FUpdating then Exit;
+  TraceController('Refresh');
+  if FUpdating or FAggregationBusy then Exit;
 
-  if FAggregationDirty and Assigned(FAggregationEngine) then
-  begin
-    FAggregationEngine.Recalculate;
-    FAggregationDirty := False;
+  FAggregationBusy := True;
+  try
+    if FAggregationDirty and Assigned(FAggregationEngine) then
+    begin
+      FAggregationEngine.Recalculate;
+      FAggregationDirty := False;
+    end;
+  finally
+    FAggregationBusy := False;
   end;
 
   if Assigned(FGrid) then
@@ -760,13 +795,20 @@ end;
 
 procedure TVittixDBGridController.GridLayoutChanged;
 begin
+  TraceController('GridLayoutChanged');
   if not Assigned(FGrid) then
     Exit;
 
-  if Assigned(FFooterPanel) then
-  begin
-    FFooterPanel.SyncLayout;
-    FFooterPanel.Invalidate;
+  if FUpdating then Exit;
+  FUpdating := True;
+  try
+    if Assigned(FFooterPanel) then
+    begin
+      FFooterPanel.SyncLayout;
+      FFooterPanel.Invalidate;
+    end;
+  finally
+    FUpdating := False;
   end;
 end;
 
@@ -781,10 +823,16 @@ end;
 
 procedure TVittixDBGridController.ApplyState;
 begin
+  TraceController('ApplyState');
   if Assigned(FSortEngine) then
     FSortEngine.ApplySorting;
   SetAggregationDirty;
   Refresh;
+end;
+
+function TVittixDBGridController.IsUpdating: Boolean;
+begin
+  Result := FUpdating;
 end;
 
 procedure TVittixDBGridController.SetGlobalFilter(const Text: string);
@@ -885,9 +933,9 @@ var
 begin
   if (State = nil) or not Assigned(FGrid) then Exit;
   State.Clear;
-  State.FooterVisible := FShowFooter;
-  State.AlternatingRowColors := FAlternatingRowColors;
-  State.AlternateRowColor := FAlternateRowColor;
+  State.FooterVisible := FGrid.FooterVisible;
+  State.AlternatingRowColors := FGrid.AlternatingRowColors;
+  State.AlternateRowColor := FGrid.AlternateRowColor;
   for I := 0 to FGrid.Columns.Count - 1 do
   begin
     Col := FGrid.Columns[I];
@@ -919,9 +967,6 @@ begin
   if (State = nil) or not Assigned(FGrid) then Exit;
   FUpdating := True;
   try
-    FShowFooter := State.FooterVisible;
-    FAlternatingRowColors := State.AlternatingRowColors;
-    FAlternateRowColor := State.AlternateRowColor;
     for I := 0 to State.Columns.Count - 1 do
     begin
       Item := State.Columns[I];
@@ -940,6 +985,9 @@ begin
         CellConditionsFromJson(Info.CellConditions, Item.CellConditionsJson);
       end;
     end;
+    FGrid.FooterVisible := State.FooterVisible;
+    FGrid.AlternatingRowColors := State.AlternatingRowColors;
+    FGrid.AlternateRowColor := State.AlternateRowColor;
     ApplyState;
   finally
     FUpdating := False;

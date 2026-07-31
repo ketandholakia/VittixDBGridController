@@ -112,12 +112,17 @@ implementation
 uses
   Vittix.DBGrid.Controller;
 
+procedure TraceGrid(const Msg: string);
+begin
+end;
+
 { TVittixDBGrid }
 
 constructor TVittixDBGrid.Create(AOwner: TComponent);
 var
   Ctrl: TVittixDBGridController;
 begin
+  TraceGrid('Create enter');
   inherited;
   FColumnsInfo := TVittixDBGridColumns.Create(Self);
 
@@ -145,6 +150,7 @@ begin
   Ctrl.Grid := Self;
 
   ApplyPersistenceSettings;
+  TraceGrid('Create exit');
 end;
 
 procedure TVittixDBGrid.BeforeDestruction;
@@ -177,6 +183,7 @@ end;
 
 procedure TVittixDBGrid.SetDataSource(Value: TDataSource);
 begin
+  TraceGrid('SetDataSource');
   if inherited DataSource <> Value then
   begin
     inherited DataSource := Value;
@@ -189,6 +196,7 @@ end;
 
 procedure TVittixDBGrid.SetFooterVisible(const Value: Boolean);
 begin
+  TraceGrid('SetFooterVisible');
   if FFooterVisible <> Value then
   begin
     FFooterVisible := Value;
@@ -206,6 +214,7 @@ end;
 
 procedure TVittixDBGrid.SetAlternatingRowColors(const Value: Boolean);
 begin
+  TraceGrid('SetAlternatingRowColors');
   if FAlternatingRowColors <> Value then
   begin
     FAlternatingRowColors := Value;
@@ -224,6 +233,7 @@ end;
 
 procedure TVittixDBGrid.SetAlternateRowColor(const Value: TColor);
 begin
+  TraceGrid('SetAlternateRowColor');
   if FAlternateRowColor <> Value then
   begin
     FAlternateRowColor := Value;
@@ -238,6 +248,7 @@ end;
 
 procedure TVittixDBGrid.CreateWnd;
 begin
+  TraceGrid('CreateWnd enter');
   inherited;
   // Now that a real Win32 window handle exists, install the WindowProc hook
   // if the controller is ready but couldn't hook it earlier (e.g. when
@@ -247,10 +258,12 @@ begin
     TVittixDBGridController(FController).InstallWindowProc;
     TVittixDBGridController(FController).GridLayoutChanged;
   end;
+  TraceGrid('CreateWnd exit');
 end;
 
 procedure TVittixDBGrid.SetLayoutStorageFileName(const Value: string);
 begin
+  TraceGrid('SetLayoutStorageFileName');
   if FPersistence.LayoutStorageFileName <> Value then
   begin
     FPersistence.LayoutStorageFileName := Value;
@@ -262,6 +275,7 @@ end;
 
 procedure TVittixDBGrid.SetChooserStateFileName(const Value: string);
 begin
+  TraceGrid('SetChooserStateFileName');
   if FPersistence.ChooserStateFileName <> Value then
   begin
     FPersistence.ChooserStateFileName := Value;
@@ -271,6 +285,7 @@ end;
 
 procedure TVittixDBGrid.SetFilterHistoryFileName(const Value: string);
 begin
+  TraceGrid('SetFilterHistoryFileName');
   if FPersistence.FilterHistoryFileName <> Value then
   begin
     FPersistence.FilterHistoryFileName := Value;
@@ -280,6 +295,7 @@ end;
 
 procedure TVittixDBGrid.SetPersistenceRootPath(const Value: string);
 begin
+  TraceGrid('SetPersistenceRootPath');
   if FPersistence.PersistenceRootPath <> Value then
   begin
     FPersistence.PersistenceRootPath := Value;
@@ -290,11 +306,14 @@ end;
 procedure TVittixDBGrid.ApplyPersistenceSettings;
 begin
   TVittixDBGridColumnChooserForm.RootPath := FPersistence.PersistenceRootPath;
+  TVittixDBGridColumnChooserForm.StateFileName := FPersistence.ChooserStateFileName;
   TVittixDBGridFilterPopup.RootPath := FPersistence.PersistenceRootPath;
+  TVittixDBGridFilterPopup.HistoryFileName := FPersistence.FilterHistoryFileName;
 end;
 
 procedure TVittixDBGrid.Loaded;
 begin
+  TraceGrid('Loaded enter');
   inherited;
   SyncColumnInfo;
 
@@ -307,18 +326,22 @@ begin
     TVittixDBGridController(FController).DataSourceChanged;
     TVittixDBGridController(FController).GridLayoutChanged;
   end;
+  TraceGrid('Loaded exit');
 end;
 
 procedure TVittixDBGrid.LayoutChanged;
 begin
+  TraceGrid('LayoutChanged enter');
   inherited;
   if not (csLoading in ComponentState) then
   begin
     SyncColumnInfo;
 
     if Assigned(FController) and (FController is TVittixDBGridController) then
-      TVittixDBGridController(FController).GridLayoutChanged;
+      if not TVittixDBGridController(FController).IsUpdating then
+        TVittixDBGridController(FController).GridLayoutChanged;
   end;
+  TraceGrid('LayoutChanged exit');
 end;
 
 procedure TVittixDBGrid.Notification(AComponent: TComponent;

@@ -7,7 +7,7 @@ uses
   System.Classes,
   System.Variants,
   System.Math,
-  System.IniFiles,
+  System.IOUtils,
   Winapi.Windows,
   Winapi.Messages,
   Vcl.Graphics,
@@ -27,9 +27,7 @@ uses
   Vittix.DBGrid,
   Vittix.DBGrid.Controller,
   Vittix.DBGrid.ColumnInfo, // This unit is already included by Vittix.DBGrid.Controller, but explicit is fine.
-  Vittix.DBGrid.Export.Engine, // Add this unit
   Vittix.DBGrid.Export.Dialog, // Add this unit
-  Vittix.DBGrid.ColumnChooser,
   Vittix.DBGrid.Editors;
 
 type
@@ -98,8 +96,6 @@ type
     mnuEditRecord: TMenuItem;
     mnuDeleteRecord: TMenuItem;
     N1: TMenuItem;
-    mnuExportSelection: TMenuItem;
-    N2: TMenuItem;
     mnuCopyCell: TMenuItem;
     mnuCopyRow: TMenuItem;
 
@@ -142,7 +138,6 @@ type
     // Popup Menu
     procedure mnuEditRecordClick(Sender: TObject);
     procedure mnuDeleteRecordClick(Sender: TObject);
-    procedure mnuExportSelectionClick(Sender: TObject);
     procedure mnuCopyCellClick(Sender: TObject);
     procedure mnuCopyRowClick(Sender: TObject);
 
@@ -152,10 +147,14 @@ type
     procedure ClientDataSet1AfterScroll(DataSet: TDataSet);
 
   private
+    function GetDemoStatePath: string;
+    function GetGridController: TVittixDBGridController;
     procedure InitializeDataset;
     procedure LoadSampleData;
     procedure UpdateStatusBar;
-    // procedure ExportToCSV(const FileName: string); // This procedure is no longer needed
+    procedure ConfigurePersistence;
+    procedure SyncDisplayOptions;
+    procedure LoadSavedLayout;
     procedure SaveColumnConfiguration(const FileName: string);
     procedure LoadColumnConfiguration(const FileName: string);
     procedure SetupAggregations;
@@ -179,16 +178,14 @@ procedure TfrmVittixDemo.FormCreate(Sender: TObject);
 begin
   Caption := 'Vittix DBGrid - Complete Feature Demo';
 
+  ConfigurePersistence;
+
   // Initialize dataset
   InitializeDataset;
   LoadSampleData;
 
   // Setup aggregations
   SetupAggregations;
-
-  // Initial UI state
-  chkAlternateRows.Checked := VittixGrid.AlternatingRowColors;
-  chkShowFooter.Checked := VittixGrid.FooterVisible;
 
   // Update status
   UpdateStatusBar;
@@ -200,19 +197,78 @@ begin
   ShowMessage(
     'Welcome to Vittix DBGrid Feature Demo!' + sLineBreak + sLineBreak +
     'Features to try:' + sLineBreak +
-    '• Click column headers to sort (Ctrl+Click for multi-column)' + sLineBreak +
-    '• Right-click column headers to filter' + sLineBreak +
-    '• Use Global Search to search all columns' + sLineBreak +
-    '• Right-click footer to change aggregations' + sLineBreak +
-    '• Double-click row to edit' + sLineBreak +
-    '• Right-click grid for context menu' + sLineBreak +
-    '• Use Column Chooser to show/hide/reorder columns'
+    '- Click column headers to sort, or Ctrl+Click for multi-column sorting' + sLineBreak +
+    '- Right-click a column title to open the filter popup; Enter applies and Esc cancels' + sLineBreak +
+    '- Filter popup supports Not Between and history clearing with Ctrl+Shift+H' + sLineBreak +
+    '- Use Global Search to search across all columns' + sLineBreak +
+    '- Column Chooser supports Ctrl+F search, Ctrl+A/N selection, Ctrl+Up/Down reorder, Ctrl+R reset, and Esc clear' + sLineBreak +
+    '- Footer shortcuts support Del, Ctrl+Del, Ctrl+C, Ctrl+Shift+C, and Ctrl+Shift+F' + sLineBreak +
+    '- Export Data supports CSV, TSV, Excel, HTML, XML, JSON, clipboard, and text' + sLineBreak +
+    '- Demo state is stored in features-demo-state next to the executable' + sLineBreak +
+    '- Use Save Layout and Load Layout to persist or restore the current grid state'
   );
 end;
 
 procedure TfrmVittixDemo.FormDestroy(Sender: TObject);
 begin
   // Cleanup handled automatically
+end;
+
+function TfrmVittixDemo.GetDemoStatePath: string;
+begin
+  Result := TPath.Combine(ExtractFilePath(ParamStr(0)), 'features-demo-state');
+  try
+    ForceDirectories(Result);
+  except
+    Result := TPath.Combine(TPath.GetTempPath, 'VittixDBGridDemo');
+    ForceDirectories(Result);
+  end;
+end;
+
+function TfrmVittixDemo.GetGridController: TVittixDBGridController;
+begin
+  Result := nil;
+  if Assigned(VittixGrid.Controller) and (VittixGrid.Controller is TVittixDBGridController) then
+    Result := TVittixDBGridController(VittixGrid.Controller);
+end;
+
+procedure TfrmVittixDemo.ConfigurePersistence;
+var
+  StatePath: string;
+begin
+  StatePath := GetDemoStatePath;
+
+  VittixGrid.PersistenceRootPath := StatePath;
+  VittixGrid.LayoutStorageFileName := TPath.Combine(StatePath, 'layout.json');
+  VittixGrid.ChooserStateFileName := TPath.Combine(StatePath, 'chooser.ini');
+  VittixGrid.FilterHistoryFileName := TPath.Combine(StatePath, 'filter.ini');
+
+  TfrmExportDialog.RootPath := StatePath;
+  TfrmExportDialog.StateFileName := TPath.Combine(StatePath, 'export.ini');
+end;
+
+procedure TfrmVittixDemo.SyncDisplayOptions;
+begin
+  chkAlternateRows.Checked := VittixGrid.AlternatingRowColors;
+  chkShowFooter.Checked := VittixGrid.FooterVisible;
+  chkShowFiltered.Checked := ClientDataSet1.Filtered;
+end;
+
+procedure TfrmVittixDemo.LoadSavedLayout;
+var
+  Controller: TVittixDBGridController;
+begin
+  Controller := GetGridController;
+  if Assigned(Controller) and FileExists(VittixGrid.LayoutStorageFileName) then
+  begin
+    try
+      Controller.LoadLayoutFromFile;
+    except
+      // Ignore corrupted layout files in the demo.
+    end;
+  end;
+
+  SyncDisplayOptions;
 end;
 
 procedure TfrmVittixDemo.InitializeDataset;
@@ -347,10 +403,7 @@ var
   SortText: string;
   I: Integer;
 begin
-  lblRecordCount.Caption := Format('Records: %d of %d', [
-    ClientDataSet1.RecordCount,
-    ClientDataSet1.RecordCount
-  ]);
+  lblRecordCount.Caption := Format('Records: %d', [ClientDataSet1.RecordCount]);
 
   if ClientDataSet1.Filtered then
     lblFilterStatus.Caption := 'Filter: Active'
@@ -447,9 +500,12 @@ begin
 end;
 
 procedure TfrmVittixDemo.btnRefreshDataClick(Sender: TObject);
+var
+  Controller: TVittixDBGridController;
 begin
-  if Assigned(VittixGrid.Controller) and (VittixGrid.Controller is TVittixDBGridController) then
-    TVittixDBGridController(VittixGrid.Controller).Refresh;
+  Controller := GetGridController;
+  if Assigned(Controller) then
+    Controller.Refresh;
 
   UpdateStatusBar;
   ShowMessage('Grid refreshed');
@@ -475,13 +531,15 @@ begin
 end;
 
 procedure TfrmVittixDemo.btnClearFiltersClick(Sender: TObject);
+var
+  Controller: TVittixDBGridController;
 begin
   edtGlobalSearch.Clear;
-  if Assigned(VittixGrid.Controller) and (VittixGrid.Controller is TVittixDBGridController) then
-  begin
-    TVittixDBGridController(VittixGrid.Controller).ClearFilters;
-    UpdateStatusBar;
-  end;
+  Controller := GetGridController;
+  if Assigned(Controller) then
+    Controller.ClearFilters;
+  chkShowFiltered.Checked := False;
+  UpdateStatusBar;
   ShowMessage('All filters cleared');
 end;
 
@@ -505,8 +563,12 @@ begin
 end;
 
 procedure TfrmVittixDemo.btnColumnChooserClick(Sender: TObject);
+var
+  Controller: TVittixDBGridController;
 begin
-  TVittixDBGridColumnChooserForm.Execute(VittixGrid);
+  Controller := GetGridController;
+  if Assigned(Controller) then
+    Controller.ShowColumnChooser;
 end;
 
 { Export & Config }
@@ -524,110 +586,61 @@ end;
 
 procedure TfrmVittixDemo.btnSaveConfigClick(Sender: TObject);
 begin
-  SaveDialog1.Filter := 'Config Files (*.ini)|*.ini|All Files (*.*)|*.*';
-  SaveDialog1.DefaultExt := 'ini';
-  SaveDialog1.FileName := 'grid_config.ini';
+  SaveDialog1.DefaultExt := 'json';
+  SaveDialog1.FileName := 'grid_layout.json';
+  SaveDialog1.InitialDir := GetDemoStatePath;
+  SaveDialog1.Filter := 'Layout Files (*.json)|*.json|All Files (*.*)|*.*';
 
   if SaveDialog1.Execute then
   begin
     SaveColumnConfiguration(SaveDialog1.FileName);
-    ShowMessage('Configuration saved to: ' + SaveDialog1.FileName);
+    ShowMessage('Layout saved to: ' + SaveDialog1.FileName);
   end;
 end;
 
 procedure TfrmVittixDemo.SaveColumnConfiguration(const FileName: string);
 var
-  Ini: TIniFile;
-  I: Integer;
-  Col: TColumn;
-  Info: TVittixDBGridColumnInfo;
+  Controller: TVittixDBGridController;
 begin
-  Ini := TIniFile.Create(FileName);
-  try
-    for I := 0 to VittixGrid.Columns.Count - 1 do
-    begin
-      Col := VittixGrid.Columns[I];
-      Ini.WriteBool('Columns', Col.FieldName + '_Visible', Col.Visible);
-      Ini.WriteInteger('Columns', Col.FieldName + '_Width', Col.Width);
-      Ini.WriteInteger('Columns', Col.FieldName + '_Index', Col.Index);
-    end;
-
-    for I := 0 to VittixGrid.ColumnInfo.Count - 1 do
-    begin
-      Info := VittixGrid.ColumnInfo[I];
-      Ini.WriteInteger('ColumnInfo', Info.FieldName + '_SortOrder', Ord(Info.SortOrder));
-      Ini.WriteInteger('ColumnInfo', Info.FieldName + '_SortIndex', Info.SortIndex);
-      Ini.WriteString('ColumnInfo', Info.FieldName + '_FilterText', Info.FilterText);
-      Ini.WriteBool('ColumnInfo', Info.FieldName + '_HasFilter', Info.HasFilter);
-      Ini.WriteInteger('ColumnInfo', Info.FieldName + '_AggregationType', Ord(Info.AggregationType));
-    end;
-
-    Ini.WriteBool('Display', 'AlternatingRows', VittixGrid.AlternatingRowColors);
-    Ini.WriteBool('Display', 'ShowFooter', VittixGrid.FooterVisible);
-  finally
-    Ini.Free;
+  Controller := GetGridController;
+  if Assigned(Controller) then
+  begin
+    if FileName <> '' then
+      Controller.SaveLayoutToFile(FileName)
+    else
+      Controller.SaveLayoutToFile;
   end;
 end;
 
 procedure TfrmVittixDemo.btnLoadConfigClick(Sender: TObject);
 begin
-  OpenDialog1.Filter := 'Config Files (*.ini)|*.ini|All Files (*.*)|*.*';
-  OpenDialog1.DefaultExt := 'ini';
-  OpenDialog1.FileName := 'grid_config.ini';
+  OpenDialog1.Filter := 'Layout Files (*.json)|*.json|All Files (*.*)|*.*';
+  OpenDialog1.DefaultExt := 'json';
+  OpenDialog1.FileName := 'grid_layout.json';
+  OpenDialog1.InitialDir := GetDemoStatePath;
 
   if OpenDialog1.Execute then
   begin
     LoadColumnConfiguration(OpenDialog1.FileName);
-    ShowMessage('Configuration loaded from: ' + OpenDialog1.FileName);
+    ShowMessage('Layout loaded from: ' + OpenDialog1.FileName);
   end;
 end;
 
 procedure TfrmVittixDemo.LoadColumnConfiguration(const FileName: string);
 var
-  Ini: TIniFile;
-  I: Integer;
-  Col: TColumn;
-  Info: TVittixDBGridColumnInfo;
+  Controller: TVittixDBGridController;
 begin
-  Ini := TIniFile.Create(FileName);
-  try
-    for I := 0 to VittixGrid.Columns.Count - 1 do
-    begin
-      Col := VittixGrid.Columns[I];
-      Col.Visible := Ini.ReadBool('Columns', Col.FieldName + '_Visible', Col.Visible);
-      Col.Width := Ini.ReadInteger('Columns', Col.FieldName + '_Width', Col.Width);
-    end;
-
-    for I := 0 to VittixGrid.ColumnInfo.Count - 1 do
-    begin
-      Info := VittixGrid.ColumnInfo[I];
-      Info.SortOrder := TVittixSortOrder(
-        Ini.ReadInteger('ColumnInfo', Info.FieldName + '_SortOrder', Ord(Info.SortOrder))
-      );
-      Info.SortIndex := Ini.ReadInteger('ColumnInfo', Info.FieldName + '_SortIndex', Info.SortIndex);
-      Info.FilterText := Ini.ReadString('ColumnInfo', Info.FieldName + '_FilterText', Info.FilterText);
-      Info.HasFilter := Ini.ReadBool('ColumnInfo', Info.FieldName + '_HasFilter', Info.HasFilter);
-      Info.AggregationType := TVittixAggregationType(
-        Ini.ReadInteger('ColumnInfo', Info.FieldName + '_AggregationType', Ord(Info.AggregationType))
-      );
-    end;
-
-    VittixGrid.AlternatingRowColors :=
-      Ini.ReadBool('Display', 'AlternatingRows', True);
-    VittixGrid.FooterVisible :=
-      Ini.ReadBool('Display', 'ShowFooter', True);
-
-    chkAlternateRows.Checked := VittixGrid.AlternatingRowColors;
-    chkShowFooter.Checked := VittixGrid.FooterVisible;
-
-    if Assigned(VittixGrid.Controller) and (VittixGrid.Controller is TVittixDBGridController) then
-      TVittixDBGridController(VittixGrid.Controller).ApplyState;
-
-    VittixGrid.Invalidate;
-    UpdateStatusBar;
-  finally
-    Ini.Free;
+  Controller := GetGridController;
+  if Assigned(Controller) then
+  begin
+    if FileName <> '' then
+      Controller.LoadLayoutFromFile(FileName)
+    else
+      Controller.LoadLayoutFromFile;
   end;
+
+  SyncDisplayOptions;
+  UpdateStatusBar;
 end;
 
 { Grid Events }
@@ -654,12 +667,6 @@ begin
   btnDeleteRecordClick(Sender);
 end;
 
-procedure TfrmVittixDemo.mnuExportSelectionClick(Sender: TObject);
-begin
-  ShowMessage('Export selection feature - would export selected rows only');
-end;
-
-// FIX: Removed intermediate TColumn logic that caused E2003
 procedure TfrmVittixDemo.mnuCopyCellClick(Sender: TObject);
 begin
   if Assigned(VittixGrid.SelectedField) then

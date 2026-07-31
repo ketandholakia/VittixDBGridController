@@ -43,6 +43,7 @@ type
     FAggregationEngine: TVittixDBGridAggregationEngine;
     FPopup: TPopupMenu;
     FContextColumn: TColumn;
+    FSyncingLayout: Boolean;
 
     procedure BuildPopup;
     procedure PopupClick(Sender: TObject);
@@ -86,6 +87,10 @@ type
   // Cracker class to access protected 'LeftCol' of TCustomGrid/TDBGrid
   TVittixGridAccess = class(TDBGrid);
 
+procedure TraceFooter(const Msg: string);
+begin
+end;
+
 { TVittixDBGridFooterPanel }
 
 constructor TVittixDBGridFooterPanel.Create(AOwner: TComponent);
@@ -109,6 +114,7 @@ procedure TVittixDBGridFooterPanel.Attach(
   AGrid: TVittixDBGrid;
   AEngine: TVittixDBGridAggregationEngine);
 begin
+  TraceFooter('Attach enter');
   FGrid := AGrid;
   FAggregationEngine := AEngine;
 
@@ -123,31 +129,54 @@ begin
   Anchors := [akLeft, akRight, akBottom];
 
   SyncLayout;
+  TraceFooter('Attach exit');
 end;
 
 procedure TVittixDBGridFooterPanel.SyncLayout;
 var
   TM: TTextMetric;
   DC: HDC;
+  NewLeft: Integer;
+  NewTop: Integer;
+  NewWidth: Integer;
+  NewHeight: Integer;
 begin
+  TraceFooter('SyncLayout enter');
   if not Assigned(FGrid) then Exit;
+  if FSyncingLayout then Exit;
 
   // DESIGN-TIME SAFETY: Do not access GDI handles or ClientWidth in the IDE.
   if csDesigning in FGrid.ComponentState then Exit;
 
+  FSyncingLayout := True;
+  try
   DC := GetDC(0);
   try
     SelectObject(DC, FGrid.Font.Handle);
     GetTextMetrics(DC, TM);
-    Height := TM.tmHeight + TM.tmExternalLeading + 8;
+    NewHeight := TM.tmHeight + TM.tmExternalLeading + 8;
   finally
     ReleaseDC(0, DC);
   end;
 
-  Left := FGrid.Left;
-  Top := FGrid.Top + FGrid.Height - Height;
-  Width := FGrid.Width;
-  Invalidate;
+    NewLeft := FGrid.Left;
+    NewTop := FGrid.Top + FGrid.Height - NewHeight;
+    NewWidth := FGrid.Width;
+
+    if (Left <> NewLeft) then
+      Left := NewLeft;
+    if (Top <> NewTop) then
+      Top := NewTop;
+    if (Width <> NewWidth) then
+      Width := NewWidth;
+    if (Height <> NewHeight) then
+      Height := NewHeight;
+
+    Invalidate;
+  finally
+    FSyncingLayout := False;
+  end;
+  TraceFooter('SyncLayout exit');
 end;
 
 function TVittixDBGridFooterPanel.GetIndicatorOffset: Integer;

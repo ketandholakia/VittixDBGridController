@@ -47,6 +47,8 @@ type
     [Test]
     procedure ApplyLayout_RestoresFooterVisible;
     [Test]
+    procedure ApplyLayout_RestoresGridDisplayOptions;
+    [Test]
     procedure ApplyLayout_RestoresFooterText;
     [Test]
     procedure ApplyLayout_IgnoresMissingFields;
@@ -76,6 +78,8 @@ type
     procedure ExplicitPersistenceFilesOverrideRootPath;
     [Test]
     procedure GridPersistenceFilesOverrideRootPathWhenSetAfterRoot;
+    [Test]
+    procedure GridPersistenceFileNamesFanOutToHelpers;
     [Test]
     procedure GridCanSaveAndLoadLayoutToExplicitFile;
     [Test]
@@ -255,6 +259,28 @@ begin
     FController.ShowFooter := False;
     FController.ApplyLayout(State);
     Assert.IsTrue(FController.ShowFooter);
+  finally
+    State.Free;
+  end;
+end;
+
+procedure TVittixLayoutTests.ApplyLayout_RestoresGridDisplayOptions;
+var
+  State: TVittixDBGridLayoutState;
+begin
+  State := TVittixDBGridLayoutState.Create;
+  try
+    FController.CaptureLayout(State);
+
+    FGrid.FooterVisible := False;
+    FGrid.AlternatingRowColors := False;
+    FGrid.AlternateRowColor := clYellow;
+
+    FController.ApplyLayout(State);
+
+    Assert.IsTrue(FGrid.FooterVisible);
+    Assert.IsTrue(FGrid.AlternatingRowColors);
+    Assert.AreEqual(State.AlternateRowColor, FGrid.AlternateRowColor);
   finally
     State.Free;
   end;
@@ -635,6 +661,34 @@ begin
       OwnerForm.Free;
     end;
   finally
+  end;
+end;
+
+procedure TVittixLayoutTests.GridPersistenceFileNamesFanOutToHelpers;
+var
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+  OriginalChooserStateFileName: string;
+  OriginalFilterHistoryFileName: string;
+begin
+  OwnerForm := TForm.CreateNew(nil);
+  OriginalChooserStateFileName := TVittixDBGridColumnChooserForm.StateFileName;
+  OriginalFilterHistoryFileName := TVittixDBGridFilterPopup.HistoryFileName;
+  try
+    Grid := TVittixDBGrid.Create(OwnerForm);
+    try
+      Grid.ChooserStateFileName := 'C:\temp\chooser.ini';
+      Grid.FilterHistoryFileName := 'C:\temp\filter.ini';
+
+      Assert.AreEqual('C:\temp\chooser.ini', TVittixDBGridColumnChooserForm.StateFileName);
+      Assert.AreEqual('C:\temp\filter.ini', TVittixDBGridFilterPopup.HistoryFileName);
+    finally
+      Grid.Free;
+      OwnerForm.Free;
+    end;
+  finally
+    TVittixDBGridColumnChooserForm.StateFileName := OriginalChooserStateFileName;
+    TVittixDBGridFilterPopup.HistoryFileName := OriginalFilterHistoryFileName;
   end;
 end;
 

@@ -1,7 +1,7 @@
 object frmVittixDemo: TfrmVittixDemo
   Left = 0
   Top = 0
-  Caption = 'Vittix DBGrid - Complete Feature Demonstration'
+  Caption = 'Vittix DBGrid - Complete Feature Demo'
   ClientHeight = 700
   ClientWidth = 1200
   Color = clBtnFace
@@ -45,8 +45,8 @@ object frmVittixDemo: TfrmVittixDemo
       Width = 504
       Height = 15
       Caption = 
-        'Demonstrating all features: Sorting, Filtering, Aggregations, Ex' +
-        'port, Column Chooser, and more!'
+        'Sorting, filtering, chooser shortcuts, footer actions, export, ' +
+        'and persisted layout state.'
       Font.Charset = DEFAULT_CHARSET
       Font.Color = clWhite
       Font.Height = -12
@@ -108,7 +108,7 @@ object frmVittixDemo: TfrmVittixDemo
       Width = 265
       Height = 114
       Align = alLeft
-      Caption = ' Filtering & Search '
+      Caption = ' Filtering, Search & History '
       TabOrder = 1
       object lblGlobalSearch: TLabel
         Left = 8
@@ -152,7 +152,7 @@ object frmVittixDemo: TfrmVittixDemo
       Width = 225
       Height = 114
       Align = alLeft
-      Caption = ' Display Options '
+      Caption = ' Display & Layout '
       TabOrder = 2
       object chkAlternateRows: TCheckBox
         Left = 8
@@ -204,24 +204,24 @@ object frmVittixDemo: TfrmVittixDemo
         TabOrder = 0
         OnClick = btnExportDialogClick
       end
-      object btnSaveConfig: TButton
-        Left = 8
-        Top = 51
-        Width = 169
-        Height = 25
-        Caption = 'Save Configuration...'
-        TabOrder = 1
-        OnClick = btnSaveConfigClick
-      end
-      object btnLoadConfig: TButton
-        Left = 8
-        Top = 82
-        Width = 169
-        Height = 25
-        Caption = 'Load Configuration...'
-        TabOrder = 2
-        OnClick = btnLoadConfigClick
-      end
+    object btnSaveConfig: TButton
+      Left = 8
+      Top = 51
+      Width = 169
+      Height = 25
+      Caption = 'Save Layout...'
+      TabOrder = 1
+      OnClick = btnSaveConfigClick
+    end
+    object btnLoadConfig: TButton
+      Left = 8
+      Top = 82
+      Width = 169
+      Height = 25
+      Caption = 'Load Layout...'
+      TabOrder = 2
+      OnClick = btnLoadConfigClick
+    end
     end
     object btnRefreshData: TButton
       Left = 892
@@ -249,7 +249,7 @@ object frmVittixDemo: TfrmVittixDemo
       Height = 15
       Margins.Left = 8
       Align = alLeft
-      Caption = 'Records: 0 of 0'
+      Caption = 'Records: 0'
       Font.Charset = DEFAULT_CHARSET
       Font.Color = clWindowText
       Font.Height = -12
@@ -488,13 +488,6 @@ object frmVittixDemo: TfrmVittixDemo
       OnClick = mnuDeleteRecordClick
     end
     object N1: TMenuItem
-      Caption = '-'
-    end
-    object mnuExportSelection: TMenuItem
-      Caption = 'Export Selection'
-      OnClick = mnuExportSelectionClick
-    end
-    object N2: TMenuItem
       Caption = '-'
     end
     object mnuCopyCell: TMenuItem
