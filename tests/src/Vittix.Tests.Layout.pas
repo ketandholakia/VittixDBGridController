@@ -117,6 +117,8 @@ type
     [Test]
     procedure ChooserSearchSummaryReflectsMatches;
     [Test]
+    procedure ChooserResetAlsoClearsSearchText;
+    [Test]
     procedure ChooserSearchMatchesAllTerms;
     [Test]
     procedure ChooserEscapeClearsSearchText;
@@ -1169,6 +1171,34 @@ begin
       try
         Chooser.SearchText := 'am';
         Assert.AreEqual('1 match', Chooser.SearchSummaryText);
+      finally
+        Chooser.Free;
+      end;
+    finally
+      Grid.Free;
+      OwnerForm.Free;
+    end;
+  finally
+  end;
+end;
+
+procedure TVittixLayoutTests.ChooserResetAlsoClearsSearchText;
+var
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+  Chooser: TVittixDBGridColumnChooserForm;
+begin
+  OwnerForm := TForm.CreateNew(nil);
+  try
+    Grid := TVittixDBGrid.Create(OwnerForm);
+    try
+      Grid.Parent := OwnerForm;
+      Chooser := TVittixDBGridColumnChooserForm.CreateChooser(OwnerForm, Grid);
+      try
+        Chooser.SearchText := 'Amount';
+        Assert.AreEqual('Amount', Chooser.SearchText);
+        Chooser.ResetLayout;
+        Assert.AreEqual('', Chooser.SearchText);
       finally
         Chooser.Free;
       end;

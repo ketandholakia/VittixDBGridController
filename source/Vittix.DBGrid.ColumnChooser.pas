@@ -636,6 +636,11 @@ begin
 
   for I := 0 to FGrid.Columns.Count - 1 do
     FGrid.Columns[I].Visible := True;
+
+  ClearSearchText;
+  ApplySearchFilter;
+  if Assigned(FCheckList) and (FCheckList.Items.Count > 0) then
+    FCheckList.ItemIndex := 0;
 end;
 
 procedure TVittixDBGridColumnChooserForm.DoGrowWidth(Sender: TObject);
@@ -672,6 +677,7 @@ end;
 procedure TVittixDBGridColumnChooserForm.ClearSearchText;
 begin
   FSearchEdit.Text := '';
+  ApplySearchFilter;
 end;
 
 procedure TVittixDBGridColumnChooserForm.MoveSelectedItem(Delta: Integer);
