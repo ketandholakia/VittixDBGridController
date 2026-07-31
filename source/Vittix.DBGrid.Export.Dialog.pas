@@ -48,6 +48,7 @@ type
     rbHTML: TRadioButton;
     rbXML: TRadioButton;
     rbJSON: TRadioButton;
+    rbText: TRadioButton;
     grpDestination: TGroupBox;
     rbFile: TRadioButton;
     rbClipboard: TRadioButton;
@@ -92,6 +93,8 @@ type
     function GetStatePath: string;
     function GetIncludeFooterChecked: Boolean;
     procedure SetIncludeFooterChecked(const Value: Boolean);
+    function GetTextFormatChecked: Boolean;
+    procedure SetTextFormatChecked(const Value: Boolean);
     
   public
     class var StateFileName: string;
@@ -100,6 +103,7 @@ type
     procedure LoadDialogState;
     procedure SaveDialogState;
     property IncludeFooterChecked: Boolean read GetIncludeFooterChecked write SetIncludeFooterChecked;
+    property TextFormatChecked: Boolean read GetTextFormatChecked write SetTextFormatChecked;
     function GetPreviewText: string;
     function GetActivePageIndex: Integer;
     procedure SetActivePageIndex(Value: Integer);
@@ -156,6 +160,14 @@ begin
   chkIncludeFooter.Top := chkIncludeHeaders.Top + chkIncludeHeaders.Height + 6;
   chkIncludeFooter.Width := chkIncludeHeaders.Width;
 
+  rbText := TRadioButton.Create(Self);
+  rbText.Parent := grpFormat;
+  rbText.Name := 'rbText';
+  rbText.Caption := 'Text';
+  rbText.Left := rbJSON.Left;
+  rbText.Top := rbJSON.Top + rbJSON.Height + 6;
+  rbText.Width := rbJSON.Width;
+
   PageControl1.ActivePageIndex := 0;
   ProgressBar1.Visible := False;
   lblProgress.Visible := False;
@@ -205,6 +217,17 @@ begin
     chkIncludeFooter.Checked := Value;
 end;
 
+function TfrmExportDialog.GetTextFormatChecked: Boolean;
+begin
+  Result := Assigned(rbText) and rbText.Checked;
+end;
+
+procedure TfrmExportDialog.SetTextFormatChecked(const Value: Boolean);
+begin
+  if Assigned(rbText) then
+    rbText.Checked := Value;
+end;
+
 procedure TfrmExportDialog.LoadDialogState;
 var
   Ini: TIniFile;
@@ -230,6 +253,7 @@ begin
       3: rbHTML.Checked := True;
       4: rbXML.Checked := True;
       5: rbJSON.Checked := True;
+      6: rbText.Checked := True;
     end;
 
     rbFile.Checked := Ini.ReadBool('Export', 'DestinationFile', True);
@@ -311,6 +335,7 @@ begin
     vefHTML:      Result := '.html';
     vefXML:       Result := '.xml';
     vefJSON:      Result := '.json';
+    vefText:      Result := '.txt';
   else
     Result := '.txt';
   end;
@@ -330,6 +355,8 @@ begin
     Result := vefXML
   else if rbJSON.Checked then
     Result := vefJSON
+  else if rbText.Checked then
+    Result := vefText
   else
     Result := vefCSV;
 end;
@@ -352,6 +379,8 @@ begin
       SaveDialog1.Filter := 'XML Files (*.xml)|*.xml|All Files (*.*)|*.*';
     vefJSON:
       SaveDialog1.Filter := 'JSON Files (*.json)|*.json|All Files (*.*)|*.*';
+    vefText:
+      SaveDialog1.Filter := 'Text Files (*.txt)|*.txt|All Files (*.*)|*.*';
   end;
 end;
 

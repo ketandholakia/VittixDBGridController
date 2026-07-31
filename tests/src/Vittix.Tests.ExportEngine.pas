@@ -5,6 +5,7 @@ interface
 uses
   System.SysUtils,
   System.Classes,
+  System.IniFiles,
   System.Zip,
   Datasnap.DBClient,
   Vcl.Forms,
@@ -63,6 +64,8 @@ type
     procedure ExportDialogPreviewTextIsStable;
     [Test]
     procedure ExportDialogGeometryAndPageRoundTrip;
+    [Test]
+    procedure ExportDialogSupportsTextFormat;
   end;
 
 implementation
@@ -440,6 +443,43 @@ begin
       Assert.AreEqual(456, Dlg.Width);
       Assert.AreEqual(567, Dlg.Height);
       Assert.AreEqual(2, Dlg.GetActivePageIndex);
+    finally
+      Dlg.Free;
+    end;
+  finally
+    TfrmExportDialog.StateFileName := '';
+    if FileExists(TempFile) then
+      DeleteFile(TempFile);
+  end;
+end;
+
+procedure TVittixExportEngineTests.ExportDialogSupportsTextFormat;
+var
+  TempFile: string;
+  Dlg: TfrmExportDialog;
+  Ini: TIniFile;
+begin
+  TempFile := TPath.Combine(TPath.GetTempPath, 'VittixDBGridExportDialog.text.test.ini');
+  TfrmExportDialog.StateFileName := TempFile;
+  try
+    Dlg := TfrmExportDialog.Create(nil);
+    try
+      Dlg.TextFormatChecked := True;
+      Dlg.SaveDialogState;
+    finally
+      Dlg.Free;
+    end;
+
+    Ini := TIniFile.Create(TempFile);
+    try
+      Assert.AreEqual(6, Ini.ReadInteger('Export', 'Format', -1));
+    finally
+      Ini.Free;
+    end;
+
+    Dlg := TfrmExportDialog.Create(nil);
+    try
+      Assert.IsTrue(Dlg.TextFormatChecked);
     finally
       Dlg.Free;
     end;
