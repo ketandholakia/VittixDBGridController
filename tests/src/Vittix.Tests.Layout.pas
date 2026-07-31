@@ -103,6 +103,8 @@ type
     [Test]
     procedure FooterCanCopyAllAggregations;
     [Test]
+    procedure FooterCanCopyFooterSummary;
+    [Test]
     procedure ChooserAllowReorderDisablesDragOverWhenFalse;
     [Test]
     procedure CellConditionMatcherSupportsTextAndNumericRules;
@@ -969,6 +971,23 @@ begin
     Footer.CopyAllAggregations;
     Assert.IsTrue(Clipboard.AsText.Contains('Name: Sum: 42'));
     Assert.IsTrue(Clipboard.AsText.Contains('Amount: Avg: 5'));
+  finally
+    Footer.Free;
+  end;
+end;
+
+procedure TVittixLayoutTests.FooterCanCopyFooterSummary;
+var
+  Footer: TVittixDBGridFooterPanel;
+begin
+  Footer := TVittixDBGridFooterPanel.Create(FOwnerForm);
+  try
+    Footer.Attach(FGrid, nil);
+    FGrid.ColumnInfoByColumn(FGrid.Columns[1]).FooterText := 'Sum: 42';
+    FGrid.ColumnInfoByColumn(FGrid.Columns[2]).FooterText := 'Avg: 5';
+    Clipboard.AsText := '';
+    Footer.CopyFooterSummary;
+    Assert.IsTrue(Clipboard.AsText.Contains('Sum: 42'#9'Avg: 5'));
   finally
     Footer.Free;
   end;
