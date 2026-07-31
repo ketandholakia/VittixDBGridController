@@ -91,6 +91,8 @@ type
     procedure FilterPopupClearHistoryDeletesRootPathFile;
     [Test]
     procedure FilterPopupCanRestrictValuesToDistinctList;
+    [Test]
+    procedure FilterPopupDistinctValuesIncludeBlankEntry;
   end;
 
 implementation
@@ -829,6 +831,30 @@ begin
 
       Popup.FilterText := 'NotInList';
       Assert.IsFalse(Popup.ValidateCurrentInput);
+    finally
+      Popup.Free;
+    end;
+  finally
+    OwnerForm.Free;
+  end;
+end;
+
+procedure TVittixFilterEngineTests.FilterPopupDistinctValuesIncludeBlankEntry;
+var
+  OwnerForm: TForm;
+  Info: TVittixDBGridColumnInfo;
+  Popup: TVittixDBGridFilterPopup;
+begin
+  OwnerForm := TForm.CreateNew(nil);
+  try
+    Info := FColumns.FindByFieldName('Name');
+    Popup := TVittixDBGridFilterPopup.CreatePopup(OwnerForm, Info);
+    try
+      Popup.UseDistinctValuesOnly := True;
+      Assert.IsTrue(Popup.ValidateCurrentInput);
+      Popup.FilterText := '(Blank)';
+      Assert.IsTrue(Popup.ValidateCurrentInput);
+      Assert.AreEqual(14, Popup.OperatorIndex);
     finally
       Popup.Free;
     end;

@@ -92,6 +92,8 @@ uses
 
 var
   GFilterHistory: TObjectDictionary<string, TStringList>;
+const
+  BlankValueCaption = '(Blank)';
 
 { TVittixDBGridFilterPopup }
 
@@ -489,6 +491,7 @@ var
   DataSet: TDataSet;
   Field: TField;
   Values: TStringList;
+  HasBlank: Boolean;
 begin
   if not (Owner is TDBGrid) then
     Exit;
@@ -509,13 +512,16 @@ begin
   try
     Values.Sorted := True;
     Values.Duplicates := dupIgnore;
+    HasBlank := False;
 
     DataSet.DisableControls;
     try
       DataSet.First;
       while not DataSet.Eof do
       begin
-        if not Field.IsNull then
+        if Field.IsNull or (Trim(Field.AsString) = '') then
+          HasBlank := True
+        else
           Values.Add(Trim(Field.AsString));
         DataSet.Next;
       end;
@@ -523,6 +529,8 @@ begin
       DataSet.EnableControls;
     end;
 
+    if HasBlank then
+      FRecentCombo.Items.Add(BlankValueCaption);
     if Values.Count > 0 then
       FRecentCombo.Items.AddStrings(Values);
   finally
@@ -554,6 +562,11 @@ begin
   if IsValid and FUseDistinctValuesOnly and (Trim(FRecentCombo.Text) <> '') and
     not (FOperatorCombo.ItemIndex in [12, 13, 14, 15]) then
   begin
+    if SameText(Trim(FRecentCombo.Text), BlankValueCaption) then
+    begin
+      FOperatorCombo.ItemIndex := 14;
+      Exit(True);
+    end;
     Found := False;
     for I := 0 to FRecentCombo.Items.Count - 1 do
       if SameText(FRecentCombo.Items[I], FRecentCombo.Text) then
