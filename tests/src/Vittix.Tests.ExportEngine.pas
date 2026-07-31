@@ -11,6 +11,7 @@ uses
   Vcl.Clipbrd,
   DUnitX.TestFramework,
   Vittix.DBGrid,
+  Vittix.DBGrid.Export.Dialog,
   Vittix.DBGrid.Export.Engine;
 
 type
@@ -56,6 +57,8 @@ type
     procedure XlsxReportsProgressDuringExport;
     [Test]
     procedure ClipboardExportWritesExpectedText;
+    [Test]
+    procedure ExportDialogStateRoundTripsThroughIni;
   end;
 
 implementation
@@ -344,6 +347,54 @@ begin
 
   Assert.IsTrue(Clipboard.AsText.Contains('ID'#9'Name'#9'Amount'));
   Assert.IsTrue(Clipboard.AsText.Contains('1'#9'Alpha'));
+end;
+
+procedure TVittixExportEngineTests.ExportDialogStateRoundTripsThroughIni;
+var
+  TempFile: string;
+  Dlg: TfrmExportDialog;
+begin
+  TempFile := TPath.Combine(TPath.GetTempPath, 'VittixDBGridExportDialog.test.ini');
+  TfrmExportDialog.StateFileName := TempFile;
+  try
+    Dlg := TfrmExportDialog.Create(nil);
+    try
+      Dlg.rbTSV.Checked := True;
+      Dlg.rbFile.Checked := False;
+      Dlg.rbClipboard.Checked := True;
+      Dlg.chkVisibleOnly.Checked := False;
+      Dlg.chkFilteredOnly.Checked := False;
+      Dlg.chkIncludeHeaders.Checked := False;
+      Dlg.IncludeFooterChecked := True;
+      Dlg.edtDateFormat.Text := 'dd/mm/yyyy';
+      Dlg.edtTimeFormat.Text := 'hh:nn';
+      Dlg.edtCurrencyFormat.Text := '0.000';
+      Dlg.edtFileName.Text := 'C:\temp\export.tsv';
+      Dlg.SaveDialogState;
+    finally
+      Dlg.Free;
+    end;
+
+    Dlg := TfrmExportDialog.Create(nil);
+    try
+      Assert.IsTrue(Dlg.rbTSV.Checked);
+      Assert.IsTrue(Dlg.rbClipboard.Checked);
+      Assert.IsFalse(Dlg.chkVisibleOnly.Checked);
+      Assert.IsFalse(Dlg.chkFilteredOnly.Checked);
+      Assert.IsFalse(Dlg.chkIncludeHeaders.Checked);
+      Assert.IsTrue(Dlg.IncludeFooterChecked);
+      Assert.AreEqual('dd/mm/yyyy', Dlg.edtDateFormat.Text);
+      Assert.AreEqual('hh:nn', Dlg.edtTimeFormat.Text);
+      Assert.AreEqual('0.000', Dlg.edtCurrencyFormat.Text);
+      Assert.AreEqual('C:\temp\export.tsv', Dlg.edtFileName.Text);
+    finally
+      Dlg.Free;
+    end;
+  finally
+    TfrmExportDialog.StateFileName := '';
+    if FileExists(TempFile) then
+      DeleteFile(TempFile);
+  end;
 end;
 
 end.

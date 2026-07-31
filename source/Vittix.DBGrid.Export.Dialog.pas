@@ -89,9 +89,17 @@ type
     procedure ExportProgress(Sender: TObject; Current, Total: Integer; var Cancel: Boolean);
     function GetSelectedFormat: TVittixExportFormat;
     function GetFileExtension: string;
+    function GetStatePath: string;
+    function GetIncludeFooterChecked: Boolean;
+    procedure SetIncludeFooterChecked(const Value: Boolean);
     
   public
+    class var StateFileName: string;
+    class var RootPath: string;
     class function Execute(AGrid: TVittixDBGrid): Boolean;
+    procedure LoadDialogState;
+    procedure SaveDialogState;
+    property IncludeFooterChecked: Boolean read GetIncludeFooterChecked write SetIncludeFooterChecked;
   end;
 
   TVittixExportDialog = TfrmExportDialog;
@@ -104,7 +112,8 @@ implementation
 {$R *.dfm}
 
 uses
-  System.IOUtils;
+  System.IOUtils,
+  System.IniFiles;
 
 { TfrmExportDialog }
 
@@ -150,6 +159,7 @@ begin
 
   // Load defaults now that all controls exist
   LoadDefaults;
+  LoadDialogState;
 end;
 
 procedure TfrmExportDialog.LoadDefaults;
@@ -170,6 +180,91 @@ begin
   edtCurrencyFormat.Text := '#,##0.00';
   
   UpdateFileName;
+end;
+
+function TfrmExportDialog.GetStatePath: string;
+begin
+  if StateFileName <> '' then
+    Exit(StateFileName);
+  if RootPath <> '' then
+    Exit(TPath.Combine(RootPath, 'export.ini'));
+  Result := TPath.Combine(TPath.GetDocumentsPath, 'VittixDBGridExport.ini');
+end;
+
+function TfrmExportDialog.GetIncludeFooterChecked: Boolean;
+begin
+  Result := Assigned(chkIncludeFooter) and chkIncludeFooter.Checked;
+end;
+
+procedure TfrmExportDialog.SetIncludeFooterChecked(const Value: Boolean);
+begin
+  if Assigned(chkIncludeFooter) then
+    chkIncludeFooter.Checked := Value;
+end;
+
+procedure TfrmExportDialog.LoadDialogState;
+var
+  Ini: TIniFile;
+  FileName: string;
+  FormatIndex: Integer;
+begin
+  FileName := GetStatePath;
+  if (FileName = '') or not FileExists(FileName) then
+    Exit;
+
+  Ini := TIniFile.Create(FileName);
+  try
+    FormatIndex := Ini.ReadInteger('Export', 'Format', 0);
+    case FormatIndex of
+      0: rbCSV.Checked := True;
+      1: rbTSV.Checked := True;
+      2: rbExcel.Checked := True;
+      3: rbHTML.Checked := True;
+      4: rbXML.Checked := True;
+      5: rbJSON.Checked := True;
+    end;
+
+    rbFile.Checked := Ini.ReadBool('Export', 'DestinationFile', True);
+    rbClipboard.Checked := not rbFile.Checked;
+    edtFileName.Text := Ini.ReadString('Export', 'FileName', edtFileName.Text);
+    chkVisibleOnly.Checked := Ini.ReadBool('Export', 'VisibleOnly', chkVisibleOnly.Checked);
+    chkFilteredOnly.Checked := Ini.ReadBool('Export', 'FilteredOnly', chkFilteredOnly.Checked);
+    chkIncludeHeaders.Checked := Ini.ReadBool('Export', 'IncludeHeaders', chkIncludeHeaders.Checked);
+    chkIncludeFooter.Checked := Ini.ReadBool('Export', 'IncludeFooter', chkIncludeFooter.Checked);
+    edtDateFormat.Text := Ini.ReadString('Export', 'DateFormat', edtDateFormat.Text);
+    edtTimeFormat.Text := Ini.ReadString('Export', 'TimeFormat', edtTimeFormat.Text);
+    edtCurrencyFormat.Text := Ini.ReadString('Export', 'CurrencyFormat', edtCurrencyFormat.Text);
+    rbFormatClick(Self);
+    rbFileClick(Self);
+  finally
+    Ini.Free;
+  end;
+end;
+
+procedure TfrmExportDialog.SaveDialogState;
+var
+  Ini: TIniFile;
+  FileName: string;
+begin
+  FileName := GetStatePath;
+  if FileName = '' then
+    Exit;
+
+  Ini := TIniFile.Create(FileName);
+  try
+    Ini.WriteInteger('Export', 'Format', Ord(GetSelectedFormat));
+    Ini.WriteBool('Export', 'DestinationFile', rbFile.Checked);
+    Ini.WriteString('Export', 'FileName', edtFileName.Text);
+    Ini.WriteBool('Export', 'VisibleOnly', chkVisibleOnly.Checked);
+    Ini.WriteBool('Export', 'FilteredOnly', chkFilteredOnly.Checked);
+    Ini.WriteBool('Export', 'IncludeHeaders', chkIncludeHeaders.Checked);
+    Ini.WriteBool('Export', 'IncludeFooter', chkIncludeFooter.Checked);
+    Ini.WriteString('Export', 'DateFormat', edtDateFormat.Text);
+    Ini.WriteString('Export', 'TimeFormat', edtTimeFormat.Text);
+    Ini.WriteString('Export', 'CurrencyFormat', edtCurrencyFormat.Text);
+  finally
+    Ini.Free;
+  end;
 end;
 
 procedure TfrmExportDialog.UpdateFileName;
@@ -380,6 +475,7 @@ begin
         );
       end;
       
+      SaveDialogState;
       ModalResult := mrOk;
       
     except
@@ -430,5 +526,9 @@ begin
   
   Application.ProcessMessages;
 end;
+
+initialization
+  TfrmExportDialog.StateFileName := '';
+  TfrmExportDialog.RootPath := '';
 
 end.
