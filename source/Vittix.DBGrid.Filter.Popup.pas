@@ -327,6 +327,10 @@ begin
 
   if FileExists(GetHistoryPath) then
     TFile.Delete(GetHistoryPath);
+
+  FRecentCombo.Text := '';
+  FOperatorCombo.ItemIndex := 0;
+  ValidateInput;
 end;
 
 procedure TVittixDBGridFilterPopup.LoadPersistedHistory;
