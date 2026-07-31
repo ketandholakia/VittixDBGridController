@@ -54,11 +54,15 @@ type
     [Test]
     procedure FilterOperatorsSupportNotBetweenRanges;
     [Test]
+    procedure FilterOperatorsSupportNullChecks;
+    [Test]
     procedure FilterPopupRestoresOperatorFromSavedText;
     [Test]
     procedure FilterPopupRestoresBetweenOperatorFromSavedText;
     [Test]
     procedure FilterPopupRestoresNotBetweenOperatorFromSavedText;
+    [Test]
+    procedure FilterPopupRestoresNullOperatorFromSavedText;
     [Test]
     procedure FilterPopupLoadsPersistedHistory;
     [Test]
@@ -291,6 +295,21 @@ begin
   Assert.AreEqual(50, FDataSet.FieldByName('Amount').AsInteger);
 end;
 
+procedure TVittixFilterEngineTests.FilterOperatorsSupportNullChecks;
+begin
+  FColumns.FindByFieldName('Name').FilterText := 'null';
+  FColumns.FindByFieldName('Name').HasFilter := True;
+  FEngine.Active := True;
+  Assert.AreEqual(1, CountVisibleRecords(FDataSet));
+  Assert.IsTrue(FDataSet.FieldByName('Name').IsNull);
+
+  FEngine.Clear;
+  FColumns.FindByFieldName('Name').FilterText := '!null';
+  FColumns.FindByFieldName('Name').HasFilter := True;
+  FEngine.Active := True;
+  Assert.AreEqual(3, CountVisibleRecords(FDataSet));
+end;
+
 procedure TVittixFilterEngineTests.FilterPopupRestoresOperatorFromSavedText;
 var
   OwnerForm: TForm;
@@ -352,6 +371,29 @@ begin
     try
       Assert.AreEqual(11, Popup.OperatorIndex);
       Assert.AreEqual('150|300', Popup.FilterText);
+    finally
+      Popup.Free;
+    end;
+  finally
+    OwnerForm.Free;
+  end;
+end;
+
+procedure TVittixFilterEngineTests.FilterPopupRestoresNullOperatorFromSavedText;
+var
+  OwnerForm: TForm;
+  Info: TVittixDBGridColumnInfo;
+  Popup: TVittixDBGridFilterPopup;
+begin
+  OwnerForm := TForm.CreateNew(nil);
+  try
+    Info := FColumns.FindByFieldName('Name');
+    Info.FilterText := 'null';
+    Info.HasFilter := True;
+    Popup := TVittixDBGridFilterPopup.CreatePopup(OwnerForm, Info);
+    try
+      Assert.AreEqual(12, Popup.OperatorIndex);
+      Assert.AreEqual('', Popup.FilterText);
     finally
       Popup.Free;
     end;

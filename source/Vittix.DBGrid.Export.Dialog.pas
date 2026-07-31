@@ -20,6 +20,7 @@ uses
   System.SysUtils,
   System.Variants,
   System.Classes,
+  System.IniFiles,
   Vcl.Graphics,
   Vcl.Controls,
   Vcl.Forms,
@@ -95,6 +96,9 @@ type
     procedure SetIncludeFooterChecked(const Value: Boolean);
     function GetTextFormatChecked: Boolean;
     procedure SetTextFormatChecked(const Value: Boolean);
+    function GetFormatStateKey(AFormat: TVittixExportFormat): string;
+    procedure LoadDestinationStateForFormat(Ini: TIniFile; AFormat: TVittixExportFormat);
+    procedure SaveDestinationStateForFormat(Ini: TIniFile; AFormat: TVittixExportFormat);
     
   public
     class var StateFileName: string;
@@ -120,8 +124,7 @@ implementation
 {$R *.dfm}
 
 uses
-  System.IOUtils,
-  System.IniFiles;
+  System.IOUtils;
 
 { TfrmExportDialog }
 
@@ -229,6 +232,42 @@ begin
     rbText.Checked := Value;
 end;
 
+function TfrmExportDialog.GetFormatStateKey(AFormat: TVittixExportFormat): string;
+begin
+  case AFormat of
+    vefCSV: Result := 'CSV';
+    vefTSV: Result := 'TSV';
+    vefExcelXLSX: Result := 'Excel';
+    vefHTML: Result := 'HTML';
+    vefXML: Result := 'XML';
+    vefJSON: Result := 'JSON';
+    vefText: Result := 'Text';
+  else
+    Result := 'CSV';
+  end;
+end;
+
+procedure TfrmExportDialog.LoadDestinationStateForFormat(Ini: TIniFile;
+  AFormat: TVittixExportFormat);
+var
+  Key: string;
+begin
+  Key := GetFormatStateKey(AFormat);
+  rbFile.Checked := Ini.ReadBool('Export', 'DestinationFile_' + Key, rbFile.Checked);
+  rbClipboard.Checked := not rbFile.Checked;
+  edtFileName.Text := Ini.ReadString('Export', 'FileName_' + Key, edtFileName.Text);
+end;
+
+procedure TfrmExportDialog.SaveDestinationStateForFormat(Ini: TIniFile;
+  AFormat: TVittixExportFormat);
+var
+  Key: string;
+begin
+  Key := GetFormatStateKey(AFormat);
+  Ini.WriteBool('Export', 'DestinationFile_' + Key, rbFile.Checked);
+  Ini.WriteString('Export', 'FileName_' + Key, edtFileName.Text);
+end;
+
 procedure TfrmExportDialog.LoadDialogState;
 var
   Ini: TIniFile;
@@ -259,7 +298,6 @@ begin
 
     rbFile.Checked := Ini.ReadBool('Export', 'DestinationFile', True);
     rbClipboard.Checked := not rbFile.Checked;
-    edtFileName.Text := Ini.ReadString('Export', 'FileName', edtFileName.Text);
     chkVisibleOnly.Checked := Ini.ReadBool('Export', 'VisibleOnly', chkVisibleOnly.Checked);
     chkFilteredOnly.Checked := Ini.ReadBool('Export', 'FilteredOnly', chkFilteredOnly.Checked);
     chkIncludeHeaders.Checked := Ini.ReadBool('Export', 'IncludeHeaders', chkIncludeHeaders.Checked);
@@ -268,6 +306,7 @@ begin
     edtTimeFormat.Text := Ini.ReadString('Export', 'TimeFormat', edtTimeFormat.Text);
     edtCurrencyFormat.Text := Ini.ReadString('Export', 'CurrencyFormat', edtCurrencyFormat.Text);
     rbFormatClick(Self);
+    LoadDestinationStateForFormat(Ini, GetSelectedFormat);
     rbFileClick(Self);
   finally
     Ini.Free;
@@ -291,8 +330,6 @@ begin
     Ini.WriteInteger('Export', 'Width', Width);
     Ini.WriteInteger('Export', 'Height', Height);
     Ini.WriteInteger('Export', 'ActivePage', GetActivePageIndex);
-    Ini.WriteBool('Export', 'DestinationFile', rbFile.Checked);
-    Ini.WriteString('Export', 'FileName', edtFileName.Text);
     Ini.WriteBool('Export', 'VisibleOnly', chkVisibleOnly.Checked);
     Ini.WriteBool('Export', 'FilteredOnly', chkFilteredOnly.Checked);
     Ini.WriteBool('Export', 'IncludeHeaders', chkIncludeHeaders.Checked);
@@ -300,6 +337,7 @@ begin
     Ini.WriteString('Export', 'DateFormat', edtDateFormat.Text);
     Ini.WriteString('Export', 'TimeFormat', edtTimeFormat.Text);
     Ini.WriteString('Export', 'CurrencyFormat', edtCurrencyFormat.Text);
+    SaveDestinationStateForFormat(Ini, GetSelectedFormat);
   finally
     Ini.Free;
   end;

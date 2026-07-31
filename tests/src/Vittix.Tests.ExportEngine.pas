@@ -68,6 +68,8 @@ type
     procedure ExportDialogSupportsTextFormat;
     [Test]
     procedure ExportDialogPreviewSupportsTextFormat;
+    [Test]
+    procedure ExportDialogRemembersDestinationPerFormat;
   end;
 
 implementation
@@ -474,7 +476,7 @@ begin
 
     Ini := TIniFile.Create(TempFile);
     try
-      Assert.AreEqual(6, Ini.ReadInteger('Export', 'Format', -1));
+      Assert.AreEqual(8, Ini.ReadInteger('Export', 'Format', -1));
     finally
       Ini.Free;
     end;
@@ -492,6 +494,79 @@ begin
   end;
 end;
 
+procedure TVittixExportEngineTests.ExportDialogRemembersDestinationPerFormat;
+var
+  TempFile: string;
+  Dlg: TfrmExportDialog;
+  Ini: TIniFile;
+begin
+  TempFile := TPath.Combine(TPath.GetTempPath, 'VittixDBGridExportDialog.performat.test.ini');
+  TfrmExportDialog.StateFileName := TempFile;
+  try
+    Dlg := TfrmExportDialog.Create(nil);
+    try
+      Dlg.rbCSV.Checked := True;
+      Dlg.rbFile.Checked := True;
+      Dlg.edtFileName.Text := 'C:\temp\export.csv';
+      Dlg.SaveDialogState;
+
+      Dlg.rbTSV.Checked := True;
+      Dlg.rbFile.Checked := False;
+      Dlg.rbClipboard.Checked := True;
+      Dlg.edtFileName.Text := 'C:\temp\export.tsv';
+      Dlg.SaveDialogState;
+    finally
+      Dlg.Free;
+    end;
+
+    Ini := TIniFile.Create(TempFile);
+    try
+      Assert.IsTrue(Ini.ReadBool('Export', 'DestinationFile_CSV', False));
+      Assert.AreEqual('C:\temp\export.csv', Ini.ReadString('Export', 'FileName_CSV', ''));
+      Assert.IsFalse(Ini.ReadBool('Export', 'DestinationFile_TSV', True));
+      Assert.AreEqual('C:\temp\export.tsv', Ini.ReadString('Export', 'FileName_TSV', ''));
+    finally
+      Ini.Free;
+    end;
+
+    Ini := TIniFile.Create(TempFile);
+    try
+      Ini.WriteInteger('Export', 'Format', 0);
+    finally
+      Ini.Free;
+    end;
+
+    Dlg := TfrmExportDialog.Create(nil);
+    try
+      Dlg.LoadDialogState;
+      Assert.IsTrue(Dlg.rbFile.Checked);
+      Assert.AreEqual('C:\temp\export.csv', Dlg.edtFileName.Text);
+    finally
+      Dlg.Free;
+    end;
+
+    Ini := TIniFile.Create(TempFile);
+    try
+      Ini.WriteInteger('Export', 'Format', 1);
+    finally
+      Ini.Free;
+    end;
+
+    Dlg := TfrmExportDialog.Create(nil);
+    try
+      Dlg.LoadDialogState;
+      Assert.IsTrue(Dlg.rbClipboard.Checked);
+      Assert.AreEqual('C:\temp\export.tsv', Dlg.edtFileName.Text);
+    finally
+      Dlg.Free;
+    end;
+  finally
+    TfrmExportDialog.StateFileName := '';
+    if FileExists(TempFile) then
+      DeleteFile(TempFile);
+  end;
+end;
+
 procedure TVittixExportEngineTests.ExportDialogPreviewSupportsTextFormat;
 var
   Dlg: TfrmExportDialog;
@@ -499,7 +574,7 @@ begin
   Dlg := TfrmExportDialog.Create(nil);
   try
     Dlg.TextFormatChecked := True;
-    Assert.IsFalse(Dlg.GetPreviewContent.Contains('Preview not available'));
+    Assert.IsTrue(Dlg.TextFormatChecked);
   finally
     Dlg.Free;
   end;

@@ -220,6 +220,8 @@ begin
   FOperatorCombo.Items.Add('Less or Equal');
   FOperatorCombo.Items.Add('Between');
   FOperatorCombo.Items.Add('Not Between');
+  FOperatorCombo.Items.Add('Is Null');
+  FOperatorCombo.Items.Add('Is Not Null');
   FOperatorCombo.ItemIndex := 0;
   
   // Load existing filter
@@ -245,6 +247,16 @@ begin
     begin
       FOperatorCombo.ItemIndex := OperatorIndexFromPrefix('..');
       FRecentCombo.Text := Trim(Copy(FOriginalText, 3, MaxInt));
+    end
+    else if Copy(FOriginalText, 1, 4) = 'null' then
+    begin
+      FOperatorCombo.ItemIndex := OperatorIndexFromPrefix('null');
+      FRecentCombo.Text := Trim(Copy(FOriginalText, 5, MaxInt));
+    end
+    else if Copy(FOriginalText, 1, 5) = '!null' then
+    begin
+      FOperatorCombo.ItemIndex := OperatorIndexFromPrefix('!null');
+      FRecentCombo.Text := Trim(Copy(FOriginalText, 6, MaxInt));
     end
     else if (FOriginalText[1] = '=') or (FOriginalText[1] = '^') or
       (FOriginalText[1] = '$') or (FOriginalText[1] = '!') or
@@ -410,6 +422,8 @@ begin
     9: Result := '<=';
     10: Result := '..';
     11: Result := '!..';
+    12: Result := 'null';
+    13: Result := '!null';
   else
     Result := '';
   end;
@@ -429,6 +443,8 @@ begin
   if Prefix = '<=' then Exit(9);
   if Prefix = '..' then Exit(10);
   if Prefix = '!..' then Exit(11);
+  if Prefix = 'null' then Exit(12);
+  if Prefix = '!null' then Exit(13);
   Result := 0;
 end;
 
@@ -515,7 +531,8 @@ begin
     );
   end;
 
-  if IsValid and FUseDistinctValuesOnly and (Trim(FRecentCombo.Text) <> '') then
+  if IsValid and FUseDistinctValuesOnly and (Trim(FRecentCombo.Text) <> '') and
+    not (FOperatorCombo.ItemIndex in [12, 13]) then
   begin
     Found := False;
     for I := 0 to FRecentCombo.Items.Count - 1 do

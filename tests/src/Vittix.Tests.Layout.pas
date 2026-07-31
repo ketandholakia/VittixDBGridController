@@ -9,6 +9,7 @@ uses
   System.IniFiles,
   Datasnap.DBClient,
   Vcl.Forms,
+  Vcl.Clipbrd,
   Vcl.DBGrids,
   DUnitX.TestFramework,
   Vittix.DBGrid,
@@ -95,6 +96,8 @@ type
     procedure FooterPopupReportsCaptionSummary;
     [Test]
     procedure FooterCanClearAggregationAtClientX;
+    [Test]
+    procedure FooterCanCopyAggregationAtClientX;
     [Test]
     procedure ChooserAllowReorderDisablesDragOverWhenFalse;
     [Test]
@@ -868,7 +871,7 @@ begin
   Footer := TVittixDBGridFooterPanel.Create(FOwnerForm);
   try
     Assert.AreEqual(
-      '&Clear aggregation=Del;Clear all aggregations=Ctrl+Del',
+      'Clear aggregation=Del;Clear all aggregations=Ctrl+Del;Copy aggregation=Ctrl+C',
       Footer.GetPopupShortcutSummaryText
     );
   finally
@@ -883,9 +886,25 @@ begin
   Footer := TVittixDBGridFooterPanel.Create(FOwnerForm);
   try
     Assert.AreEqual(
-      '&Clear aggregation|Clear &all aggregations|-|Count|Sum|Average|Minimum|Maximum',
+      '&Clear aggregation|Clear &all aggregations|&Copy aggregation|-|Count|Sum|Average|Minimum|Maximum',
       Footer.GetPopupCaptionSummaryText
     );
+  finally
+    Footer.Free;
+  end;
+end;
+
+procedure TVittixLayoutTests.FooterCanCopyAggregationAtClientX;
+var
+  Footer: TVittixDBGridFooterPanel;
+begin
+  Footer := TVittixDBGridFooterPanel.Create(FOwnerForm);
+  try
+    Footer.Attach(FGrid, nil);
+    FGrid.ColumnInfoByColumn(FGrid.Columns[1]).FooterText := 'Sum: 42';
+    Clipboard.AsText := '';
+    Footer.CopyAggregationForColumn(FGrid.Columns[1]);
+    Assert.AreEqual('Sum: 42', Clipboard.AsText);
   finally
     Footer.Free;
   end;

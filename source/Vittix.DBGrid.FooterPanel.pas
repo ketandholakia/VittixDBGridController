@@ -30,6 +30,7 @@ uses
   Vcl.Grids,
   Winapi.Messages,
   Vcl.Menus,
+  Vcl.Clipbrd,
   Data.DB,
   Vittix.DBGrid,
   Vittix.DBGrid.ColumnInfo,
@@ -47,10 +48,12 @@ type
     procedure PopupClick(Sender: TObject);
     procedure PopupClearClick(Sender: TObject);
     procedure PopupClearAllClick(Sender: TObject);
+    procedure PopupCopyClick(Sender: TObject);
     function HitTestColumn(X: Integer): TColumn;
     function GetIndicatorOffset: Integer;
     function GetIndicatorRect: TRect;
     function GetColumnRect(AColumn: TColumn): TRect;
+    function GetAggregationTextForColumn(AColumn: TColumn): string;
   protected
     procedure Paint; override;
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
@@ -62,6 +65,7 @@ type
     function GetPopupShortcutSummaryText: string;
     function GetPopupCaptionSummaryText: string;
     procedure ClearAggregationAtClientX(X: Integer);
+    procedure CopyAggregationAtClientX(X: Integer);
     procedure Attach(
       AGrid: TVittixDBGrid;
       AEngine: TVittixDBGridAggregationEngine
@@ -69,6 +73,7 @@ type
     procedure SyncLayout;
     procedure ClearAggregationForColumn(AColumn: TColumn);
     procedure ClearAllAggregations;
+    procedure CopyAggregationForColumn(AColumn: TColumn);
   end;
 
 implementation
@@ -371,6 +376,23 @@ begin
   ClearAggregationAtClientX(ScreenToClient(Mouse.CursorPos).X);
 end;
 
+function TVittixDBGridFooterPanel.GetAggregationTextForColumn(
+  AColumn: TColumn): string;
+var
+  Info: TVittixDBGridColumnInfo;
+begin
+  Result := '';
+  if not Assigned(AColumn) or not Assigned(FGrid) then Exit;
+
+  Info := FGrid.ColumnInfoByColumn(AColumn);
+  if not Assigned(Info) then Exit;
+
+  if Info.FooterText <> '' then
+    Result := Info.FooterText
+  else
+    Result := AggregationCaption(Info.AggregationType);
+end;
+
 procedure TVittixDBGridFooterPanel.ClearAggregationAtClientX(X: Integer);
 var
   Col: TColumn;
@@ -378,6 +400,15 @@ begin
   Col := HitTestColumn(X);
   if Assigned(Col) then
     ClearAggregationForColumn(Col);
+end;
+
+procedure TVittixDBGridFooterPanel.CopyAggregationAtClientX(X: Integer);
+var
+  Col: TColumn;
+begin
+  Col := HitTestColumn(X);
+  if Assigned(Col) then
+    CopyAggregationForColumn(Col);
 end;
 
 procedure TVittixDBGridFooterPanel.BuildPopup;
@@ -405,6 +436,12 @@ begin
   FPopup.Items.Add(Item);
 
   Item := TMenuItem.Create(FPopup);
+  Item.Caption := '&Copy aggregation';
+  Item.ShortCut := TextToShortCut('Ctrl+C');
+  Item.OnClick := PopupCopyClick;
+  FPopup.Items.Add(Item);
+
+  Item := TMenuItem.Create(FPopup);
   Item.Caption := '-';
   FPopup.Items.Add(Item);
 
@@ -426,12 +463,12 @@ end;
 
 function TVittixDBGridFooterPanel.GetPopupShortcutSummaryText: string;
 begin
-  Result := 'Clear aggregation=Del;Clear all aggregations=Ctrl+Del';
+  Result := 'Clear aggregation=Del;Clear all aggregations=Ctrl+Del;Copy aggregation=Ctrl+C';
 end;
 
 function TVittixDBGridFooterPanel.GetPopupCaptionSummaryText: string;
 begin
-  Result := '&Clear aggregation|Clear &all aggregations|-|Count|Sum|Average|Minimum|Maximum';
+  Result := '&Clear aggregation|Clear &all aggregations|&Copy aggregation|-|Count|Sum|Average|Minimum|Maximum';
 end;
 
 procedure TVittixDBGridFooterPanel.PopupClearClick(Sender: TObject);
@@ -442,6 +479,11 @@ end;
 procedure TVittixDBGridFooterPanel.PopupClearAllClick(Sender: TObject);
 begin
   ClearAllAggregations;
+end;
+
+procedure TVittixDBGridFooterPanel.PopupCopyClick(Sender: TObject);
+begin
+  CopyAggregationForColumn(FContextColumn);
 end;
 
 procedure TVittixDBGridFooterPanel.ClearAggregationForColumn(AColumn: TColumn);
@@ -472,6 +514,15 @@ begin
 
   for I := 0 to FGrid.Columns.Count - 1 do
     ClearAggregationForColumn(FGrid.Columns[I]);
+end;
+
+procedure TVittixDBGridFooterPanel.CopyAggregationForColumn(AColumn: TColumn);
+var
+  Text: string;
+begin
+  Text := GetAggregationTextForColumn(AColumn);
+  if Text <> '' then
+    Clipboard.AsText := Text;
 end;
 
 procedure TVittixDBGridFooterPanel.PopupClick(Sender: TObject);

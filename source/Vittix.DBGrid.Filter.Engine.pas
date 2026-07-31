@@ -21,7 +21,7 @@ type
   TVittixFilterMatchMode = (
     vfmContains, vfmEquals, vfmStartsWith, vfmEndsWith,
     vfmNotEquals, vfmGreaterThan, vfmGreaterOrEqual, vfmLessThan, vfmLessOrEqual,
-    vfmBetween, vfmNotBetween
+    vfmBetween, vfmNotBetween, vfmIsNull, vfmIsNotNull
   );
 
   // NEW: Filter validation event
@@ -362,6 +362,8 @@ begin
   if Copy(Value, 1, 2) = '<>' then begin Mode := vfmNotEquals; Delete(Value, 1, 2); Exit; end;
   if Copy(Value, 1, 3) = '!..' then begin Mode := vfmNotBetween; Delete(Value, 1, 3); Exit; end;
   if Copy(Value, 1, 2) = '..' then begin Mode := vfmBetween; Delete(Value, 1, 2); Exit; end;
+  if Copy(Value, 1, 4) = 'null' then begin Mode := vfmIsNull; Delete(Value, 1, 4); Exit; end;
+  if Copy(Value, 1, 5) = '!null' then begin Mode := vfmIsNotNull; Delete(Value, 1, 5); Exit; end;
   if Copy(Value, 1, 1) = '=' then begin Mode := vfmEquals; Delete(Value, 1, 1); Exit; end;
   if Copy(Value, 1, 1) = '!' then begin Mode := vfmNotEquals; Delete(Value, 1, 1); Exit; end;
   if Copy(Value, 1, 1) = '>' then begin Mode := vfmGreaterThan; Delete(Value, 1, 1); Exit; end;
@@ -454,6 +456,10 @@ begin
         else
           Result := False;
       end;
+    vfmIsNull:
+      Result := Trim(Hay) = '';
+    vfmIsNotNull:
+      Result := Trim(Hay) <> '';
   else
     Result := False;
   end;
