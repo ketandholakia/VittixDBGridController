@@ -49,6 +49,7 @@ type
     procedure PopupClearClick(Sender: TObject);
     procedure PopupClearAllClick(Sender: TObject);
     procedure PopupCopyClick(Sender: TObject);
+    procedure PopupCopyAllClick(Sender: TObject);
     function HitTestColumn(X: Integer): TColumn;
     function GetIndicatorOffset: Integer;
     function GetIndicatorRect: TRect;
@@ -74,6 +75,7 @@ type
     procedure ClearAggregationForColumn(AColumn: TColumn);
     procedure ClearAllAggregations;
     procedure CopyAggregationForColumn(AColumn: TColumn);
+    procedure CopyAllAggregations;
   end;
 
 implementation
@@ -442,6 +444,12 @@ begin
   FPopup.Items.Add(Item);
 
   Item := TMenuItem.Create(FPopup);
+  Item.Caption := 'Copy &all aggregations';
+  Item.ShortCut := TextToShortCut('Ctrl+Shift+C');
+  Item.OnClick := PopupCopyAllClick;
+  FPopup.Items.Add(Item);
+
+  Item := TMenuItem.Create(FPopup);
   Item.Caption := '-';
   FPopup.Items.Add(Item);
 
@@ -463,12 +471,12 @@ end;
 
 function TVittixDBGridFooterPanel.GetPopupShortcutSummaryText: string;
 begin
-  Result := 'Clear aggregation=Del;Clear all aggregations=Ctrl+Del;Copy aggregation=Ctrl+C';
+  Result := 'Clear aggregation=Del;Clear all aggregations=Ctrl+Del;Copy aggregation=Ctrl+C;Copy all aggregations=Ctrl+Shift+C';
 end;
 
 function TVittixDBGridFooterPanel.GetPopupCaptionSummaryText: string;
 begin
-  Result := '&Clear aggregation|Clear &all aggregations|&Copy aggregation|-|Count|Sum|Average|Minimum|Maximum';
+  Result := '&Clear aggregation|Clear &all aggregations|&Copy aggregation|Copy &all aggregations|-|Count|Sum|Average|Minimum|Maximum';
 end;
 
 procedure TVittixDBGridFooterPanel.PopupClearClick(Sender: TObject);
@@ -484,6 +492,11 @@ end;
 procedure TVittixDBGridFooterPanel.PopupCopyClick(Sender: TObject);
 begin
   CopyAggregationForColumn(FContextColumn);
+end;
+
+procedure TVittixDBGridFooterPanel.PopupCopyAllClick(Sender: TObject);
+begin
+  CopyAllAggregations;
 end;
 
 procedure TVittixDBGridFooterPanel.ClearAggregationForColumn(AColumn: TColumn);
@@ -523,6 +536,35 @@ begin
   Text := GetAggregationTextForColumn(AColumn);
   if Text <> '' then
     Clipboard.AsText := Text;
+end;
+
+procedure TVittixDBGridFooterPanel.CopyAllAggregations;
+var
+  I: Integer;
+  Line: string;
+  Lines: TStringList;
+  Info: TVittixDBGridColumnInfo;
+begin
+  if not Assigned(FGrid) then Exit;
+
+  Lines := TStringList.Create;
+  try
+    for I := 0 to FGrid.Columns.Count - 1 do
+    begin
+      Info := FGrid.ColumnInfoByColumn(FGrid.Columns[I]);
+      if not Assigned(Info) then
+        Continue;
+
+      Line := GetAggregationTextForColumn(FGrid.Columns[I]);
+      if Line <> '' then
+        Lines.Add(FGrid.Columns[I].Title.Caption + ': ' + Line);
+    end;
+
+    if Lines.Count > 0 then
+      Clipboard.AsText := TrimRight(Lines.Text);
+  finally
+    Lines.Free;
+  end;
 end;
 
 procedure TVittixDBGridFooterPanel.PopupClick(Sender: TObject);
