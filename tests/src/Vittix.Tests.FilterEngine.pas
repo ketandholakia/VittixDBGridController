@@ -56,6 +56,8 @@ type
     [Test]
     procedure FilterOperatorsSupportNullChecks;
     [Test]
+    procedure FilterOperatorsSupportEmptyChecks;
+    [Test]
     procedure FilterPopupRestoresOperatorFromSavedText;
     [Test]
     procedure FilterPopupRestoresBetweenOperatorFromSavedText;
@@ -63,6 +65,8 @@ type
     procedure FilterPopupRestoresNotBetweenOperatorFromSavedText;
     [Test]
     procedure FilterPopupRestoresNullOperatorFromSavedText;
+    [Test]
+    procedure FilterPopupRestoresEmptyOperatorFromSavedText;
     [Test]
     procedure FilterPopupLoadsPersistedHistory;
     [Test]
@@ -310,6 +314,21 @@ begin
   Assert.AreEqual(3, CountVisibleRecords(FDataSet));
 end;
 
+procedure TVittixFilterEngineTests.FilterOperatorsSupportEmptyChecks;
+begin
+  FColumns.FindByFieldName('Name').FilterText := 'empty';
+  FColumns.FindByFieldName('Name').HasFilter := True;
+  FEngine.Active := True;
+  Assert.AreEqual(1, CountVisibleRecords(FDataSet));
+  Assert.AreEqual(3, FDataSet.FieldByName('ID').AsInteger);
+
+  FEngine.Clear;
+  FColumns.FindByFieldName('Name').FilterText := '!empty';
+  FColumns.FindByFieldName('Name').HasFilter := True;
+  FEngine.Active := True;
+  Assert.AreEqual(2, CountVisibleRecords(FDataSet));
+end;
+
 procedure TVittixFilterEngineTests.FilterPopupRestoresOperatorFromSavedText;
 var
   OwnerForm: TForm;
@@ -393,6 +412,29 @@ begin
     Popup := TVittixDBGridFilterPopup.CreatePopup(OwnerForm, Info);
     try
       Assert.AreEqual(12, Popup.OperatorIndex);
+      Assert.AreEqual('', Popup.FilterText);
+    finally
+      Popup.Free;
+    end;
+  finally
+    OwnerForm.Free;
+  end;
+end;
+
+procedure TVittixFilterEngineTests.FilterPopupRestoresEmptyOperatorFromSavedText;
+var
+  OwnerForm: TForm;
+  Info: TVittixDBGridColumnInfo;
+  Popup: TVittixDBGridFilterPopup;
+begin
+  OwnerForm := TForm.CreateNew(nil);
+  try
+    Info := FColumns.FindByFieldName('Name');
+    Info.FilterText := 'empty';
+    Info.HasFilter := True;
+    Popup := TVittixDBGridFilterPopup.CreatePopup(OwnerForm, Info);
+    try
+      Assert.AreEqual(14, Popup.OperatorIndex);
       Assert.AreEqual('', Popup.FilterText);
     finally
       Popup.Free;
