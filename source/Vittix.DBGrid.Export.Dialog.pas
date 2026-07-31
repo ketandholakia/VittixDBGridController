@@ -101,6 +101,8 @@ type
     procedure SaveDialogState;
     property IncludeFooterChecked: Boolean read GetIncludeFooterChecked write SetIncludeFooterChecked;
     function GetPreviewText: string;
+    function GetActivePageIndex: Integer;
+    procedure SetActivePageIndex(Value: Integer);
   end;
 
   TVittixExportDialog = TfrmExportDialog;
@@ -216,6 +218,11 @@ begin
   Ini := TIniFile.Create(FileName);
   try
     FormatIndex := Ini.ReadInteger('Export', 'Format', 0);
+    Left := Ini.ReadInteger('Export', 'Left', Left);
+    Top := Ini.ReadInteger('Export', 'Top', Top);
+    Width := Ini.ReadInteger('Export', 'Width', Width);
+    Height := Ini.ReadInteger('Export', 'Height', Height);
+    SetActivePageIndex(Ini.ReadInteger('Export', 'ActivePage', PageControl1.ActivePageIndex));
     case FormatIndex of
       0: rbCSV.Checked := True;
       1: rbTSV.Checked := True;
@@ -254,6 +261,11 @@ begin
   Ini := TIniFile.Create(FileName);
   try
     Ini.WriteInteger('Export', 'Format', Ord(GetSelectedFormat));
+    Ini.WriteInteger('Export', 'Left', Left);
+    Ini.WriteInteger('Export', 'Top', Top);
+    Ini.WriteInteger('Export', 'Width', Width);
+    Ini.WriteInteger('Export', 'Height', Height);
+    Ini.WriteInteger('Export', 'ActivePage', GetActivePageIndex);
     Ini.WriteBool('Export', 'DestinationFile', rbFile.Checked);
     Ini.WriteString('Export', 'FileName', edtFileName.Text);
     Ini.WriteBool('Export', 'VisibleOnly', chkVisibleOnly.Checked);
@@ -421,6 +433,20 @@ end;
 function TfrmExportDialog.GetPreviewText: string;
 begin
   Result := 'Generating preview...';
+end;
+
+function TfrmExportDialog.GetActivePageIndex: Integer;
+begin
+  Result := PageControl1.ActivePageIndex;
+end;
+
+procedure TfrmExportDialog.SetActivePageIndex(Value: Integer);
+begin
+  if Value < 0 then
+    Value := 0;
+  if Value > PageControl1.PageCount - 1 then
+    Value := PageControl1.PageCount - 1;
+  PageControl1.ActivePageIndex := Value;
 end;
 
 procedure TfrmExportDialog.btnExportClick(Sender: TObject);

@@ -61,6 +61,8 @@ type
     procedure ExportDialogStateRoundTripsThroughIni;
     [Test]
     procedure ExportDialogPreviewTextIsStable;
+    [Test]
+    procedure ExportDialogGeometryAndPageRoundTrip;
   end;
 
 implementation
@@ -408,6 +410,43 @@ begin
     Assert.AreEqual('Generating preview...', Dlg.GetPreviewText);
   finally
     Dlg.Free;
+  end;
+end;
+
+procedure TVittixExportEngineTests.ExportDialogGeometryAndPageRoundTrip;
+var
+  TempFile: string;
+  Dlg: TfrmExportDialog;
+begin
+  TempFile := TPath.Combine(TPath.GetTempPath, 'VittixDBGridExportDialog.geometry.test.ini');
+  TfrmExportDialog.StateFileName := TempFile;
+  try
+    Dlg := TfrmExportDialog.Create(nil);
+    try
+      Dlg.Left := 123;
+      Dlg.Top := 234;
+      Dlg.Width := 456;
+      Dlg.Height := 567;
+      Dlg.SetActivePageIndex(2);
+      Dlg.SaveDialogState;
+    finally
+      Dlg.Free;
+    end;
+
+    Dlg := TfrmExportDialog.Create(nil);
+    try
+      Assert.AreEqual(123, Dlg.Left);
+      Assert.AreEqual(234, Dlg.Top);
+      Assert.AreEqual(456, Dlg.Width);
+      Assert.AreEqual(567, Dlg.Height);
+      Assert.AreEqual(2, Dlg.GetActivePageIndex);
+    finally
+      Dlg.Free;
+    end;
+  finally
+    TfrmExportDialog.StateFileName := '';
+    if FileExists(TempFile) then
+      DeleteFile(TempFile);
   end;
 end;
 
