@@ -100,6 +100,7 @@ type
     procedure LoadDialogState;
     procedure SaveDialogState;
     property IncludeFooterChecked: Boolean read GetIncludeFooterChecked write SetIncludeFooterChecked;
+    function GetPreviewText: string;
   end;
 
   TVittixExportDialog = TfrmExportDialog;
@@ -368,7 +369,7 @@ var
   Exporter: TVittixDBGridExporter;
 begin
   memoPreview.Lines.Clear;
-  memoPreview.Lines.Add('Generating preview...');
+  memoPreview.Lines.Add(GetPreviewText);
   
   Exporter := TVittixDBGridExporter.Create(FGrid);
   try
@@ -415,6 +416,11 @@ begin
   finally
     Exporter.Free;
   end;
+end;
+
+function TfrmExportDialog.GetPreviewText: string;
+begin
+  Result := 'Generating preview...';
 end;
 
 procedure TfrmExportDialog.btnExportClick(Sender: TObject);

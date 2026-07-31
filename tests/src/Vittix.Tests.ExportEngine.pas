@@ -59,6 +59,8 @@ type
     procedure ClipboardExportWritesExpectedText;
     [Test]
     procedure ExportDialogStateRoundTripsThroughIni;
+    [Test]
+    procedure ExportDialogPreviewTextIsStable;
   end;
 
 implementation
@@ -394,6 +396,18 @@ begin
     TfrmExportDialog.StateFileName := '';
     if FileExists(TempFile) then
       DeleteFile(TempFile);
+  end;
+end;
+
+procedure TVittixExportEngineTests.ExportDialogPreviewTextIsStable;
+var
+  Dlg: TfrmExportDialog;
+begin
+  Dlg := TfrmExportDialog.Create(nil);
+  try
+    Assert.AreEqual('Generating preview...', Dlg.GetPreviewText);
+  finally
+    Dlg.Free;
   end;
 end;
 
