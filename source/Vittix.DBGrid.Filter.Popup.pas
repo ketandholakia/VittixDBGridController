@@ -607,7 +607,10 @@ begin
   // Only apply if valid
   if not ValidateInput then Exit;
 
-  NewText := GetOperatorPrefix + Trim(FRecentCombo.Text);
+  if FOperatorCombo.ItemIndex in [14, 15] then
+    NewText := GetOperatorPrefix
+  else
+    NewText := GetOperatorPrefix + Trim(FRecentCombo.Text);
 
   // Update history
   if NewText <> '' then

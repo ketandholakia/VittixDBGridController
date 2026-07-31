@@ -93,6 +93,8 @@ type
     procedure FilterPopupCanRestrictValuesToDistinctList;
     [Test]
     procedure FilterPopupDistinctValuesIncludeBlankEntry;
+    [Test]
+    procedure FilterPopupBlankDistinctSelectionPersistsCleanToken;
   end;
 
 implementation
@@ -855,6 +857,30 @@ begin
       Popup.FilterText := '(Blank)';
       Assert.IsTrue(Popup.ValidateCurrentInput);
       Assert.AreEqual(14, Popup.OperatorIndex);
+    finally
+      Popup.Free;
+    end;
+  finally
+    OwnerForm.Free;
+  end;
+end;
+
+procedure TVittixFilterEngineTests.FilterPopupBlankDistinctSelectionPersistsCleanToken;
+var
+  OwnerForm: TForm;
+  Info: TVittixDBGridColumnInfo;
+  Popup: TVittixDBGridFilterPopup;
+begin
+  OwnerForm := TForm.CreateNew(nil);
+  try
+    Info := FColumns.FindByFieldName('Name');
+    Popup := TVittixDBGridFilterPopup.CreatePopup(OwnerForm, Info);
+    try
+      Popup.UseDistinctValuesOnly := True;
+      Popup.FilterText := '(Blank)';
+      Popup.CommitCurrentValue;
+      Assert.AreEqual('empty', Info.FilterText);
+      Assert.IsTrue(Info.HasFilter);
     finally
       Popup.Free;
     end;
