@@ -107,6 +107,7 @@ type
     function GetPreviewText: string;
     function GetActivePageIndex: Integer;
     procedure SetActivePageIndex(Value: Integer);
+    function GetPreviewContent: string;
   end;
 
   TVittixExportDialog = TfrmExportDialog;
@@ -407,14 +408,37 @@ end;
 procedure TfrmExportDialog.GeneratePreview;
 var
   PreviewData: string;
-  Exporter: TVittixDBGridExporter;
 begin
   memoPreview.Lines.Clear;
   memoPreview.Lines.Add(GetPreviewText);
+  PreviewData := GetPreviewContent;
+  memoPreview.Lines.Text := PreviewData;
   
+  // Truncate if too long
+  if memoPreview.Lines.Count > 50 then
+  begin
+    while memoPreview.Lines.Count > 50 do
+      memoPreview.Lines.Delete(memoPreview.Lines.Count - 1);
+    memoPreview.Lines.Add('...');
+    memoPreview.Lines.Add('(Preview truncated - showing first 50 lines)');
+  end;
+end;
+
+function TfrmExportDialog.GetPreviewText: string;
+begin
+  Result := 'Generating preview...';
+end;
+
+function TfrmExportDialog.GetPreviewContent: string;
+var
+  Exporter: TVittixDBGridExporter;
+begin
+  Result := 'Preview not available for this format';
+  if not Assigned(FGrid) or not Assigned(FGrid.DataSource) or not Assigned(FGrid.DataSource.DataSet) then
+    Exit;
+
   Exporter := TVittixDBGridExporter.Create(FGrid);
   try
-    // Configure options
     Exporter.Options.ExportVisibleOnly := chkVisibleOnly.Checked;
     Exporter.Options.ExportFilteredOnly := chkFilteredOnly.Checked;
     Exporter.Options.IncludeHeaders := chkIncludeHeaders.Checked;
@@ -422,46 +446,20 @@ begin
     Exporter.Options.TimeFormat := edtTimeFormat.Text;
     Exporter.Options.CurrencyFormat := edtCurrencyFormat.Text;
 
-    if Assigned(FGrid.DataSource.DataSet) then
-    begin
-      FGrid.DataSource.DataSet.DisableControls;
-      try
-        FGrid.DataSource.DataSet.First;
-        
-        // Generate preview based on format
-        case GetSelectedFormat of
-          vefCSV, vefTSV:
-            PreviewData := Exporter.ExportToString(GetSelectedFormat);
-          vefHTML, vefXML, vefJSON:
-            PreviewData := Exporter.ExportToString(GetSelectedFormat);
-        else
-          PreviewData := 'Preview not available for this format';
-        end;
-        
-      finally
-        FGrid.DataSource.DataSet.EnableControls;
+    FGrid.DataSource.DataSet.DisableControls;
+    try
+      FGrid.DataSource.DataSet.First;
+      case GetSelectedFormat of
+        vefCSV, vefTSV, vefText,
+        vefHTML, vefXML, vefJSON:
+          Result := Exporter.ExportToString(GetSelectedFormat);
       end;
+    finally
+      FGrid.DataSource.DataSet.EnableControls;
     end;
-    
-    memoPreview.Lines.Text := PreviewData;
-    
-    // Truncate if too long
-    if memoPreview.Lines.Count > 50 then
-    begin
-      while memoPreview.Lines.Count > 50 do
-        memoPreview.Lines.Delete(memoPreview.Lines.Count - 1);
-      memoPreview.Lines.Add('...');
-      memoPreview.Lines.Add('(Preview truncated - showing first 50 lines)');
-    end;
-    
   finally
     Exporter.Free;
   end;
-end;
-
-function TfrmExportDialog.GetPreviewText: string;
-begin
-  Result := 'Generating preview...';
 end;
 
 function TfrmExportDialog.GetActivePageIndex: Integer;

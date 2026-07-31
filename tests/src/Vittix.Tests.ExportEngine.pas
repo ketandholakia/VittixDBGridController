@@ -66,6 +66,8 @@ type
     procedure ExportDialogGeometryAndPageRoundTrip;
     [Test]
     procedure ExportDialogSupportsTextFormat;
+    [Test]
+    procedure ExportDialogPreviewSupportsTextFormat;
   end;
 
 implementation
@@ -487,6 +489,19 @@ begin
     TfrmExportDialog.StateFileName := '';
     if FileExists(TempFile) then
       DeleteFile(TempFile);
+  end;
+end;
+
+procedure TVittixExportEngineTests.ExportDialogPreviewSupportsTextFormat;
+var
+  Dlg: TfrmExportDialog;
+begin
+  Dlg := TfrmExportDialog.Create(nil);
+  try
+    Dlg.TextFormatChecked := True;
+    Assert.IsFalse(Dlg.GetPreviewContent.Contains('Preview not available'));
+  finally
+    Dlg.Free;
   end;
 end;
 
