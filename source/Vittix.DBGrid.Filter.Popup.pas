@@ -52,6 +52,7 @@ type
     function GetOperatorIndex: Integer;
     function GetFilterText: string;
     procedure SetFilterText(const Value: string);
+    function NormalizeDisplayFilterText(const Value: string): string;
     procedure LoadPersistedHistory;
     function GetHistoryPath: string;
   public
@@ -308,6 +309,14 @@ begin
   FRecentCombo.OnChange := ComboChange;
 end;
 
+function TVittixDBGridFilterPopup.NormalizeDisplayFilterText(
+  const Value: string): string;
+begin
+  if SameText(Trim(Value), 'empty') then
+    Exit(BlankValueCaption);
+  Result := Value;
+end;
+
 procedure TVittixDBGridFilterPopup.PersistHistory;
 begin
   ApplyChanges;
@@ -352,7 +361,7 @@ begin
     SavedOperator := Ini.ReadInteger(FHistoryKey, 'OperatorIndex', FOperatorCombo.ItemIndex);
 
     if SavedText <> '' then
-      FRecentCombo.Text := SavedText;
+      FRecentCombo.Text := NormalizeDisplayFilterText(SavedText);
 
     if SavedOperator < 0 then
       SavedOperator := 0;

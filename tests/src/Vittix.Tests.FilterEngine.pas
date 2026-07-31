@@ -95,6 +95,8 @@ type
     procedure FilterPopupDistinctValuesIncludeBlankEntry;
     [Test]
     procedure FilterPopupBlankDistinctSelectionPersistsCleanToken;
+    [Test]
+    procedure FilterPopupBlankDistinctSelectionReloadsAsDisplayLabel;
   end;
 
 implementation
@@ -886,6 +888,42 @@ begin
     end;
   finally
     OwnerForm.Free;
+  end;
+end;
+
+procedure TVittixFilterEngineTests.FilterPopupBlankDistinctSelectionReloadsAsDisplayLabel;
+var
+  OwnerForm: TForm;
+  Info: TVittixDBGridColumnInfo;
+  Popup: TVittixDBGridFilterPopup;
+  TempFile: string;
+begin
+  TempFile := TPath.Combine(TPath.GetTempPath, 'VittixDBGridFilter.blank.test.ini');
+  OwnerForm := TForm.CreateNew(nil);
+  try
+    Info := FColumns.FindByFieldName('Name');
+    TVittixDBGridFilterPopup.HistoryFileName := TempFile;
+    Popup := TVittixDBGridFilterPopup.CreatePopup(OwnerForm, Info);
+    try
+      Popup.UseDistinctValuesOnly := True;
+      Popup.FilterText := '(Blank)';
+      Popup.CommitCurrentValue;
+    finally
+      Popup.Free;
+    end;
+
+    Popup := TVittixDBGridFilterPopup.CreatePopup(OwnerForm, Info);
+    try
+      Assert.AreEqual('(Blank)', Popup.FilterText);
+      Assert.AreEqual(14, Popup.OperatorIndex);
+    finally
+      Popup.Free;
+    end;
+  finally
+    TVittixDBGridFilterPopup.HistoryFileName := '';
+    OwnerForm.Free;
+    if FileExists(TempFile) then
+      DeleteFile(TempFile);
   end;
 end;
 
