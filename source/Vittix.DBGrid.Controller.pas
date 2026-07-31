@@ -139,6 +139,7 @@ type
 
     procedure Detach;
     procedure InstallWindowProc;
+    procedure RehookGrid;
     procedure GridLayoutChanged;
 
     procedure Refresh;
@@ -445,6 +446,16 @@ begin
   FGrid.OnDblClick := FOldDblClick;
   FGrid.OnKeyDown := FOldKeyDown;
   FGrid.WindowProc := FOldWindowProc;
+end;
+
+procedure TVittixDBGridController.RehookGrid;
+begin
+  if not Assigned(FGrid) then Exit;
+  if csDesigning in FGrid.ComponentState then Exit;
+  if csLoading in FGrid.ComponentState then Exit;
+
+  UnhookGrid;
+  HookGrid;
 end;
 
 procedure TVittixDBGridController.HookDataSource;

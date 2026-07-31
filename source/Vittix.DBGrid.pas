@@ -323,6 +323,7 @@ begin
 
   if Assigned(FController) and (FController is TVittixDBGridController) then
   begin
+    TVittixDBGridController(FController).RehookGrid;
     TVittixDBGridController(FController).DataSourceChanged;
     TVittixDBGridController(FController).GridLayoutChanged;
   end;
