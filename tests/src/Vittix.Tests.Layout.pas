@@ -61,6 +61,8 @@ type
     [Test]
     procedure ChooserStateRoundTripsThroughIni;
     [Test]
+    procedure ChooserStateRoundTripsSelectedIndex;
+    [Test]
     procedure ChooserStateUsesConfiguredFileName;
     [Test]
     procedure ChooserStateUsesConfiguredRootPath;
@@ -437,6 +439,46 @@ begin
       end;
     finally
       TVittixDBGridColumnChooserForm.StateFileName := '';
+      OwnerForm.Free;
+    end;
+  finally
+    if FileExists(TempFile) then
+      DeleteFile(TempFile);
+  end;
+end;
+
+procedure TVittixLayoutTests.ChooserStateRoundTripsSelectedIndex;
+var
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+  Chooser: TVittixDBGridColumnChooserForm;
+  TempFile: string;
+  Ini: TIniFile;
+begin
+  TempFile := TPath.Combine(TPath.GetTempPath, 'VittixDBGridChooser.selected.test.ini');
+  OwnerForm := TForm.CreateNew(nil);
+  try
+    Grid := TVittixDBGrid.Create(OwnerForm);
+    try
+      Grid.Parent := OwnerForm;
+      TVittixDBGridColumnChooserForm.StateFileName := TempFile;
+      Chooser := TVittixDBGridColumnChooserForm.CreateChooser(OwnerForm, Grid);
+      try
+        Chooser.SelectColumnIndex(1);
+        Chooser.SaveDialogState;
+      finally
+        Chooser.Free;
+      end;
+
+      Ini := TIniFile.Create(TempFile);
+      try
+        Assert.AreEqual(1, Ini.ReadInteger('Chooser', 'SelectedIndex', -1));
+      finally
+        Ini.Free;
+      end;
+    finally
+      TVittixDBGridColumnChooserForm.StateFileName := '';
+      Grid.Free;
       OwnerForm.Free;
     end;
   finally

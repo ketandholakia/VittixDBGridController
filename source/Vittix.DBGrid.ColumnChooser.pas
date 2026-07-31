@@ -79,6 +79,7 @@ type
     procedure DoGrowWidth(Sender: TObject);
     procedure DoShrinkWidth(Sender: TObject);
     procedure RestoreOriginalColumnWidths;
+    procedure RestoreSelectionIndex(AIndex: Integer);
     procedure CheckListMouseDown(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Integer);
     procedure CheckListDragOver(Sender, Source: TObject; X, Y: Integer;
@@ -418,10 +419,26 @@ begin
     Height := Constraints.MinHeight;
 end;
 
+procedure TVittixDBGridColumnChooserForm.RestoreSelectionIndex(AIndex: Integer);
+begin
+  if FCheckList.Items.Count = 0 then
+  begin
+    FCheckList.ItemIndex := -1;
+    Exit;
+  end;
+
+  if AIndex < 0 then
+    AIndex := 0;
+  if AIndex > FCheckList.Items.Count - 1 then
+    AIndex := FCheckList.Items.Count - 1;
+  FCheckList.ItemIndex := AIndex;
+end;
+
 procedure TVittixDBGridColumnChooserForm.LoadDialogState;
 var
   Ini: TIniFile;
   FileName: string;
+  SelectedIndex: Integer;
 begin
   if StateFileName <> '' then
     FileName := StateFileName
@@ -437,6 +454,8 @@ begin
     Height := Ini.ReadInteger('Chooser', 'Height', Height);
     FSearchEdit.Text := Ini.ReadString('Chooser', 'SearchText', '');
     FAllowReorder := Ini.ReadBool('Chooser', 'AllowReorder', FAllowReorder);
+    SelectedIndex := Ini.ReadInteger('Chooser', 'SelectedIndex', -1);
+    RestoreSelectionIndex(SelectedIndex);
   finally
     Ini.Free;
   end;
@@ -461,6 +480,7 @@ begin
     Ini.WriteInteger('Chooser', 'Height', Height);
     Ini.WriteString('Chooser', 'SearchText', FSearchEdit.Text);
     Ini.WriteBool('Chooser', 'AllowReorder', FAllowReorder);
+    Ini.WriteInteger('Chooser', 'SelectedIndex', FCheckList.ItemIndex);
   finally
     Ini.Free;
   end;
