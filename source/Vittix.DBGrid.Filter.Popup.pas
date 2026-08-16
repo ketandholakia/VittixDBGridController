@@ -697,7 +697,13 @@ begin
       Free;
     end;
   except
-    // Non-fatal; in-memory history still works.
+    // Non-fatal; in-memory history still works. Surface the cause when
+    // debugging (locked file, read-only media, ...) instead of hiding it.
+    on E: Exception do
+      {$IFDEF DEBUG}
+      OutputDebugString(PChar('[Vittix] Filter history INI write failed: ' +
+        E.ClassName + ' - ' + E.Message));
+      {$ENDIF}
   end;
 
   // Optimistic update: Only change if different

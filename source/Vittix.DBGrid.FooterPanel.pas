@@ -87,10 +87,6 @@ type
   // Cracker class to access protected 'LeftCol' of TCustomGrid/TDBGrid
   TVittixGridAccess = class(TDBGrid);
 
-procedure TraceFooter(const Msg: string);
-begin
-end;
-
 { TVittixDBGridFooterPanel }
 
 constructor TVittixDBGridFooterPanel.Create(AOwner: TComponent);
@@ -114,7 +110,6 @@ procedure TVittixDBGridFooterPanel.Attach(
   AGrid: TVittixDBGrid;
   AEngine: TVittixDBGridAggregationEngine);
 begin
-  TraceFooter('Attach enter');
   FGrid := AGrid;
   FAggregationEngine := AEngine;
 
@@ -129,7 +124,6 @@ begin
   Anchors := [akLeft, akRight, akBottom];
 
   SyncLayout;
-  TraceFooter('Attach exit');
 end;
 
 procedure TVittixDBGridFooterPanel.SyncLayout;
@@ -141,7 +135,6 @@ var
   NewWidth: Integer;
   NewHeight: Integer;
 begin
-  TraceFooter('SyncLayout enter');
   if not Assigned(FGrid) then Exit;
   if FSyncingLayout then Exit;
 
@@ -176,7 +169,6 @@ begin
   finally
     FSyncingLayout := False;
   end;
-  TraceFooter('SyncLayout exit');
 end;
 
 function TVittixDBGridFooterPanel.GetIndicatorOffset: Integer;

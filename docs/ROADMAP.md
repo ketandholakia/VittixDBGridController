@@ -140,22 +140,29 @@ signatures unchanged for DFM compatibility).
 
 - `source/Vittix.DBGrid.pas:34-35, 129-132, 210-246`
 
-### 2.4 [R] Delete dead scaffolding
-- Empty `TraceGrid`/`TraceController` stubs called ~30 times
-  (`Vittix.DBGrid.pas:115`, `Controller.pas:216`).
-- Commented-out `DebugMsg` (`Controller.pas:211-214`).
-- Duplicated/dead `FLineBreak` option (`Export.Engine.pas:216-218`).
-- Dead `Lines.Add` before overwrite in preview (`Export.Dialog.pas:450-453`).
+### 2.4 [R] Delete dead scaffolding — ✅ COMPLETED 2026-08-16
+- Empty `TraceGrid`/`TraceController`/`TraceFooter` stubs called ~45 times
+  (`Vittix.DBGrid.pas`, `Controller.pas`, `FooterPanel.pas`).
+- Commented-out `DebugMsg` (`Controller.pas`).
+- Duplicated/dead `FLineBreak` option (`Export.Engine.pas`).
+- Dead `Lines.Add` before overwrite in preview (`Export.Dialog.pas`)
+  and the `GetPreviewText` placeholder it fed.
 - Public raw field `Aggregation: TVittixAggregation` → property
-  (`ColumnInfo.pas:112`).
+  (`ColumnInfo.pas`). Record member mutations through the property shuttle
+  through locals in the aggregation engine (`Inc`/`Clear` would otherwise
+  operate on compiler temporaries).
 - Redundant RTTI `SetPropValue(..., 'IndexName', ...)` paths
-  (`Sort.Engine.pas:277, 307, 323`).
+  (`Sort.Engine.pas`) → direct access via a local
+  `TVittixCDSAccess = class(TCustomClientDataSet)` cracker (`IndexName` is
+  protected on `TCustomClientDataSet`).
 
-### 2.5 [R] Exception hygiene
-- Replace bare `except end` blocks with targeted exception types or logging:
-  `Sort.Engine.pas:232-235, 309-312`; `Filter.Popup.pas:658-668`.
-- Dedicated `EVittixExportError` for the PDF stub instead of generic
-  `Exception.Create` (`Export.Engine.pas:486`).
+### 2.5 [R] Exception hygiene — ✅ COMPLETED 2026-08-16
+- Sort engine bare `except end` blocks now catch `EDatabaseError` only
+  (temp-index deletion paths).
+- Filter popup INI write failure logs via `OutputDebugString` in DEBUG
+  builds instead of a silent swallow.
+- Dedicated `EVittixExportError` for all export engine raises (PDF stub,
+  unsupported format, inactive dataset).
 
 ---
 

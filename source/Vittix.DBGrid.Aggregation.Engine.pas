@@ -114,10 +114,17 @@ end;
 procedure TVittixDBGridAggregationEngine.Clear;
 var
   I: Integer;
+  Agg: TVittixAggregation;
 begin
   if Assigned(FColumns) then
     for I := 0 to FColumns.Count - 1 do
-      FColumns[I].Aggregation.Clear;
+    begin
+      // Shuttle the property-backed record through a local so the
+      // mutation lands on the item, not on a compiler temporary
+      Agg := FColumns[I].Aggregation;
+      Agg.Clear;
+      FColumns[I].Aggregation := Agg;
+    end;
 end;
 
 procedure TVittixDBGridAggregationEngine.BuildCache;
@@ -251,6 +258,7 @@ procedure TVittixDBGridAggregationEngine.Recalculate;
 var
   Bookmark: TBookmark;
   I: Integer;
+  Agg: TVittixAggregation;
 {$IFDEF DEBUG}
   Stopwatch: TStopwatch;
 {$ENDIF}
@@ -293,15 +301,21 @@ begin
       begin
         if FCache[I].Field.IsNull then
         begin
-          Inc(FCache[I].Info.Aggregation.NullCount);
+          Agg := FCache[I].Info.Aggregation;
+          Inc(Agg.NullCount);
+          FCache[I].Info.Aggregation := Agg;
           Continue;
         end;
 
+        // AggregateField takes the accumulator by var, so shuttle the
+        // property-backed record through a local copy
+        Agg := FCache[I].Info.Aggregation;
         AggregateField(
           FCache[I].Field,
-          FCache[I].Info.Aggregation,
+          Agg,
           FCache[I].Info.AggregationType
         );
+        FCache[I].Info.Aggregation := Agg;
       end;
 
       FDataSet.Next;

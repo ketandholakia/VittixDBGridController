@@ -108,7 +108,6 @@ type
     procedure SaveDialogState;
     property IncludeFooterChecked: Boolean read GetIncludeFooterChecked write SetIncludeFooterChecked;
     property TextFormatChecked: Boolean read GetTextFormatChecked write SetTextFormatChecked;
-    function GetPreviewText: string;
     function GetActivePageIndex: Integer;
     procedure SetActivePageIndex(Value: Integer);
     function GetPreviewContent: string;
@@ -445,14 +444,9 @@ begin
 end;
 
 procedure TfrmExportDialog.GeneratePreview;
-var
-  PreviewData: string;
 begin
-  memoPreview.Lines.Clear;
-  memoPreview.Lines.Add(GetPreviewText);
-  PreviewData := GetPreviewContent;
-  memoPreview.Lines.Text := PreviewData;
-  
+  memoPreview.Lines.Text := GetPreviewContent;
+
   // Truncate if too long
   if memoPreview.Lines.Count > 50 then
   begin
@@ -461,11 +455,6 @@ begin
     memoPreview.Lines.Add('...');
     memoPreview.Lines.Add('(Preview truncated - showing first 50 lines)');
   end;
-end;
-
-function TfrmExportDialog.GetPreviewText: string;
-begin
-  Result := 'Generating preview...';
 end;
 
 function TfrmExportDialog.GetPreviewContent: string;

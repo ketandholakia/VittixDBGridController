@@ -106,14 +106,15 @@ type
     FAggregationType: TVittixAggregationType;
     FFooterText: string;
     FCellConditions: TVittixDBGridCellConditions;
+    // Runtime-only accumulator state (not streamed)
+    FAggregation: TVittixAggregation;
   protected
     function GetDisplayName: string; override;
   public
-    Aggregation: TVittixAggregation;
     constructor Create(Collection: TCollection); override;
-    
+
     // Standard VCL method to copy settings between objects
-    procedure Assign(Source: TPersistent); override; 
+    procedure Assign(Source: TPersistent); override;
   published
     property FieldName: string
       read FFieldName write FFieldName;
@@ -136,6 +137,11 @@ type
     property FooterText: string
       read FFooterText write FFooterText;
     property CellConditions: TVittixDBGridCellConditions read FCellConditions;
+  public
+    // Runtime aggregation results (direct field access keeps record member
+    // calls like Aggregation.Clear mutating the backing field)
+    property Aggregation: TVittixAggregation
+      read FAggregation write FAggregation;
   end;
 
   // ------------------------------------------------------------

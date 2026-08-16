@@ -55,6 +55,13 @@ type
 
 implementation
 
+type
+  // IndexName is protected on TCustomClientDataSet (public only on
+  // TClientDataSet). Cracking lets the engine switch indexes directly on
+  // any ClientDataSet descendant (TClientDataSet, TFDMemTable, ...)
+  // instead of going through RTTI.
+  TVittixCDSAccess = class(TCustomClientDataSet);
+
 { TVittixDBGridSortEngine }
 
 constructor TVittixDBGridSortEngine.Create(
@@ -205,8 +212,8 @@ begin
 
   if Assigned(FDataSet) then
   begin
-    if FDataSet is TClientDataSet then
-      FOriginalIndexName := TClientDataSet(FDataSet).IndexName;
+    if FDataSet is TCustomClientDataSet then
+      FOriginalIndexName := TVittixCDSAccess(FDataSet).IndexName;
 
     if DataSetSupportsIndexFieldNames then
       FOriginalIndexFieldNames := GetPropValue(FDataSet, 'IndexFieldNames', True);
@@ -224,14 +231,16 @@ begin
   begin
     TCustomClientDataSet(FDataSet).DisableControls;
     try
-      if FDataSet is TClientDataSet then
-        TClientDataSet(FDataSet).IndexName := FOriginalIndexName;
+      TVittixCDSAccess(FDataSet).IndexName := FOriginalIndexName;
       TCustomClientDataSet(FDataSet).IndexFieldNames := FOriginalIndexFieldNames;
       if FTempIndexCreated then
       begin
         try
           TCustomClientDataSet(FDataSet).DeleteIndex(TEMP_CLIENT_DATASET_INDEX);
         except
+          // Expected when the temp index was never created; anything else
+          // (e.g. index busy) still must not break restore.
+          on E: EDatabaseError do ;
         end;
       end;
     finally
@@ -274,7 +283,7 @@ begin
 
     if Sorted.Count = 0 then
     begin
-      SetPropValue(ClientDataSet, 'IndexName', '');
+      TVittixCDSAccess(ClientDataSet).IndexName := '';
       ClientDataSet.IndexFieldNames := '';
       Exit;
     end;
@@ -304,11 +313,12 @@ begin
 
     ClientDataSet.DisableControls;
     try
-      SetPropValue(ClientDataSet, 'IndexName', '');
+      TVittixCDSAccess(ClientDataSet).IndexName := '';
       try
         ClientDataSet.DeleteIndex(TEMP_CLIENT_DATASET_INDEX);
       except
-        // Ignore if the temporary index does not exist yet.
+        // Expected when the temp index does not exist yet
+        on E: EDatabaseError do ;
       end;
 
       if Fields.Count = 0 then
@@ -320,7 +330,7 @@ begin
         [],
         DescFields.DelimitedText
       );
-      SetPropValue(ClientDataSet, 'IndexName', TEMP_CLIENT_DATASET_INDEX);
+      TVittixCDSAccess(ClientDataSet).IndexName := TEMP_CLIENT_DATASET_INDEX;
       FTempIndexCreated := True;
     finally
       ClientDataSet.EnableControls;

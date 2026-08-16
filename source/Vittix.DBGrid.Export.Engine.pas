@@ -51,6 +51,9 @@ uses
   Vittix.DBGrid.ColumnInfo;
 
 type
+  // Raised for unsupported/unimplemented export formats and engine misuse
+  EVittixExportError = class(Exception);
+
   // Export format enumeration
   TVittixExportFormat = (
     vefCSV,           // Comma-Separated Values
@@ -82,7 +85,6 @@ type
     FNullText: string;
     FDelimiter: Char;
     FQuoteChar: Char;
-    FLineBreak: string;
     // FEncoding is private as it's set to UTF8 by default and not exposed for simplicity.
     FEncoding: TEncoding;
   public
@@ -213,9 +215,7 @@ begin
   FFalseText := 'No';
   FNullText := '';
   FDelimiter := ',';
-  FLineBreak := #13#10; // Ensure line break is set
   FQuoteChar := '"';
-  FLineBreak := #13#10;
   FEncoding := TEncoding.UTF8;
 end;
 
@@ -240,7 +240,6 @@ begin
     FFalseText := Src.FalseText;
     FNullText := Src.NullText;
     FDelimiter := Src.Delimiter;
-    FLineBreak := Src.FLineBreak; // Added FLineBreak
     FEncoding := Src.FEncoding;   // Added FEncoding
     FQuoteChar := Src.QuoteChar;
   end
@@ -496,9 +495,9 @@ begin
         ExcelExporter.ExportToXLSX(Stream);
       finally ExcelExporter.Free; end;
     end;
-    vefPDF:        raise Exception.Create('PDF export requires a reporting component and is not implemented in the core engine.');
+    vefPDF:        raise EVittixExportError.Create('PDF export requires a reporting component and is not implemented in the core engine.');
   else
-    raise Exception.Create('Unsupported export format');
+    raise EVittixExportError.Create('Unsupported export format');
   end;
 end;
 
@@ -536,7 +535,7 @@ var
   Col: TColumn;
 begin
   if not Assigned(FDataset) or not FDataset.Active then
-    raise Exception.Create('Dataset is not active');
+    raise EVittixExportError.Create('Dataset is not active');
     
   Writer := TStreamWriter.Create(Stream, FOptions.Encoding); // Use public Encoding property
   try
@@ -629,7 +628,7 @@ var
   RowData: TArray<string>;
 begin
   if not Assigned(FDataset) or not FDataset.Active then
-    raise Exception.Create('Dataset is not active');
+    raise EVittixExportError.Create('Dataset is not active');
 
   Writer := TStreamWriter.Create(Stream, FOptions.Encoding);
   try
@@ -742,7 +741,7 @@ var
   Col: TColumn;
 begin
   if not Assigned(FDataset) or not FDataset.Active then
-    raise Exception.Create('Dataset is not active');
+    raise EVittixExportError.Create('Dataset is not active');
     
   Writer := TStreamWriter.Create(Stream, TEncoding.UTF8);
   try
@@ -848,7 +847,7 @@ var
   FieldName: string;
 begin
   if not Assigned(FDataset) or not FDataset.Active then
-    raise Exception.Create('Dataset is not active');
+    raise EVittixExportError.Create('Dataset is not active');
     
   Writer := TStreamWriter.Create(Stream, TEncoding.UTF8);
   try
@@ -929,7 +928,7 @@ var
   FirstRow, FirstCol: Boolean;
 begin
   if not Assigned(FDataset) or not FDataset.Active then
-    raise Exception.Create('Dataset is not active');
+    raise EVittixExportError.Create('Dataset is not active');
     
   Writer := TStreamWriter.Create(Stream, TEncoding.UTF8);
   try
@@ -1001,7 +1000,7 @@ end;
 procedure TVittixDBGridExporter.ExportToExcel(const FileName: string);
 begin
   if not SameText(TPath.GetExtension(FileName), '.xlsx') then
-    raise Exception.Create('Only .xlsx export is supported');
+    raise EVittixExportError.Create('Only .xlsx export is supported');
 
   ExportToFileAtomic(
     FileName,
@@ -1057,7 +1056,7 @@ var
   Value: string;
 begin
   if not Assigned(FExporter.Dataset) or not FExporter.Dataset.Active then
-    raise Exception.Create('Dataset is not active');
+    raise EVittixExportError.Create('Dataset is not active');
 
   XML := TStringList.Create;
   try
@@ -1161,7 +1160,7 @@ var
   end;
 begin
   if not Assigned(FExporter.Dataset) or not FExporter.Dataset.Active then
-    raise Exception.Create('Dataset is not active');
+    raise EVittixExportError.Create('Dataset is not active');
 
   SheetXML := BuildSheetXML;
   TempStream := TMemoryStream.Create;
