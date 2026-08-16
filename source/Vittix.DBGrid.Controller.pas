@@ -445,7 +445,18 @@ begin
   FGrid.OnMouseDown := FOldMouseDown;
   FGrid.OnDblClick := FOldDblClick;
   FGrid.OnKeyDown := FOldKeyDown;
-  FGrid.WindowProc := FOldWindowProc;
+
+  // CRITICAL: Only restore the WindowProc when the hook was actually
+  // installed. HookGrid skips the hook when the grid handle is not yet
+  // allocated, leaving FOldWindowProc nil. Assigning that nil back here
+  // would wipe out the grid's real FWindowProc, so the next Perform
+  // (e.g. from TWinControl.Invalidate during a layout change) calls a nil
+  // method pointer -> EAccessViolation at address 00000000.
+  if Assigned(FOldWindowProc) then
+  begin
+    FGrid.WindowProc := FOldWindowProc;
+    FOldWindowProc := nil;
+  end;
 end;
 
 procedure TVittixDBGridController.RehookGrid;
@@ -624,12 +635,17 @@ begin
     // Check Dataset Record Number
     if Assigned(FGrid.DataSource) and Assigned(FGrid.DataSource.DataSet) then
     begin
-      // Odd returns True for 1, 3, 5...
-      // RecNo is usually 1-based.
-      IsOddRow := Odd(FGrid.DataSource.DataSet.RecNo);
-
-      if IsOddRow then
-        FGrid.Canvas.Brush.Color := FAlternateRowColor;
+      // FIX BUG (RecNo): RecNo can return -1 for datasets that don't support
+      // it (e.g., server-side cursors, some query-based datasets). Odd(-1)
+      // returns True, which would incorrectly apply the alternate color to
+      // ALL rows. RecNo can also be 0 in some states (BOF/empty). Validate
+      // RecNo > 0 before using it.
+      if FGrid.DataSource.DataSet.RecNo > 0 then
+      begin
+        IsOddRow := Odd(FGrid.DataSource.DataSet.RecNo);
+        if IsOddRow then
+          FGrid.Canvas.Brush.Color := FAlternateRowColor;
+      end;
     end;
   end;
 
@@ -637,7 +653,14 @@ begin
   if Assigned(Info) and Assigned(FGrid.DataSource) and Assigned(FGrid.DataSource.DataSet) and
      (not (gdSelected in State)) and (not (gdFixed in State)) then
   begin
-    FieldValue := FGrid.DataSource.DataSet.FieldByName(Column.FieldName).AsString;
+    // FIX BUG (FieldByName): FieldByName does a linear search through fields
+    // on every cell draw (performance issue) and raises an exception if the
+    // field doesn't exist (crash risk). Column.Field is already available and
+    // directly references the field object without any lookup.
+    if Assigned(Column.Field) then
+      FieldValue := Column.Field.AsString
+    else
+      FieldValue := '';
     for I := 0 to Info.CellConditions.Count - 1 do
     begin
       Cond := Info.CellConditions[I];
