@@ -371,6 +371,9 @@ var
   I: Integer;
   Info: TVittixDBGridColumnInfo;
 begin
+  Result := '';
+  if not Assigned(FColumns) then Exit;
+
   Parts := TStringList.Create;
   try
     for I := 0 to FColumns.Count - 1 do

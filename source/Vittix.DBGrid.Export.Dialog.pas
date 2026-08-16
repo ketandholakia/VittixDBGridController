@@ -293,7 +293,8 @@ begin
       3: rbHTML.Checked := True;
       4: rbXML.Checked := True;
       5: rbJSON.Checked := True;
-      6: rbText.Checked := True;
+      // vefText = 8 in TVittixExportFormat (6 is the unimplemented PDF slot)
+      8: rbText.Checked := True;
     end;
 
     rbFile.Checked := Ini.ReadBool('Export', 'DestinationFile', True);

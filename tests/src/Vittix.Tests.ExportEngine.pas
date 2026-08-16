@@ -333,22 +333,43 @@ end;
 
 procedure TVittixExportEngineTests.XlsxReportsProgressDuringExport;
 var
+  BigSet: TClientDataSet;
+  BigOwner: TForm;
+  BigGrid: TVittixDBGrid;
+  BigExporter: TVittixDBGridExporter;
   Stream: TMemoryStream;
 begin
-  FProgressCount := 0;
-  FLastProgressCurrent := 0;
-  FLastProgressTotal := 0;
-  FExporter.OnProgress := RecordProgress;
-  Stream := TMemoryStream.Create;
+  // Progress fires every 100 rows; the 5-row fixture dataset can never
+  // trigger it, so bind a dedicated larger dataset.
+  BigSet := CreateLargeDataSet(250);
   try
-    FExporter.ExportToStream(Stream, vefExcelXLSX);
-  finally
-    Stream.Free;
-  end;
+    BigGrid := CreateHeadlessGrid(BigSet, BigOwner);
+    try
+      BigExporter := TVittixDBGridExporter.Create(BigGrid);
+      try
+        FProgressCount := 0;
+        FLastProgressCurrent := 0;
+        FLastProgressTotal := 0;
+        BigExporter.OnProgress := RecordProgress;
+        Stream := TMemoryStream.Create;
+        try
+          BigExporter.ExportToStream(Stream, vefExcelXLSX);
+        finally
+          Stream.Free;
+        end;
 
-  Assert.IsTrue(FProgressCount > 0);
-  Assert.IsTrue(FLastProgressCurrent > 0);
-  Assert.IsTrue(FLastProgressTotal > 0);
+        Assert.IsTrue(FProgressCount > 0);
+        Assert.IsTrue(FLastProgressCurrent > 0);
+        Assert.IsTrue(FLastProgressTotal > 0);
+      finally
+        BigExporter.Free;
+      end;
+    finally
+      BigOwner.Free;
+    end;
+  finally
+    BigSet.Free;
+  end;
 end;
 
 procedure TVittixExportEngineTests.ClipboardExportWritesExpectedText;

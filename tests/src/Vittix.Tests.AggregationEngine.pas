@@ -133,8 +133,9 @@ begin
   FColumns.FindByFieldName('Amount').AggregationType := vatSum;
   FColumns.FindByFieldName('Name').AggregationType := vatMax;
 
+  // The summary follows column order (ID, Name, Amount, ...) — Name first
   Assert.AreEqual(
-    'Amount:Sum,Name:Max',
+    'Name:Max,Amount:Sum',
     FEngine.GetActiveAggregationSummaryText
   );
 end;

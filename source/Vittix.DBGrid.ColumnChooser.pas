@@ -57,6 +57,10 @@ type
     FMenuItemShrink: TMenuItem;
     FAllowReorder: Boolean;
     FDraggedIndex: Integer;
+    // Per-instance persistence settings resolved from the target grid.
+    // Class vars below remain only as process-wide fallback defaults.
+    FRootPath: string;
+    FStateFileName: string;
     // FIX BUG 9: Snapshot of original column indices taken when dialog opens.
     // On Cancel, we roll back the live reorder that drag-drop applies immediately.
     FOriginalColumnOrder: TArray<Integer>;
@@ -69,6 +73,7 @@ type
     function GetColumnCaption(AColumn: TColumn): string;
     function GetSearchText: string;
     procedure SetSearchText(const Value: string);
+    function GetStateFileName: string;
     
     // Event Handlers
     procedure CheckListDblClick(Sender: TObject);
@@ -89,6 +94,8 @@ type
     procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure FormResize(Sender: TObject);
   public
+    // Process-wide fallbacks used only when the target grid carries no
+    // persistence settings of its own.
     class var StateFileName: string;
     class var RootPath: string;
     constructor CreateChooser(AOwner: TComponent; AGrid: TDBGrid); reintroduce;
@@ -116,6 +123,9 @@ type
 
 implementation
 
+uses
+  Vittix.DBGrid;
+
 { TVittixDBGridColumnChooserForm }
 
 constructor TVittixDBGridColumnChooserForm.CreateChooser(
@@ -130,6 +140,14 @@ begin
   FGrid := AGrid;
   FAllowReorder := True;
   FDraggedIndex := -1;
+
+  // Per-grid persistence settings: resolve from the target grid instead of
+  // the process-wide class vars (two grids must not overwrite each other).
+  if AGrid is TVittixDBGrid then
+  begin
+    FRootPath := TVittixDBGrid(AGrid).PersistenceRootPath;
+    FStateFileName := TVittixDBGrid(AGrid).ChooserStateFileName;
+  end;
 
   // FIX BUG 9: Snapshot the current column order so we can roll it back
   // if the user clicks Cancel. Drag-drop applies reordering to the grid live,
@@ -434,18 +452,28 @@ begin
   FCheckList.ItemIndex := AIndex;
 end;
 
+function TVittixDBGridColumnChooserForm.GetStateFileName: string;
+begin
+  // Resolution order: per-instance settings (from the target grid) override
+  // the process-wide class-var fallbacks.
+  if FStateFileName <> '' then
+    Exit(FStateFileName);
+  if FRootPath <> '' then
+    Exit(TPath.Combine(FRootPath, 'chooser.ini'));
+  if StateFileName <> '' then
+    Exit(StateFileName);
+  if RootPath <> '' then
+    Exit(TPath.Combine(RootPath, 'chooser.ini'));
+  Result := TPath.Combine(ExtractFilePath(ParamStr(0)), 'VittixDBGridChooser.ini');
+end;
+
 procedure TVittixDBGridColumnChooserForm.LoadDialogState;
 var
   Ini: TIniFile;
   FileName: string;
   SelectedIndex: Integer;
 begin
-  if StateFileName <> '' then
-    FileName := StateFileName
-  else if RootPath <> '' then
-    FileName := TPath.Combine(RootPath, 'chooser.ini')
-  else
-    FileName := TPath.Combine(ExtractFilePath(ParamStr(0)), 'VittixDBGridChooser.ini');
+  FileName := GetStateFileName;
   Ini := TIniFile.Create(FileName);
   try
     Left := Ini.ReadInteger('Chooser', 'Left', Left);
@@ -466,12 +494,7 @@ var
   Ini: TIniFile;
   FileName: string;
 begin
-  if StateFileName <> '' then
-    FileName := StateFileName
-  else if RootPath <> '' then
-    FileName := TPath.Combine(RootPath, 'chooser.ini')
-  else
-    FileName := TPath.Combine(ExtractFilePath(ParamStr(0)), 'VittixDBGridChooser.ini');
+  FileName := GetStateFileName;
   Ini := TIniFile.Create(FileName);
   try
     Ini.WriteInteger('Chooser', 'Left', Left);
@@ -555,39 +578,42 @@ procedure TVittixDBGridColumnChooserForm.CheckListDragDrop(Sender, Source: TObje
 var
   DropIndex: Integer;
   DraggedChecked: Boolean;
+  Col: TColumn;
 begin
   if FDraggedIndex < 0 then Exit;
 
   // FIX: Use Point() function instead of TPoint.Create
   DropIndex := FCheckList.ItemAtPos(Point(X, Y), True);
-  
+
   // If dropped outside items, move to end
   if DropIndex < 0 then
     DropIndex := FCheckList.Items.Count - 1;
 
   if (DropIndex >= 0) and (DropIndex <> FDraggedIndex) then
   begin
+    // Resolve the column BEFORE moving the list item: afterwards the list
+    // indices no longer describe the pre-move arrangement, so indexing the
+    // grid by the dragged list index can move the wrong column once the two
+    // orders have ever diverged.
+    Col := TColumn(FCheckList.Items.Objects[FDraggedIndex]);
+
     // Save the checked state before moving
     DraggedChecked := FCheckList.Checked[FDraggedIndex];
-    
+
     // Move the listbox item first (this is visual)
     FCheckList.Items.Move(FDraggedIndex, DropIndex);
-    
+
     // Restore the checked state (Move doesn't preserve it)
     FCheckList.Checked[DropIndex] := DraggedChecked;
-    
+
     // Move the actual grid column to match
-    // Safety: Check that column is still valid
-    if (FDraggedIndex < FGrid.Columns.Count) and 
-       (DropIndex < FGrid.Columns.Count) then
-    begin
-      FGrid.Columns[FDraggedIndex].Index := DropIndex;
-    end;
-    
+    if Assigned(Col) and Assigned(Col.Collection) then
+      Col.Index := DropIndex;
+
     // Select the moved item
     FCheckList.ItemIndex := DropIndex;
   end;
-  
+
   FDraggedIndex := -1;
 end;
 
@@ -684,6 +710,7 @@ procedure TVittixDBGridColumnChooserForm.MoveSelectedItem(Delta: Integer);
 var
   FromIndex, ToIndex: Integer;
   DraggedChecked: Boolean;
+  Col: TColumn;
 begin
   if not FAllowReorder then Exit;
   FromIndex := FCheckList.ItemIndex;
@@ -697,11 +724,13 @@ begin
 
   if ToIndex = FromIndex then Exit;
 
+  // Resolve the column before moving the list item (see CheckListDragDrop)
+  Col := TColumn(FCheckList.Items.Objects[FromIndex]);
   DraggedChecked := FCheckList.Checked[FromIndex];
   FCheckList.Items.Move(FromIndex, ToIndex);
   FCheckList.Checked[ToIndex] := DraggedChecked;
-  if (FromIndex < FGrid.Columns.Count) and (ToIndex < FGrid.Columns.Count) then
-    FGrid.Columns[FromIndex].Index := ToIndex;
+  if Assigned(Col) and Assigned(Col.Collection) then
+    Col.Index := ToIndex;
   FCheckList.ItemIndex := ToIndex;
 end;
 

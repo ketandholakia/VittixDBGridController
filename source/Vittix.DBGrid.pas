@@ -10,10 +10,7 @@ uses
   Vcl.Graphics, // Needed for TColor
   Vcl.Controls,
   Data.DB,
-  Vittix.DBGrid.ColumnInfo,
-  Vittix.DBGrid.ColumnChooser,
-  Vittix.DBGrid.Filter.Popup,
-  Vittix.DBGrid.Layout;
+  Vittix.DBGrid.ColumnInfo;
 
 type
   TVittixDBGridPersistenceSettings = record
@@ -47,7 +44,6 @@ type
     procedure SetChooserStateFileName(const Value: string);
     procedure SetFilterHistoryFileName(const Value: string);
     procedure SetPersistenceRootPath(const Value: string);
-    procedure ApplyPersistenceSettings;
 
   protected
     procedure Loaded; override;
@@ -149,7 +145,6 @@ begin
   Ctrl.ShowFooter := FFooterVisible;
   Ctrl.Grid := Self;
 
-  ApplyPersistenceSettings;
   TraceGrid('Create exit');
 end;
 
@@ -269,7 +264,6 @@ begin
     FPersistence.LayoutStorageFileName := Value;
     if Assigned(FController) and (FController is TVittixDBGridController) then
       TVittixDBGridController(FController).LayoutStorageFileName := Value;
-    ApplyPersistenceSettings;
   end;
 end;
 
@@ -277,20 +271,14 @@ procedure TVittixDBGrid.SetChooserStateFileName(const Value: string);
 begin
   TraceGrid('SetChooserStateFileName');
   if FPersistence.ChooserStateFileName <> Value then
-  begin
     FPersistence.ChooserStateFileName := Value;
-    ApplyPersistenceSettings;
-  end;
 end;
 
 procedure TVittixDBGrid.SetFilterHistoryFileName(const Value: string);
 begin
   TraceGrid('SetFilterHistoryFileName');
   if FPersistence.FilterHistoryFileName <> Value then
-  begin
     FPersistence.FilterHistoryFileName := Value;
-    ApplyPersistenceSettings;
-  end;
 end;
 
 procedure TVittixDBGrid.SetPersistenceRootPath(const Value: string);
@@ -299,16 +287,9 @@ begin
   if FPersistence.PersistenceRootPath <> Value then
   begin
     FPersistence.PersistenceRootPath := Value;
-    ApplyPersistenceSettings;
+    if Assigned(FController) and (FController is TVittixDBGridController) then
+      TVittixDBGridController(FController).PersistenceRootPath := Value;
   end;
-end;
-
-procedure TVittixDBGrid.ApplyPersistenceSettings;
-begin
-  TVittixDBGridColumnChooserForm.RootPath := FPersistence.PersistenceRootPath;
-  TVittixDBGridColumnChooserForm.StateFileName := FPersistence.ChooserStateFileName;
-  TVittixDBGridFilterPopup.RootPath := FPersistence.PersistenceRootPath;
-  TVittixDBGridFilterPopup.HistoryFileName := FPersistence.FilterHistoryFileName;
 end;
 
 procedure TVittixDBGrid.Loaded;

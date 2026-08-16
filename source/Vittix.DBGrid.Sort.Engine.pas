@@ -336,6 +336,8 @@ procedure TVittixDBGridSortEngine.ClearSorting;
 var
   I: Integer;
 begin
+  if not Assigned(FColumns) then Exit;
+
   // Reset internal state
   for I := 0 to FColumns.Count - 1 do
   begin
@@ -396,6 +398,9 @@ var
   Parts: TStringList;
   I: Integer;
 begin
+  Result := '';
+  if not Assigned(FColumns) then Exit;
+
   Parts := TStringList.Create;
   try
     for I := 0 to FColumns.Count - 1 do

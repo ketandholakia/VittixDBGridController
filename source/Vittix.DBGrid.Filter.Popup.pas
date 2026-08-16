@@ -35,6 +35,11 @@ type
 
     FColumnInfo: TVittixDBGridColumnInfo;
     FOriginalText: string;
+    // Per-instance persistence settings resolved from the owning grid.
+    // Class vars below remain only as process-wide fallback defaults so that
+    // popups created without a TVittixDBGrid owner keep working.
+    FRootPath: string;
+    FHistoryFileName: string;
     // FIX BUG 12: Scoped history key prevents two grids sharing history for
     // same-named fields. Key is "OwnerClassName.FieldName".
     FHistoryKey: string;
@@ -43,6 +48,7 @@ type
     procedure BtnClearClick(Sender: TObject);
     procedure BtnClearHistoryClick(Sender: TObject);
     procedure ApplyChanges;
+    procedure ApplySavedTextToControls(const AText: string);
     procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure ComboChange(Sender: TObject);
     procedure LoadDistinctValues;
@@ -56,6 +62,8 @@ type
     procedure LoadPersistedHistory;
     function GetHistoryPath: string;
   public
+    // Process-wide fallbacks used only when the popup owner is not a
+    // TVittixDBGrid with its own persistence settings.
     class var HistoryFileName: string;
     class var RootPath: string;
     OnValidateFilterInput: TFilterValidationEvent;
@@ -89,7 +97,8 @@ uses
   System.IOUtils,
   System.IniFiles,
   System.Math,
-  System.Generics.Collections;
+  System.Generics.Collections,
+  Vittix.DBGrid;
 
 var
   GFilterHistory: TObjectDictionary<string, TStringList>;
@@ -97,6 +106,63 @@ const
   BlankValueCaption = '(Blank)';
 
 { TVittixDBGridFilterPopup }
+
+// Splits a stored filter text into operator selection + value text, applying
+// both to the combo controls. Used for the column's active filter and for
+// restoring persisted history so both paths stay consistent.
+procedure TVittixDBGridFilterPopup.ApplySavedTextToControls(const AText: string);
+begin
+  if AText = '' then
+  begin
+    FRecentCombo.Text := '';
+    Exit;
+  end;
+
+  if Copy(AText, 1, 2) = '>=' then
+  begin
+    FOperatorCombo.ItemIndex := OperatorIndexFromPrefix('>=');
+    FRecentCombo.Text := Trim(Copy(AText, 3, MaxInt));
+  end
+  else if Copy(AText, 1, 2) = '<=' then
+  begin
+    FOperatorCombo.ItemIndex := OperatorIndexFromPrefix('<=');
+    FRecentCombo.Text := Trim(Copy(AText, 3, MaxInt));
+  end
+  else if Copy(AText, 1, 2) = '<>' then
+  begin
+    FOperatorCombo.ItemIndex := OperatorIndexFromPrefix('<>');
+    FRecentCombo.Text := Trim(Copy(AText, 3, MaxInt));
+  end
+  else if Copy(AText, 1, 3) = '!..' then
+  begin
+    FOperatorCombo.ItemIndex := OperatorIndexFromPrefix('!..');
+    FRecentCombo.Text := Trim(Copy(AText, 4, MaxInt));
+  end
+  else if Copy(AText, 1, 2) = '..' then
+  begin
+    FOperatorCombo.ItemIndex := OperatorIndexFromPrefix('..');
+    FRecentCombo.Text := Trim(Copy(AText, 3, MaxInt));
+  end
+  // Word operators match the WHOLE filter text (engine parses the same way)
+  else if AText = 'null' then
+    FOperatorCombo.ItemIndex := OperatorIndexFromPrefix('null')
+  else if AText = '!null' then
+    FOperatorCombo.ItemIndex := OperatorIndexFromPrefix('!null')
+  else if AText = 'empty' then
+    FOperatorCombo.ItemIndex := OperatorIndexFromPrefix('empty')
+  else if AText = '!empty' then
+    FOperatorCombo.ItemIndex := OperatorIndexFromPrefix('!empty')
+  else if (AText[1] = '=') or (AText[1] = '^') or
+    (AText[1] = '$') or (AText[1] = '!') or
+    (AText[1] = '>') or
+    (AText[1] = '<') then
+  begin
+    FOperatorCombo.ItemIndex := OperatorIndexFromPrefix(AText[1]);
+    FRecentCombo.Text := Trim(Copy(AText, 2, MaxInt));
+  end
+  else
+    FRecentCombo.Text := AText;
+end;
 
 constructor TVittixDBGridFilterPopup.CreatePopup(
   AOwner: TComponent;
@@ -112,6 +178,15 @@ begin
   FColumnInfo := AColumnInfo;
   FOriginalText := '';
   FUseDistinctValuesOnly := False;
+
+  // Per-grid persistence settings: the controller passes the grid as owner,
+  // so resolve root path / history file from the grid itself instead of the
+  // process-wide class vars (two grids must not overwrite each other).
+  if AOwner is TVittixDBGrid then
+  begin
+    FRootPath := TVittixDBGrid(AOwner).PersistenceRootPath;
+    FHistoryFileName := TVittixDBGrid(AOwner).FilterHistoryFileName;
+  end;
 
   // FIX BUG 12: Build a scoped history key using owner's class name so that
   // two grids on the same form don't share filter history for the same field.
@@ -231,76 +306,28 @@ begin
   
   // Load existing filter
   FOriginalText := Trim(FColumnInfo.FilterText);
-  if FOriginalText <> '' then
-  begin
-    if Copy(FOriginalText, 1, 2) = '>=' then
-    begin
-      FOperatorCombo.ItemIndex := OperatorIndexFromPrefix('>=');
-      FRecentCombo.Text := Trim(Copy(FOriginalText, 3, MaxInt));
-    end
-    else if Copy(FOriginalText, 1, 2) = '<=' then
-    begin
-      FOperatorCombo.ItemIndex := OperatorIndexFromPrefix('<=');
-      FRecentCombo.Text := Trim(Copy(FOriginalText, 3, MaxInt));
-    end
-    else if Copy(FOriginalText, 1, 2) = '<>' then
-    begin
-      FOperatorCombo.ItemIndex := OperatorIndexFromPrefix('<>');
-      FRecentCombo.Text := Trim(Copy(FOriginalText, 3, MaxInt));
-    end
-    else if Copy(FOriginalText, 1, 2) = '..' then
-    begin
-      FOperatorCombo.ItemIndex := OperatorIndexFromPrefix('..');
-      FRecentCombo.Text := Trim(Copy(FOriginalText, 3, MaxInt));
-    end
-    else if Copy(FOriginalText, 1, 4) = 'null' then
-    begin
-      FOperatorCombo.ItemIndex := OperatorIndexFromPrefix('null');
-      FRecentCombo.Text := Trim(Copy(FOriginalText, 5, MaxInt));
-    end
-    else if Copy(FOriginalText, 1, 5) = '!null' then
-    begin
-      FOperatorCombo.ItemIndex := OperatorIndexFromPrefix('!null');
-      FRecentCombo.Text := Trim(Copy(FOriginalText, 6, MaxInt));
-    end
-    else if Copy(FOriginalText, 1, 5) = 'empty' then
-    begin
-      FOperatorCombo.ItemIndex := OperatorIndexFromPrefix('empty');
-      FRecentCombo.Text := Trim(Copy(FOriginalText, 6, MaxInt));
-    end
-    else if Copy(FOriginalText, 1, 6) = '!empty' then
-    begin
-      FOperatorCombo.ItemIndex := OperatorIndexFromPrefix('!empty');
-      FRecentCombo.Text := Trim(Copy(FOriginalText, 7, MaxInt));
-    end
-    else if (FOriginalText[1] = '=') or (FOriginalText[1] = '^') or
-      (FOriginalText[1] = '$') or (FOriginalText[1] = '!') or
-      (FOriginalText[1] = '>') or
-      (FOriginalText[1] = '<') then
-    begin
-      FOperatorCombo.ItemIndex := OperatorIndexFromPrefix(FOriginalText[1]);
-      FRecentCombo.Text := Trim(Copy(FOriginalText, 2, MaxInt));
-    end
-    else
-      FRecentCombo.Text := FOriginalText;
-  end
-  else
-    FRecentCombo.Text := '';
+  ApplySavedTextToControls(FOriginalText);
+
+  // Feature: an "empty" filter reloads as the distinct-list display label
+  // so the combo shows what the user originally picked.
+  if (FOperatorCombo.ItemIndex = OperatorIndexFromPrefix('empty')) and
+     (Trim(FRecentCombo.Text) = '') then
+    FRecentCombo.Text := BlankValueCaption;
 
   if GFilterHistory.TryGetValue(FHistoryKey, LHistory) then
     FRecentCombo.Items.Assign(LHistory);
 
-  if GFilterHistory.TryGetValue(FOperatorHistoryKey, LHistory) and (LHistory.Count > 0) then
+  // Persisted-history suggestions (INI, per-grid file) may only pre-fill the
+  // dialog when the column has no active filter. In-memory operator memory
+  // is deliberately NOT consulted: its key is owner-class based, so it leaks
+  // between grids and sessions with the same field name.
+  if FOriginalText = '' then
   begin
-    FOperatorCombo.ItemIndex := StrToIntDef(LHistory[0], FOperatorCombo.ItemIndex);
-    if FOperatorCombo.ItemIndex < 0 then
-      FOperatorCombo.ItemIndex := 0;
-    if FOperatorCombo.ItemIndex > FOperatorCombo.Items.Count - 1 then
-      FOperatorCombo.ItemIndex := FOperatorCombo.Items.Count - 1;
-  end;
-
-  LoadDistinctValues;
-  LoadPersistedHistory;
+    LoadDistinctValues;
+    LoadPersistedHistory;
+  end
+  else
+    LoadDistinctValues;
   
   // Select all text so user can type to replace immediately
   FRecentCombo.SelectAll;
@@ -358,16 +385,21 @@ begin
   Ini := TIniFile.Create(FileName);
   try
     SavedText := Ini.ReadString(FHistoryKey, 'LastFilter', '');
-    SavedOperator := Ini.ReadInteger(FHistoryKey, 'OperatorIndex', FOperatorCombo.ItemIndex);
 
     if SavedText <> '' then
-      FRecentCombo.Text := NormalizeDisplayFilterText(SavedText);
-
-    if SavedOperator < 0 then
-      SavedOperator := 0;
-    if SavedOperator > FOperatorCombo.Items.Count - 1 then
-      SavedOperator := FOperatorCombo.Items.Count - 1;
-    FOperatorCombo.ItemIndex := SavedOperator;
+      // Restore through the same operator/value split used for active
+      // filters so the combo never shows a raw operator prefix.
+      ApplySavedTextToControls(NormalizeDisplayFilterText(SavedText))
+    else
+    begin
+      // Operator-only memory (cleared text, remembered mode)
+      SavedOperator := Ini.ReadInteger(FHistoryKey, 'OperatorIndex', FOperatorCombo.ItemIndex);
+      if SavedOperator < 0 then
+        SavedOperator := 0;
+      if SavedOperator > FOperatorCombo.Items.Count - 1 then
+        SavedOperator := FOperatorCombo.Items.Count - 1;
+      FOperatorCombo.ItemIndex := SavedOperator;
+    end;
   finally
     Ini.Free;
   end;
@@ -375,6 +407,12 @@ end;
 
 function TVittixDBGridFilterPopup.GetHistoryPath: string;
 begin
+  // Resolution order: per-instance settings (from the owning grid) override
+  // the process-wide class-var fallbacks.
+  if FHistoryFileName <> '' then
+    Exit(FHistoryFileName);
+  if FRootPath <> '' then
+    Exit(TPath.Combine(FRootPath, 'filter.ini'));
   if HistoryFileName <> '' then
     Exit(HistoryFileName);
   if RootPath <> '' then
@@ -647,14 +685,9 @@ begin
   LHistory.Clear;
   LHistory.Add(IntToStr(FOperatorCombo.ItemIndex));
 
-  // Optimistic update: Only change if different
-  if NewText = FOriginalText then Exit;
-
-  FColumnInfo.FilterText := NewText;
-  FColumnInfo.HasFilter := NewText <> '';
-  
-  FOriginalText := NewText;
-
+  // Persist the current state on every commit — even when the filter text is
+  // unchanged — so "last used filter/operator" survives restarts and empty
+  // filters still create/refresh the history file.
   try
     with TIniFile.Create(GetHistoryPath) do
     try
@@ -666,6 +699,14 @@ begin
   except
     // Non-fatal; in-memory history still works.
   end;
+
+  // Optimistic update: Only change if different
+  if NewText = FOriginalText then Exit;
+
+  FColumnInfo.FilterText := NewText;
+  FColumnInfo.HasFilter := NewText <> '';
+
+  FOriginalText := NewText;
 end;
 
 class function TVittixDBGridFilterPopup.Execute(

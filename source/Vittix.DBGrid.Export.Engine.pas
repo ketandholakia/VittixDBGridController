@@ -446,19 +446,32 @@ var
   TempFileName: string;
   TempStream: TFileStream;
 begin
-  TempFileName := TPath.GetTempFileName;
-  TempStream := TFileStream.Create(TempFileName, fmCreate);
+  // Stage the temp file next to the target so the final Move stays on one
+  // volume (an atomic rename rather than a slow cross-volume copy).
+  TempFileName := TPath.Combine(TPath.GetDirectoryName(FileName),
+    '~vittix-' + TPath.GetGUIDFileName(False) + '.tmp');
   try
-    ExportProc(TempStream);
-    if FCancelled then
-      raise EAbort.Create('Export cancelled');
-  finally
-    TempStream.Free;
-  end;
+    TempStream := TFileStream.Create(TempFileName, fmCreate);
+    try
+      ExportProc(TempStream);
+      if FCancelled then
+        raise EAbort.Create('Export cancelled');
+    finally
+      TempStream.Free;
+    end;
 
-  if TFile.Exists(FileName) then
-    TFile.Delete(FileName);
-  TFile.Move(TempFileName, FileName);
+    if TFile.Exists(FileName) then
+      TFile.Delete(FileName);
+    TFile.Move(TempFileName, FileName);
+  except
+    // Never leave the staged temp file behind, cancellation included.
+    on E: Exception do
+    begin
+      if TFile.Exists(TempFileName) then
+        try TFile.Delete(TempFileName) except end;
+      raise;
+    end;
+  end;
 end;
 
 procedure TVittixDBGridExporter.ExportToStream(Stream: TStream; 

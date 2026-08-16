@@ -63,8 +63,10 @@ type
     function MatchText(const SearchUpper, ValueUpper: string): Boolean;
     function ParseFilterMode(const FilterText: string; out Mode: TVittixFilterMatchMode;
       out Value: string): Boolean;
-    function MatchFilter(const FilterText, ValueText: string): Boolean;
+    function MatchFilter(const FilterText, ValueText: string; AField: TField): Boolean;
     function GetFieldDisplayText(AField: TField): string;
+    function TryParseNumericText(const S: string; out V: Extended): Boolean;
+    function TryGetFieldNumeric(AField: TField; out V: Extended): Boolean;
 
     procedure RebuildFieldCache;
     
@@ -87,6 +89,14 @@ type
     /// Used by aggregation engine.
     /// </summary>
     function AcceptCurrentRecord: Boolean;
+
+    /// <summary>
+    /// Drops the cached TField references and (while active on an open
+    /// dataset) rebuilds them. Call after dataset close/reopen cycles that do
+    /// not go through the controller, which recreates the engines instead.
+    /// InternalAcceptRecord also self-checks cache validity per record.
+    /// </summary>
+    procedure ResetFieldCache;
 
     property Active: Boolean read FActive write SetActive;
     property GlobalSearchText: string read FGlobalSearchText write FGlobalSearchText;
@@ -199,6 +209,7 @@ var
   I: Integer;
 begin
   if not Assigned(FDataSet) or not FDataSet.Active then Exit;
+  if not Assigned(FColumns) then Exit;
 
   // Validate all filters before applying; raises on invalid input
   for I := 0 to FColumns.Count - 1 do
@@ -262,12 +273,20 @@ var
   I: Integer;
 begin
   FGlobalSearchText := '';
-  for I := 0 to FColumns.Count - 1 do
-  begin
-    FColumns[I].FilterText := '';
-    FColumns[I].HasFilter := False;
-  end;
+  if Assigned(FColumns) then
+    for I := 0 to FColumns.Count - 1 do
+    begin
+      FColumns[I].FilterText := '';
+      FColumns[I].HasFilter := False;
+    end;
   Active := False;
+end;
+
+procedure TVittixDBGridFilterEngine.ResetFieldCache;
+begin
+  SetLength(FFieldCache, 0);
+  if FActive and Assigned(FDataSet) and FDataSet.Active then
+    RebuildFieldCache;
 end;
 
 procedure TVittixDBGridFilterEngine.DoFilterRecord(
@@ -304,6 +323,18 @@ begin
   // SAFETY: Check if cache is populated
   if Length(FFieldCache) = 0 then Exit;
 
+  // STALE-CACHE GUARD: if the dataset was closed/reopened or its fields were
+  // recreated since the cache was built, the cached TField pointers dangle.
+  // A cached field whose DataSet link no longer matches triggers one rebuild.
+  for I := 0 to High(FFieldCache) do
+    if (FFieldCache[I].Field = nil) or (FFieldCache[I].Field.DataSet <> DataSet) then
+    begin
+      RebuildFieldCache;
+      if Length(FFieldCache) = 0 then
+        Exit(True);
+      Break;
+    end;
+
   // We iterate the CACHE, not the Columns collection.
   // This avoids calling FindField hundreds of times.
 
@@ -317,7 +348,7 @@ begin
     begin
       ValueUpper := UpperCase(GetFieldDisplayText(FFieldCache[I].Field));
 
-      if not MatchFilter(FFieldCache[I].Info.FilterText, ValueUpper) then
+      if not MatchFilter(FFieldCache[I].Info.FilterText, ValueUpper, FFieldCache[I].Field) then
         Exit(False); // Failed an AND condition
     end;
   end;
@@ -362,10 +393,12 @@ begin
   if Copy(Value, 1, 2) = '<>' then begin Mode := vfmNotEquals; Delete(Value, 1, 2); Exit; end;
   if Copy(Value, 1, 3) = '!..' then begin Mode := vfmNotBetween; Delete(Value, 1, 3); Exit; end;
   if Copy(Value, 1, 2) = '..' then begin Mode := vfmBetween; Delete(Value, 1, 2); Exit; end;
-  if Copy(Value, 1, 4) = 'null' then begin Mode := vfmIsNull; Delete(Value, 1, 4); Exit; end;
-  if Copy(Value, 1, 5) = '!null' then begin Mode := vfmIsNotNull; Delete(Value, 1, 5); Exit; end;
-  if Copy(Value, 1, 5) = 'empty' then begin Mode := vfmIsEmpty; Delete(Value, 1, 5); Exit; end;
-  if Copy(Value, 1, 6) = '!empty' then begin Mode := vfmIsNotEmpty; Delete(Value, 1, 6); Exit; end;
+  // Word operators match the WHOLE filter text: "nullity" must stay a plain
+  // contains-filter for the literal text, not an Is-Null operator.
+  if Value = '!null' then begin Mode := vfmIsNotNull; Value := ''; Exit; end;
+  if Value = '!empty' then begin Mode := vfmIsNotEmpty; Value := ''; Exit; end;
+  if Value = 'null' then begin Mode := vfmIsNull; Value := ''; Exit; end;
+  if Value = 'empty' then begin Mode := vfmIsEmpty; Value := ''; Exit; end;
   if Copy(Value, 1, 1) = '=' then begin Mode := vfmEquals; Delete(Value, 1, 1); Exit; end;
   if Copy(Value, 1, 1) = '!' then begin Mode := vfmNotEquals; Delete(Value, 1, 1); Exit; end;
   if Copy(Value, 1, 1) = '>' then begin Mode := vfmGreaterThan; Delete(Value, 1, 1); Exit; end;
@@ -374,7 +407,49 @@ begin
   if Copy(Value, 1, 1) = '$' then begin Mode := vfmEndsWith; Delete(Value, 1, 1); Exit; end;
 end;
 
-function TVittixDBGridFilterEngine.MatchFilter(const FilterText, ValueText: string): Boolean;
+function TVittixDBGridFilterEngine.TryParseNumericText(const S: string;
+  out V: Extended): Boolean;
+var
+  Cleaned: string;
+  Ch: Char;
+begin
+  Result := TryStrToFloat(Trim(S), V);
+  if Result then Exit;
+
+  // Display text can carry grouping separators, currency symbols and
+  // spaces ("$1,234.56"). Strip them so formatted values still compare
+  // numerically instead of silently failing the parse (and the record).
+  Cleaned := '';
+  for Ch in Trim(S) do
+    if (Ch <> FormatSettings.ThousandSeparator) and (Ch <> ' ') and (Ch <> #160) and
+       (Pos(Ch, FormatSettings.CurrencyString) = 0) then
+      Cleaned := Cleaned + Ch;
+  Result := (Cleaned <> '') and TryStrToFloat(Cleaned, V);
+end;
+
+function TVittixDBGridFilterEngine.TryGetFieldNumeric(AField: TField;
+  out V: Extended): Boolean;
+begin
+  Result := False;
+  V := 0;
+  if not Assigned(AField) or AField.IsNull then Exit;
+
+  case AField.DataType of
+    ftSmallint, ftInteger, ftWord, ftLongWord, ftAutoInc, ftLargeint,
+    ftShortint, ftByte, ftSingle, ftFloat, ftCurrency, ftBCD, ftFMTBcd,
+    ftExtended:
+      begin
+        V := AField.AsFloat;
+        Result := True;
+      end;
+  else
+    // Textual fields: compare through their (possibly formatted) display text.
+    Result := TryParseNumericText(GetFieldDisplayText(AField), V);
+  end;
+end;
+
+function TVittixDBGridFilterEngine.MatchFilter(
+  const FilterText, ValueText: string; AField: TField): Boolean;
 var
   Mode: TVittixFilterMatchMode;
   Needle, Hay, LowText, HighText: string;
@@ -382,12 +457,17 @@ var
   StartPos: Integer;
   Parts: TArray<string>;
   HighVal: Extended;
+  FieldIsNull: Boolean;
 begin
   if Trim(FilterText) = '' then
     Exit(True);
 
   ParseFilterMode(FilterText, Mode, Needle);
   Hay := Trim(ValueText);
+
+  // NULL and empty are distinct: NULL means no value at all, empty means a
+  // blank (but present) value. Only the field itself can tell them apart.
+  FieldIsNull := Assigned(AField) and AField.IsNull;
 
   case Mode of
     vfmContains: Result := Pos(UpperCase(Needle), UpperCase(Hay)) > 0;
@@ -396,8 +476,9 @@ begin
     vfmEndsWith:
       begin
         StartPos := Length(Hay) - Length(Needle) + 1;
+        // A needle longer than the haystack can never be a suffix of it.
         if StartPos < 1 then
-          StartPos := 1;
+          Exit(False);
         Result := SameText(Copy(Hay, StartPos, MaxInt), Needle);
       end;
     vfmNotEquals: Result := Pos(UpperCase(Needle), UpperCase(Hay)) = 0;
@@ -419,8 +500,8 @@ begin
 
           LowText := Trim(Parts[0]);
           HighText := Trim(Parts[1]);
-          if TryStrToFloat(LowText, FN) and TryStrToFloat(Hay, VN) and
-             TryStrToFloat(HighText, HighVal) then
+          if TryParseNumericText(LowText, FN) and TryGetFieldNumeric(AField, VN) and
+             TryParseNumericText(HighText, HighVal) then
             Result := (VN >= FN) and (VN <= HighVal)
           else
             Result := False;
@@ -438,15 +519,15 @@ begin
 
           LowText := Trim(Parts[0]);
           HighText := Trim(Parts[1]);
-          if TryStrToFloat(LowText, FN) and TryStrToFloat(Hay, VN) and
-             TryStrToFloat(HighText, HighVal) then
+          if TryParseNumericText(LowText, FN) and TryGetFieldNumeric(AField, VN) and
+             TryParseNumericText(HighText, HighVal) then
             Result := (VN < FN) or (VN > HighVal)
           else
             Result := False;
           Exit;
         end;
 
-        if TryStrToFloat(Needle, FN) and TryStrToFloat(Hay, VN) then
+        if TryParseNumericText(Needle, FN) and TryGetFieldNumeric(AField, VN) then
           case Mode of
             vfmGreaterThan: Result := VN > FN;
             vfmGreaterOrEqual: Result := VN >= FN;
@@ -459,13 +540,13 @@ begin
           Result := False;
       end;
     vfmIsNull:
-      Result := Trim(Hay) = '';
+      Result := FieldIsNull;
     vfmIsNotNull:
-      Result := Trim(Hay) <> '';
+      Result := not FieldIsNull;
     vfmIsEmpty:
-      Result := Hay = '';
+      Result := (not FieldIsNull) and (Hay = '');
     vfmIsNotEmpty:
-      Result := Hay <> '';
+      Result := FieldIsNull or (Hay <> '');
   else
     Result := False;
   end;

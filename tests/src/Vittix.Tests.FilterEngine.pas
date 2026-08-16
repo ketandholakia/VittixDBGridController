@@ -4,10 +4,12 @@ interface
 
 uses
   System.SysUtils,
+  System.Variants,
   Datasnap.DBClient,
   Data.DB,
   System.IOUtils,
   Vcl.Forms,
+  Vcl.DBGrids,
   DUnitX.TestFramework,
   Vittix.DBGrid.ColumnInfo,
   Vittix.DBGrid.Filter.Popup,
@@ -277,14 +279,16 @@ begin
   FColumns.FindByFieldName('Name').FilterText := '!Alpha';
   FColumns.FindByFieldName('Name').HasFilter := True;
   FEngine.Active := True;
-  Assert.AreEqual(1, CountVisibleRecords(FDataSet));
-  Assert.AreEqual(2, FDataSet.FieldByName('ID').AsInteger);
+  // Does-not-contain: beta, Gamma, Delta remain visible
+  Assert.AreEqual(3, CountVisibleRecords(FDataSet));
 
   FEngine.Clear;
   FColumns.FindByFieldName('Amount').FilterText := '>250';
   FColumns.FindByFieldName('Amount').HasFilter := True;
   FEngine.Active := True;
-  Assert.AreEqual(3, CountVisibleRecords(FDataSet));
+  // Amount values: 100.50, 200.00, NULL, 50.25, 400.00 — only 400 is > 250
+  Assert.AreEqual(1, CountVisibleRecords(FDataSet));
+  Assert.IsTrue(FDataSet.Locate('ID', 5, []));
 end;
 
 procedure TVittixFilterEngineTests.FilterOperatorsSupportBetweenRanges;
@@ -293,8 +297,10 @@ begin
   FColumns.FindByFieldName('Amount').HasFilter := True;
   FEngine.Active := True;
 
-  Assert.AreEqual(2, CountVisibleRecords(FDataSet));
-  Assert.AreEqual(150, FDataSet.FieldByName('Amount').AsInteger);
+  // Only 200.00 lies between 150 and 300; the value-based comparison must
+  // see through the currency display text.
+  Assert.AreEqual(1, CountVisibleRecords(FDataSet));
+  Assert.IsTrue(FDataSet.Locate('ID', 2, []));
 end;
 
 procedure TVittixFilterEngineTests.FilterOperatorsSupportNotBetweenRanges;
@@ -303,38 +309,74 @@ begin
   FColumns.FindByFieldName('Amount').HasFilter := True;
   FEngine.Active := True;
 
+  // 100.50, 50.25 and 400.00 are outside; the NULL amount is excluded
+  // (SQL semantics: NULL not between yields NULL).
   Assert.AreEqual(3, CountVisibleRecords(FDataSet));
-  Assert.AreEqual(50, FDataSet.FieldByName('Amount').AsInteger);
+  FDataSet.First;
+  Assert.AreEqual(1, FDataSet.FieldByName('ID').AsInteger);
 end;
 
 procedure TVittixFilterEngineTests.FilterOperatorsSupportNullChecks;
 begin
-  FColumns.FindByFieldName('Name').FilterText := 'null';
-  FColumns.FindByFieldName('Name').HasFilter := True;
+  // Amount is NULL on record 3
+  FColumns.FindByFieldName('Amount').FilterText := 'null';
+  FColumns.FindByFieldName('Amount').HasFilter := True;
   FEngine.Active := True;
   Assert.AreEqual(1, CountVisibleRecords(FDataSet));
-  Assert.IsTrue(FDataSet.FieldByName('Name').IsNull);
+  FDataSet.First;
+  Assert.IsTrue(FDataSet.FieldByName('Amount').IsNull);
 
   FEngine.Clear;
-  FColumns.FindByFieldName('Name').FilterText := '!null';
-  FColumns.FindByFieldName('Name').HasFilter := True;
+  FColumns.FindByFieldName('Amount').FilterText := '!null';
+  FColumns.FindByFieldName('Amount').HasFilter := True;
   FEngine.Active := True;
-  Assert.AreEqual(3, CountVisibleRecords(FDataSet));
+  Assert.AreEqual(4, CountVisibleRecords(FDataSet));
 end;
 
 procedure TVittixFilterEngineTests.FilterOperatorsSupportEmptyChecks;
+var
+  LocalSet: TClientDataSet;
+  LocalColumns: TVittixDBGridColumns;
+  LocalEngine: TVittixDBGridFilterEngine;
 begin
-  FColumns.FindByFieldName('Name').FilterText := 'empty';
-  FColumns.FindByFieldName('Name').HasFilter := True;
-  FEngine.Active := True;
-  Assert.AreEqual(1, CountVisibleRecords(FDataSet));
-  Assert.AreEqual(3, FDataSet.FieldByName('ID').AsInteger);
+  // NULL and empty are distinct: build a dataset that actually contains both.
+  LocalSet := TClientDataSet.Create(nil);
+  try
+    LocalSet.FieldDefs.Add('Name', ftString, 50);
+    LocalSet.CreateDataSet;
+    LocalSet.Open;
+    LocalSet.AppendRecord(['Alpha']);
+    LocalSet.AppendRecord(['']);      // empty string, not null
+    LocalSet.AppendRecord([Null]);    // real null
 
-  FEngine.Clear;
-  FColumns.FindByFieldName('Name').FilterText := '!empty';
-  FColumns.FindByFieldName('Name').HasFilter := True;
-  FEngine.Active := True;
-  Assert.AreEqual(2, CountVisibleRecords(FDataSet));
+    LocalColumns := CreateMatchingColumns(LocalSet);
+    try
+      LocalEngine := TVittixDBGridFilterEngine.Create(LocalSet, LocalColumns);
+      try
+        LocalColumns.FindByFieldName('Name').FilterText := 'empty';
+        LocalColumns.FindByFieldName('Name').HasFilter := True;
+        LocalEngine.Active := True;
+        // Only the empty-string record; NULL must not count as empty
+        Assert.AreEqual(1, CountVisibleRecords(LocalSet));
+        LocalSet.First;
+        Assert.IsFalse(LocalSet.FieldByName('Name').IsNull);
+        Assert.AreEqual('', LocalSet.FieldByName('Name').AsString);
+
+        LocalEngine.Clear;
+        LocalColumns.FindByFieldName('Name').FilterText := '!empty';
+        LocalColumns.FindByFieldName('Name').HasFilter := True;
+        LocalEngine.Active := True;
+        // Alpha and the NULL record are not empty
+        Assert.AreEqual(2, CountVisibleRecords(LocalSet));
+      finally
+        LocalEngine.Free;
+      end;
+    finally
+      LocalColumns.Free;
+    end;
+  finally
+    LocalSet.Free;
+  end;
 end;
 
 procedure TVittixFilterEngineTests.FilterPopupRestoresOperatorFromSavedText;
@@ -443,7 +485,8 @@ begin
     Popup := TVittixDBGridFilterPopup.CreatePopup(OwnerForm, Info);
     try
       Assert.AreEqual(14, Popup.OperatorIndex);
-      Assert.AreEqual('', Popup.FilterText);
+      // "empty" filters reload as the distinct-list display label
+      Assert.AreEqual('(Blank)', Popup.FilterText);
     finally
       Popup.Free;
     end;
@@ -485,8 +528,10 @@ begin
     Info.HasFilter := False;
     Popup := TVittixDBGridFilterPopup.CreatePopup(OwnerForm, Info);
     try
+      // Persisted history restores the last used operator AND value text
+      // (operator prefix split out, not shown raw)
       Assert.AreEqual(4, Popup.OperatorIndex);
-      Assert.AreEqual('', Popup.FilterText);
+      Assert.AreEqual('Alpha', Popup.FilterText);
       Popup.PersistHistory;
     finally
       Popup.Free;
@@ -495,7 +540,7 @@ begin
     Popup := TVittixDBGridFilterPopup.CreatePopup(OwnerForm, Info);
     try
       Assert.AreEqual(4, Popup.OperatorIndex);
-      Assert.AreEqual('', Popup.FilterText);
+      Assert.AreEqual('Alpha', Popup.FilterText);
       Popup.PersistHistory;
     finally
       Popup.Free;
@@ -540,12 +585,17 @@ var
   OwnerForm: TForm;
   Info: TVittixDBGridColumnInfo;
   Popup: TVittixDBGridFilterPopup;
+  TempFile: string;
 begin
+  TempFile := TPath.Combine(TPath.GetTempPath, 'VittixDBGridFilter.enter.test.ini');
   OwnerForm := TForm.CreateNew(nil);
   try
     Info := FColumns.FindByFieldName('Name');
     Info.FilterText := '';
     Info.HasFilter := False;
+    // Isolated history file: the commit must not inherit an operator from
+    // any earlier test's persisted state.
+    TVittixDBGridFilterPopup.HistoryFileName := TempFile;
     Popup := TVittixDBGridFilterPopup.CreatePopup(OwnerForm, Info);
     try
       Popup.FilterText := 'Alpha';
@@ -556,7 +606,10 @@ begin
       Popup.Free;
     end;
   finally
+    TVittixDBGridFilterPopup.HistoryFileName := '';
     OwnerForm.Free;
+    if FileExists(TempFile) then
+      DeleteFile(TempFile);
   end;
 end;
 
@@ -821,13 +874,24 @@ end;
 procedure TVittixFilterEngineTests.FilterPopupCanRestrictValuesToDistinctList;
 var
   OwnerForm: TForm;
+  Grid: TDBGrid;
+  Source: TDataSource;
   Info: TVittixDBGridColumnInfo;
   Popup: TVittixDBGridFilterPopup;
 begin
   OwnerForm := TForm.CreateNew(nil);
   try
+    // Distinct values only load when the popup owner is a grid bound to the
+    // dataset; a plain form owner must not pass by accident via leftover
+    // in-memory history from earlier tests.
+    Grid := TDBGrid.Create(OwnerForm);
+    Grid.Parent := OwnerForm;
+    Source := TDataSource.Create(OwnerForm);
+    Source.DataSet := FDataSet;
+    Grid.DataSource := Source;
+
     Info := FColumns.FindByFieldName('Name');
-    Popup := TVittixDBGridFilterPopup.CreatePopup(OwnerForm, Info);
+    Popup := TVittixDBGridFilterPopup.CreatePopup(Grid, Info);
     try
       Popup.UseDistinctValuesOnly := True;
       Popup.FilterText := 'Alpha';

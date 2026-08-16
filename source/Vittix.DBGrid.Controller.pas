@@ -23,6 +23,7 @@ uses
   System.Math,
   Winapi.Windows,
   Winapi.Messages,
+  System.IOUtils,
   Vcl.Controls,
   Vcl.Graphics,
   Vcl.Grids,
@@ -76,6 +77,7 @@ type
     FAlternatingRowColors: Boolean;
     FAlternateRowColor: TColor;
     FLayoutStorageFileName: string;
+    FPersistenceRootPath: string;
 
     // Engines (logic only)
     FSortEngine: TVittixDBGridSortEngine;
@@ -163,6 +165,7 @@ type
 
     property Grid: TVittixDBGrid read FGrid write SetGrid;
     property LayoutStorageFileName: string read FLayoutStorageFileName write FLayoutStorageFileName;
+    property PersistenceRootPath: string read FPersistenceRootPath write FPersistenceRootPath;
 
   published
     property Active: Boolean read FActive write SetActive default True;
@@ -1019,7 +1022,11 @@ begin
         CellConditionsFromJson(Info.CellConditions, Item.CellConditionsJson);
       end;
     end;
+    // Push the footer state through BOTH setters: the grid setter no-ops when
+    // its cached value already matches but the controller may have been
+    // desynced by a direct ShowFooter assignment, and vice versa.
     FGrid.FooterVisible := State.FooterVisible;
+    ShowFooter := State.FooterVisible;
     FGrid.AlternatingRowColors := State.AlternatingRowColors;
     FGrid.AlternateRowColor := State.AlternateRowColor;
     ApplyState;
@@ -1053,9 +1060,13 @@ var
 begin
   if FileName <> '' then
     TargetFile := FileName
+  else if FLayoutStorageFileName <> '' then
+    TargetFile := FLayoutStorageFileName
+  else if FPersistenceRootPath <> '' then
+    TargetFile := TPath.Combine(FPersistenceRootPath, 'layout.json')
   else
-    TargetFile := FLayoutStorageFileName;
-  if TargetFile = '' then Exit;
+    raise EVittixLayoutError.Create(
+      'No layout file name: pass FileName, set LayoutStorageFileName, or set PersistenceRootPath');
 
   State := TVittixDBGridLayoutState.Create;
   try
@@ -1100,9 +1111,14 @@ var
 begin
   if FileName <> '' then
     SourceFile := FileName
+  else if FLayoutStorageFileName <> '' then
+    SourceFile := FLayoutStorageFileName
+  else if FPersistenceRootPath <> '' then
+    SourceFile := TPath.Combine(FPersistenceRootPath, 'layout.json')
   else
-    SourceFile := FLayoutStorageFileName;
-  if (SourceFile = '') or not FileExists(SourceFile) then Exit;
+    raise EVittixLayoutError.Create(
+      'No layout file name: pass FileName, set LayoutStorageFileName, or set PersistenceRootPath');
+  if not FileExists(SourceFile) then Exit;
 
   Storage := TVittixDBGridLayoutJsonStorage.Create;
   try

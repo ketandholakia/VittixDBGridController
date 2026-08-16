@@ -11,6 +11,8 @@ interface
   Vittix.DBGrid.ColumnInfo;
 
 type
+  EVittixLayoutError = class(Exception);
+
   TVittixDBGridLayoutColumnState = record
     FieldName: string;
     DisplayIndex: Integer;
@@ -51,8 +53,8 @@ type
   public
     procedure SaveToStream(const State: TVittixDBGridLayoutState; Stream: TStream);
     function LoadFromStream(Stream: TStream): TVittixDBGridLayoutState;
-    class procedure SaveToFile(const State: TVittixDBGridLayoutState; const FileName: string = '');
-    class function LoadFromFile(const FileName: string = ''): TVittixDBGridLayoutState;
+    class procedure SaveToFile(const State: TVittixDBGridLayoutState; const FileName: string);
+    class function LoadFromFile(const FileName: string): TVittixDBGridLayoutState;
   end;
 
 function SortOrderToString(Value: TVittixSortOrder): string;
@@ -173,43 +175,66 @@ function TVittixDBGridLayoutJsonStorage.LoadFromStream(
 var
   Bytes: TBytes;
   JsonText: string;
+  Parsed: TJSONValue;
   Root: TJSONObject;
   Columns: TJSONArray;
   I: Integer;
   ColObj: TJSONObject;
   Col: TVittixDBGridLayoutColumnState;
 begin
-  Result := TVittixDBGridLayoutState.Create;
-  SetLength(Bytes, Stream.Size - Stream.Position);
-  if Length(Bytes) > 0 then
-    Stream.ReadBuffer(Bytes[0], Length(Bytes));
-  JsonText := TEncoding.UTF8.GetString(Bytes);
-  Root := TJSONObject.ParseJSONValue(JsonText) as TJSONObject;
-  try
-    if Root = nil then Exit;
-    Result.Version := Root.GetValue<Integer>('version', 1);
-    Result.FooterVisible := Root.GetValue<Boolean>('footerVisible', True);
-    Result.AlternatingRowColors := Root.GetValue<Boolean>('alternatingRowColors', True);
-    Result.AlternateRowColor := TColor(Root.GetValue<Integer>('alternateRowColor', $00F7F7F7));
+  if not Assigned(Stream) then
+    raise EVittixLayoutError.Create('Layout stream cannot be nil');
 
-    Columns := Root.GetValue<TJSONArray>('columns');
-    if Assigned(Columns) then
-      for I := 0 to Columns.Count - 1 do
-      begin
-        ColObj := Columns.Items[I] as TJSONObject;
-        Col.FieldName := ColObj.GetValue<string>('fieldName', '');
-        Col.DisplayIndex := ColObj.GetValue<Integer>('displayIndex', -1);
-        Col.Width := ColObj.GetValue<Integer>('width', 0);
-        Col.Visible := ColObj.GetValue<Boolean>('visible', True);
-        Col.SortOrder := StringToSortOrder(ColObj.GetValue<string>('sortOrder', 'None'));
-        Col.SortIndex := ColObj.GetValue<Integer>('sortIndex', -1);
-        Col.AggregationType := StringToAggregationType(ColObj.GetValue<string>('aggregationType', 'None'));
-        Col.FooterText := ColObj.GetValue<string>('footerText', '');
-        Col.CellConditionsJson := ColObj.GetValue<string>('cellConditionsJson', '');
-        Result.Columns.Add(Col);
-      end;
-  finally
-    Root.Free;
+  Result := TVittixDBGridLayoutState.Create;
+  try
+    SetLength(Bytes, Stream.Size - Stream.Position);
+    if Length(Bytes) > 0 then
+      Stream.ReadBuffer(Bytes[0], Length(Bytes));
+    JsonText := TEncoding.UTF8.GetString(Bytes);
+
+    if Trim(JsonText) = '' then
+      raise EVittixLayoutError.Create('Layout stream is empty');
+
+    // ParseJSONValue returns nil for invalid JSON; keep the cast explicit so
+    // a non-object root (e.g. an array) raises instead of leaking Result.
+    Parsed := TJSONObject.ParseJSONValue(JsonText);
+    if Parsed = nil then
+      raise EVittixLayoutError.Create('Layout stream does not contain valid JSON');
+    try
+      if not (Parsed is TJSONObject) then
+        raise EVittixLayoutError.Create('Layout root element must be a JSON object');
+      Root := TJSONObject(Parsed);
+
+      Result.Version := Root.GetValue<Integer>('version', 1);
+      Result.FooterVisible := Root.GetValue<Boolean>('footerVisible', True);
+      Result.AlternatingRowColors := Root.GetValue<Boolean>('alternatingRowColors', True);
+      Result.AlternateRowColor := TColor(Root.GetValue<Integer>('alternateRowColor', $00F7F7F7));
+
+      Columns := Root.GetValue<TJSONArray>('columns', nil);
+      if Assigned(Columns) then
+        for I := 0 to Columns.Count - 1 do
+        begin
+          if not (Columns.Items[I] is TJSONObject) then
+            Continue;
+          ColObj := TJSONObject(Columns.Items[I]);
+          Col.FieldName := ColObj.GetValue<string>('fieldName', '');
+          Col.DisplayIndex := ColObj.GetValue<Integer>('displayIndex', -1);
+          Col.Width := ColObj.GetValue<Integer>('width', 0);
+          Col.Visible := ColObj.GetValue<Boolean>('visible', True);
+          Col.SortOrder := StringToSortOrder(ColObj.GetValue<string>('sortOrder', 'None'));
+          Col.SortIndex := ColObj.GetValue<Integer>('sortIndex', -1);
+          Col.AggregationType := StringToAggregationType(ColObj.GetValue<string>('aggregationType', 'None'));
+          Col.FooterText := ColObj.GetValue<string>('footerText', '');
+          Col.CellConditionsJson := ColObj.GetValue<string>('cellConditionsJson', '');
+          Result.Columns.Add(Col);
+        end;
+    finally
+      Parsed.Free;
+    end;
+  except
+    // Never leak the partially-built state when parsing fails
+    Result.Free;
+    raise;
   end;
 end;
 
@@ -220,10 +245,10 @@ var
   TargetFile: string;
   Storage: TVittixDBGridLayoutJsonStorage;
 begin
-  if FileName <> '' then
-    TargetFile := FileName
-  else
-    Exit;
+  // A silent no-op on an empty name hides caller bugs; make it explicit.
+  if FileName = '' then
+    raise EVittixLayoutError.Create('Layout file name cannot be empty');
+  TargetFile := FileName;
 
   Storage := TVittixDBGridLayoutJsonStorage.Create;
   try
@@ -246,10 +271,10 @@ var
   Storage: TVittixDBGridLayoutJsonStorage;
 begin
   Result := nil;
-  if FileName <> '' then
-    SourceFile := FileName
-  else
-    Exit;
+  // A silent nil on an empty name hides caller bugs; make it explicit.
+  if FileName = '' then
+    raise EVittixLayoutError.Create('Layout file name cannot be empty');
+  SourceFile := FileName;
 
   if not FileExists(SourceFile) then
     Exit;
