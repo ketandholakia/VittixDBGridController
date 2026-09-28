@@ -17,7 +17,8 @@
 *.obj
 *.so
 *.apk
-*.res
+# Project .res files (package/project version resources) are tracked
+# intentionally; do not blanket-ignore *.res.
 
 # --- Platform output folders ---
 Win32/

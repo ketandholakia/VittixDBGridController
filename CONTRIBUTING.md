@@ -1,6 +1,6 @@
 # Contributing to VittixDBGridController
 
-First of all, thank you for considering contributing to **VittixDBGridController** 🙏  
+First of all, thank you for considering contributing to **VittixDBGridController** 🙏
 All contributions are welcome — bug reports, feature requests, documentation, and code improvements.
 
 This document explains how to contribute in a clean, consistent, and maintainable way.
@@ -11,15 +11,13 @@ This document explains how to contribute in a clean, consistent, and maintainabl
 
 VittixDBGridController follows these principles:
 
-- ✅ **Composition over inheritance** (no subclassing `TDBGrid`)
-- ✅ **Non-intrusive design** (plug-and-play controller)
+- ✅ **Controller-based architecture** — `TVittixDBGrid` subclasses `TDBGrid` and delegates all engine work (sorting, filtering, aggregation, persistence) to a `TVittixDBGridController` and its logic-only engines
 - ✅ **Clean separation of concerns**
-  - Controller
-  - Sorting engine
-  - Filtering engine
-  - Aggregation engine
-  - UI helpers
-  - Persistence
+  - Grid (`Vittix.DBGrid.pas`) — visual control, forwards input/draw events to the controller
+  - Controller (`Vittix.DBGrid.Controller.pas`) — lifecycle, hooking, engine ownership
+  - Engines — sort, filter, aggregation (pure logic, no UI)
+  - UI helpers — footer panel, editors, column chooser, filter popup
+  - Persistence — JSON layout/state storage
 - ✅ **Backward compatibility**
 - ✅ **Readable, maintainable Object Pascal**
 
@@ -29,13 +27,13 @@ Please keep these principles in mind when contributing.
 
 ## 🧰 Supported Delphi Versions
 
-Contributions should compile and work on:
+The supported and CI-tested toolchain is:
 
-- Delphi **10.4 Sydney**
-- Delphi **11 Alexandria**
-- Delphi **12 Athens** (recommended)
+- Delphi **12 Athens** (Win32) — this is what the packages, the test suite and the installer are built with
 
-If you use newer RTL features, please note it in your PR description.
+The source avoids RTL features newer than Delphi 10.3 where practical, but
+only 12 is actively tested. If a change needs a newer RTL feature, please
+note it in your PR description.
 
 ---
 
@@ -44,34 +42,51 @@ If you use newer RTL features, please note it in your PR description.
 Please respect the existing structure:
 
 ```text
-source/
-├─ core/          Core controller & column metadata
-├─ sorting/       Sorting engine
-├─ filtering/     Filtering engine & popup UI
-├─ aggregation/   Aggregation engine
-├─ ui/            UI helpers (footer, editors, column chooser)
-├─ persistence/   JSON state storage
-└─ resources/     .res and visual assets
+source/           All runtime units (flat, unit-named by area)
+├─ Vittix.DBGrid.pas                  The grid control
+├─ Vittix.DBGrid.Controller.pas       Controller + engine lifecycle
+├─ Vittix.DBGrid.ColumnInfo.pas       Column metadata (single source of truth)
+├─ Vittix.DBGrid.Sort.Engine.pas      Sorting engine
+├─ Vittix.DBGrid.Filter.Engine.pas    Filtering engine (logic only)
+├─ Vittix.DBGrid.Filter.Popup.pas     Filter popup UI
+├─ Vittix.DBGrid.Aggregation.Engine.pas
+├─ Vittix.DBGrid.FooterPanel.pas      Footer rendering
+├─ Vittix.DBGrid.Export.Engine.pas    Export engine
+├─ Vittix.DBGrid.Export.Dialog.pas    Export dialog
+├─ Vittix.DBGrid.Layout.pas           JSON layout storage
+└─ ...
+packages/         Runtime + design-time .dpk/.dproj
+tests/            DUnitX test suite (VittixDBGridTests.dpr, build-tests.bat)
+demos/            features-demo — the complete feature demo
+installer/        Inno Setup script + payload build scripts
+docs/             Roadmap and docs index
 ```
 
 **Do not**:
+
 - Move files arbitrarily
 - Merge unrelated responsibilities into one unit
 - Introduce circular unit dependencies
 
 ---
 
-## 🧪 Demos
+## 🧪 Tests and Demos
 
-If your change affects behavior or UI, please update or add a demo:
+Behavioral changes need regression coverage. The test suite is DUnitX-based:
 
-- `demos/BasicDemo` → minimal usage
-- `demos/AdvancedDemo` → all features
-- `demos/NorthwindDemo` → real-world database usage
+```bat
+cd tests
+build-tests.bat                      rem set VITTIX_DELPHI_ROOT to override the Delphi path
+VittixDBGridTests.exe
+```
 
-Demos must:
-- Compile without warnings
-- Run without additional setup (except SQLite DB already included)
+Run the suite before submitting; it must be green (the clipboard tests can
+fail spuriously on machines where another process holds the clipboard —
+rerun if only those fail).
+
+If your change affects behavior or UI, please also update the demo in
+`demos/features-demo`. Demos must compile with a plain Delphi installation
+(no third-party/commercial units) and run without additional setup.
 
 ---
 
@@ -114,19 +129,21 @@ Large features should be discussed **before** submitting a PR.
 - Use `begin/end` blocks consistently
 - Prefer clarity over cleverness
 - Avoid deeply nested logic
-- Add comments where intent is not obvious
+- Comment the **why**, not the change: commit history and CHANGELOG.md carry
+  the "what changed"; source comments explain constraints and intent
 
 ### Memory Management
 - Always free owned objects
 - Prefer `try/finally`
 - Avoid hidden ownership
+- Register `FreeNotification` for components referenced across owners
 
 ---
 
 ## 🧠 Controller Rules (Important)
 
 - ❌ Do NOT access private fields of `TVittixDBGridController`
-- ✅ Use public methods (`Refresh`, `ApplyState`, etc.)
+- ✅ Use public methods (`Refresh`, `ApplyState`, `SetColumnAggregation`, etc.)
 - ❌ Do NOT change DBGrid internals directly unless unavoidable
 - ✅ Use `ColumnInfo` as the single source of truth
 
@@ -154,6 +171,7 @@ Large features should be discussed **before** submitting a PR.
    ```
 4. Ensure:
    - Project compiles
+   - The DUnitX suite passes
    - No .dcu, .exe, .identcache files included
 5. Open a Pull Request
 
@@ -166,6 +184,8 @@ This project follows Semantic Versioning:
 - **MAJOR** – Breaking changes
 - **MINOR** – New features (backward compatible)
 - **PATCH** – Bug fixes
+
+Releases are tracked in [CHANGELOG.md](CHANGELOG.md).
 
 ---
 

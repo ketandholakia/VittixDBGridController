@@ -115,7 +115,7 @@
         <DCC_UnitSearchPath>C:\Users\Admin\Documents\GitHub\VittixDBGridController\source;D:\ketan\github\VittixDBGridController\source;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <VerInfo_Keys>CompanyName=Vittix;FileDescription=$(MSBuildProjectName);FileVersion=1.0.4.0;InternalName=VittixDBGridFullDemo;LegalCopyright=;LegalTrademarks=;OriginalFilename=VittixDBGridFullDemo.exe;ProductName=$(MSBuildProjectName);ProductVersion=1.0.4.0;Comments=;ProgramID=com.embarcadero.$(MSBuildProjectName)</VerInfo_Keys>
-        <DCC_Define>madExcept;$(DCC_Define)</DCC_Define>
+        <DCC_Define>$(DCC_Define)</DCC_Define>
         <DCC_MapFile>3</DCC_MapFile>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_2_Win64)'!=''">

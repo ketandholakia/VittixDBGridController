@@ -79,14 +79,11 @@ look like a supported call.
 - Fix: fall back to the controller's `FLayoutStorageFileName`, raise when no
   target can be determined.
 
-### 1.6 [B] Clean up temp file on failed atomic export
-`ExportToFileAtomic` leaves `TempFileName` behind when the export proc raises,
-and its delete-then-move is not atomic.
-
-- `source/Vittix.DBGrid.Export.Engine.pas:449-461`
-- Fix: `try..except`/`finally` around the export that deletes the temp file on
-  failure; move to a unique temp name in the target directory and use
-  `TFile.Replace` where possible.
+### 1.6 [B] Clean up temp file on failed atomic export — ✅ COMPLETED 2026-09-29
+`ExportToFileAtomic` stages a unique temp file next to the target, deletes it
+on failure/cancellation, and swaps the result over the target with
+`TFile.Replace` (with a managed backup name — the RTL raises on an empty
+backup path) so a locked target never leaves the old file destroyed.
 
 ### 1.7 [B] Fix column chooser drag index desync
 The checklist item is moved first, then the grid column is moved using the
@@ -274,17 +271,18 @@ README says Delphi 10.3+, CONTRIBUTING says 10.4+, installer ships only a
 Delphi 12/Win32 payload. Decide the real minimum, state it once, and ideally
 verify with CI builds.
 
-### 6.3 [D] Remove the madExcept dependency from the demo
-`demos/features-demo/VittixDBGridFullDemo.dpr` requires the commercial
-madExcept suite, breaking compilation for anyone without it. Make it
-`{$IFDEF}`-optional or remove.
+### 6.3 [D] Remove the madExcept dependency from the demo — ✅ COMPLETED 2026-09-29 (v1.0.4)
+The madExcept units were removed from `VittixDBGridFullDemo.dpr` and the
+`madExcept` define from the demo project; the demo now builds with a plain
+Delphi installation.
 
-### 6.4 [D] Repository hygiene
-- Add `*.drc`, `*.mes` to `.gitignore` (currently untracked-but-present).
-- Remove `source/Vittix.DBGrid.pas.bak`; ensure builds output to a `build/`
-  folder instead of littering `source/` with `.dcu`s.
-- The three committed `.res` files conflict with the `*.res` ignore rule —
-  either document them as intentional (version info) or scope the ignore rule.
+### 6.4 [D] Repository hygiene — ✅ COMPLETED 2026-09-29 (v1.0.4)
+- `*.drc` / `*.mes` were already ignored; done earlier.
+- `source/Vittix.DBGrid.pas.bak` and the 0-byte `source/VittixDBGrid.res`
+  removed; the `*.res` ignore rule was scoped so the intentional project
+  resources stay tracked.
+- Changelog-style noise comments ("FIX BUG n", "NEW:", "FIXED VERSION")
+  were cleaned out of the source units; why-comments were kept.
 
 ### 6.5 [D] API documentation
 Add XML doc comments consistently (engines have them; grid/controller/dialogs
@@ -391,10 +389,10 @@ phased plan. Each phase is independently shippable.
 
 ## Phase B — Finish the half-built features (quick wins)
 
-- **B1 [B] Implement `ExportFilteredOnly` and `IncludeFooter`** — declared,
-  defaulted, and persisted by the export dialog but never read by any export
-  routine (`Export.Engine.pas:74-98, 205-232`). Add footer/aggregation row
-  output to CSV/HTML/XLSX paths.
+- **B1 [B] Implement `ExportFilteredOnly` and `IncludeFooter`** — ✅ COMPLETED
+  2026-09-29 (v1.0.4). Both options are honored by every format (CSV, TSV,
+  HTML, XLSX, XML, JSON, Text) through the shared iteration helpers, with
+  cursor restore and regression tests.
 - **B2 [F] XLSX numeric cells** — emit `<c t="n">` for numeric/boolean field
   types, `xml:space="preserve"` on inline strings, and column widths
   (`Export.Engine.pas:1050-1203`). Milestone 4.2.

@@ -17,14 +17,20 @@
 ## Features
 
 - Multi-column sorting engine
-- Advanced filtering with popup UI
+- Advanced filtering with popup UI and operator syntax
 - Aggregation engine (SUM, COUNT, AVG, MIN, MAX)
 - Footer panel with live calculations
 - Runtime column chooser
 - Custom in-place editors
+- Export to CSV, TSV, XLSX, HTML, XML, JSON, Text and clipboard
+- DUnitX regression suite (206 tests)
 - Controller-based architecture
-- Optimized for large datasets
 - Pure Object Pascal (Delphi VCL)
+
+Aggregation performs a full dataset scan per recalculation and filters are
+re-evaluated per row — correct for tens of thousands of rows; incremental
+aggregation for very large datasets is on the
+[roadmap](docs/ROADMAP.md) (item 3.1).
 
 ---
 
@@ -87,10 +93,16 @@ Provides IDE integration and component registration:
 
 ## Requirements
 
-- Delphi 10.3 or newer
+- Delphi 12 Athens (the supported toolchain; packages, tests and installer are built for it)
 - VCL framework
 - `Vcl.DBGrids`
-- `TDataSet` descendants such as FireDAC, dbExpress, BDE, ClientDataSet, and third-party datasets
+- `TDataSet` descendants such as FireDAC, ClientDataSet, BDE, ADO, and third-party datasets
+
+> Sorting uses the dataset's `IndexFieldNames` mechanism. Datasets that do
+> not publish `IndexFieldNames` (for example `TADODataSet`) raise a clear
+> `EVittixSortError` when a sort is applied instead of silently doing
+> nothing. `TClientDataSet` descendants get true descending indexes; other
+> datasets use the FireDAC-style `:D` suffix.
 
 ---
 
@@ -148,7 +160,64 @@ end;
 
 ---
 
-## Persistence Configuration
+## Export
+
+`TVittixDBGridExporter` (drop it next to the grid, or use the grid's export
+dialog) writes the visible/selected columns of the bound dataset:
+
+| Format | Notes |
+|--------|-------|
+| `vefCSV` / `vefTSV` | RFC 4180 quoting, formula-injection neutralization for text |
+| `vefExcelXLSX` | Built-in SpreadsheetML writer; numbers stored as numeric cells |
+| `vefHTML` | Styled table, display formatting |
+| `vefXML` / `vefJSON` | Typed values (numbers, `true`/`false`, `null`); JSON parses cleanly |
+| `vefText` | Fixed-width text |
+| `vefClipboard` | Any text format to the clipboard |
+
+Options (`Export`): `ExportVisibleOnly`, `ExportFilteredOnly`, `IncludeHeaders`,
+`IncludeFooter` (aggregation/footer text row), date/time/float/currency
+formats, delimiter/quote/encoding, and an `OnProgress` callback with
+cancellation.
+
+Behavior worth knowing:
+
+- **Machine-readable vs display formats.** CSV, TSV, XML, JSON and XLSX
+  write numbers with full precision and an invariant decimal separator.
+  HTML and Text keep the configured display formats (`FloatFormat`,
+  `CurrencyFormat`).
+- **Dataset friendly.** Exports preserve the current record, temporarily
+  lift the grid's filter when `ExportFilteredOnly = False`, and support
+  cancellation through `OnProgress` or `Cancel`.
+- **Atomic files.** File exports stage a temp file and swap it over the
+  target, so a cancelled or failed export never destroys the previous file.
+
+---
+
+## Filter Operator Syntax
+
+Column filters accept a typed operator prefix (also selectable in the
+popup):
+
+| Prefix | Operator | Example |
+|--------|----------|---------|
+| *(none)* | Contains | `alpha` |
+| `=` | Equals | `=Alpha` |
+| `^` | Starts With | `^Al` |
+| `$` | Ends With | `pha$` |
+| `!` | Does Not Contain | `!alpha` |
+| `<>` | Not Equals (exact) | `<>Alpha` |
+| `>` `>=` `<` `<=` | Numeric comparison | `>250` |
+| `..` | Between (pipe-separated) | `150..300` → `>150 \| <300` |
+| `!..` | Not Between | `!150..300` |
+| `null` / `!null` | Is Null / Is Not Null | |
+| `empty` / `!empty` | Is Empty / Is Not Empty | |
+
+Comparisons run numerically when both sides parse as numbers, otherwise as
+case-insensitive text. The popup persists the chosen operator per column.
+
+---
+
+## Layout Persistence
 
 `TVittixDBGrid` exposes a single persistence root plus per-feature file overrides:
 
@@ -174,3 +243,20 @@ The current chooser and popup surfaces now include a few small but useful afford
 - footer popup exposes clear-current and clear-all actions, plus keyboard accelerators for those actions
 
 For testability, several of these surfaces expose read-only summary helpers on the corresponding classes. They are intended for regression coverage and diagnostics, not as a new public UI contract.
+
+---
+
+## Testing
+
+The suite is DUnitX-based and covers the export engine, filter engine and
+operator table, sort engine, aggregation engine, column info, layout
+persistence and controller lifecycle:
+
+```bat
+cd tests
+build-tests.bat
+VittixDBGridTests.exe
+```
+
+Set `VITTIX_DELPHI_ROOT` if your Delphi installation is not at the default
+`C:\Program Files (x86)\Embarcadero\Studio\23.0`.
