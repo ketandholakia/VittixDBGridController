@@ -83,6 +83,7 @@ type
     FCurrencyFormat: string;
     FFloatFormat: string;
     FBooleanAsText: Boolean;
+    FExportLocaleFormat: Boolean;
     FTrueText: string;
     FFalseText: string;
     FNullText: string;
@@ -105,6 +106,12 @@ type
     property CurrencyFormat: string read FCurrencyFormat write FCurrencyFormat;
     property FloatFormat: string read FFloatFormat write FFloatFormat;
     property BooleanAsText: Boolean read FBooleanAsText write FBooleanAsText default True;
+    /// <summary>When True, CSV/TSV/XML/JSON/XLSX numbers fall back to the
+    /// locale-aware display formatting (FloatFormat/CurrencyFormat) instead
+    /// of the default full-precision invariant separator. Restores the
+    /// pre-1.1.0 machine-format output.</summary>
+    property ExportLocaleFormat: Boolean
+      read FExportLocaleFormat write FExportLocaleFormat default False;
     property TrueText: string read FTrueText write FTrueText;
     property FalseText: string read FFalseText write FFalseText;
     property NullText: string read FNullText write FNullText;
@@ -205,6 +212,7 @@ uses
   Winapi.Windows,
   Vcl.Forms,
   Vcl.Dialogs,
+  Vittix.DBGrid.Clipboard,
   Vittix.DBGrid.Controller;
 
 { TVittixExportOptions }
@@ -227,6 +235,7 @@ begin
   FCurrencyFormat := '#,##0.00';
   FFloatFormat := '0.00';
   FBooleanAsText := True;
+  FExportLocaleFormat := False;
   FTrueText := 'Yes';
   FFalseText := 'No';
   FNullText := '';
@@ -252,6 +261,7 @@ begin
     FCurrencyFormat := Src.CurrencyFormat;
     FFloatFormat := Src.FloatFormat;
     FBooleanAsText := Src.BooleanAsText;
+    FExportLocaleFormat := Src.ExportLocaleFormat;
     FTrueText := Src.TrueText;
     FFalseText := Src.FalseText;
     FNullText := Src.NullText;
@@ -360,7 +370,7 @@ begin
         Result := Field.AsString;
 
     ftFloat, ftCurrency, ftBCD, ftFMTBcd:
-      if AMachineReadable then
+      if AMachineReadable and not FOptions.ExportLocaleFormat then
         Result := FormatNumberInvariant(Field.AsFloat)
       else if Field.DataType = ftCurrency then
         Result := FormatFloat(FOptions.CurrencyFormat, Field.AsFloat)
@@ -619,11 +629,14 @@ begin
     else
       TFile.Move(TempFileName, FileName);
   except
-    // Never leave the staged temp file behind, cancellation included.
+    // Never leave the staged temp file (or a stale backup) behind,
+    // cancellation included.
     on E: Exception do
     begin
       if TFile.Exists(TempFileName) then
         try TFile.Delete(TempFileName) except end;
+      if TFile.Exists(BackupFileName) then
+        try TFile.Delete(BackupFileName) except end;
       raise;
     end;
   end;
@@ -1415,7 +1428,7 @@ var
   Data: string;
 begin
   Data := ExportToString(Format);
-  Clipboard.AsText := Data;
+  VittixSetClipboardText(Data);
 end;
 
 { TVittixExcelExporter }

@@ -1,6 +1,6 @@
 #define MyAppName "Vittix DBGrid Controller"
 #ifndef MyAppVersion
-#define MyAppVersion "1.0.4"
+#define MyAppVersion "1.1.0"
 #endif
 #define MyAppPublisher "Vittix"
 #define MyAppURL "https://github.com/ketan/VittixDBGridController"

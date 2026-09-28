@@ -385,39 +385,61 @@ procedure TVittixDBGridSortEngine.ToggleSort(
 var
   Info: TVittixDBGridColumnInfo;
   I: Integer;
+  SavedOrders: TArray<TVittixSortOrder>;
+  SavedIndexes: TArray<Integer>;
 begin
   if not Assigned(AColumn) then Exit;
 
   Info := FColumns.FindByFieldName(AColumn.FieldName);
-  if Info = nil then Exit; 
+  if Info = nil then Exit;
 
-  // Single-column sort: clear everything else first
-  if not MultiColumn then
+  // Snapshot the sort state: when ApplySorting fails (unsupported dataset,
+  // dataset error) the column metadata must roll back too, otherwise the
+  // grid shows a sort arrow over unsorted data.
+  SetLength(SavedOrders, FColumns.Count);
+  SetLength(SavedIndexes, FColumns.Count);
+  for I := 0 to FColumns.Count - 1 do
   begin
+    SavedOrders[I] := FColumns[I].SortOrder;
+    SavedIndexes[I] := FColumns[I].SortIndex;
+  end;
+
+  try
+    // Single-column sort: clear everything else first
+    if not MultiColumn then
+    begin
+      for I := 0 to FColumns.Count - 1 do
+        if FColumns[I] <> Info then
+        begin
+          FColumns[I].SortOrder := vsoNone;
+          FColumns[I].SortIndex := -1;
+        end;
+    end;
+
+    // Tri-state toggle: None -> Asc -> Desc -> None
+    case Info.SortOrder of
+      vsoNone: Info.SortOrder := vsoAsc;
+      vsoAsc:  Info.SortOrder := vsoDesc;
+      vsoDesc: Info.SortOrder := vsoNone;
+    end;
+
+    // Assign sort index for new sort items
+    if Info.SortOrder = vsoNone then
+      Info.SortIndex := -1
+    else if Info.SortIndex < 0 then
+      // Assign temporary high index; Normalize will compact it
+      Info.SortIndex := FColumns.Count + 1;
+
+    NormalizeSortIndices;
+    ApplySorting;
+  except
     for I := 0 to FColumns.Count - 1 do
-      if FColumns[I] <> Info then
-      begin
-        FColumns[I].SortOrder := vsoNone;
-        FColumns[I].SortIndex := -1;
-      end;
+    begin
+      FColumns[I].SortOrder := SavedOrders[I];
+      FColumns[I].SortIndex := SavedIndexes[I];
+    end;
+    raise;
   end;
-
-  // Tri-state toggle: None -> Asc -> Desc -> None
-  case Info.SortOrder of
-    vsoNone: Info.SortOrder := vsoAsc;
-    vsoAsc:  Info.SortOrder := vsoDesc;
-    vsoDesc: Info.SortOrder := vsoNone;
-  end;
-
-  // Assign sort index for new sort items
-  if Info.SortOrder = vsoNone then
-    Info.SortIndex := -1
-  else if Info.SortIndex < 0 then
-    // Assign temporary high index; Normalize will compact it
-    Info.SortIndex := FColumns.Count + 1; 
-
-  NormalizeSortIndices;
-  ApplySorting;
 end;
 
 function TVittixDBGridSortEngine.GetSortSummaryText: string;

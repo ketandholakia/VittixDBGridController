@@ -37,6 +37,7 @@ requires
 
 contains
   Vittix.DBGrid in '..\source\Vittix.DBGrid.pas',
+  Vittix.DBGrid.Clipboard in '..\source\Vittix.DBGrid.Clipboard.pas',
   Vittix.DBGrid.Controller in '..\source\Vittix.DBGrid.Controller.pas',
   Vittix.DBGrid.ColumnInfo in '..\source\Vittix.DBGrid.ColumnInfo.pas',
   Vittix.DBGrid.Sort.Engine in '..\source\Vittix.DBGrid.Sort.Engine.pas',

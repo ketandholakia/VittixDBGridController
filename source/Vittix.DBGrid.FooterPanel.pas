@@ -22,7 +22,6 @@ uses
   Vcl.Grids,
   Winapi.Messages,
   Vcl.Menus,
-  Vcl.Clipbrd,
   Data.DB,
   Vittix.DBGrid.ColumnInfo,
   Vittix.DBGrid.Aggregation.Engine;
@@ -85,7 +84,8 @@ implementation
 uses
   // Implementation-only on purpose: Vittix.DBGrid.Controller (which this
   // unit's interface is used by) requires TVittixDBGrid in its interface.
-  Vittix.DBGrid;
+  Vittix.DBGrid,
+  Vittix.DBGrid.Clipboard;
 
 function VittixGrid(AGrid: TDBGrid): TVittixDBGrid;
 begin
@@ -592,7 +592,7 @@ var
 begin
   Text := GetAggregationTextForColumn(AColumn);
   if Text <> '' then
-    Clipboard.AsText := Text;
+    VittixSetClipboardText(Text);
 end;
 
 procedure TVittixDBGridFooterPanel.CopyAllAggregations;
@@ -618,7 +618,7 @@ begin
     end;
 
     if Lines.Count > 0 then
-      Clipboard.AsText := TrimRight(Lines.Text);
+      VittixSetClipboardText(TrimRight(Lines.Text));
   finally
     Lines.Free;
   end;
@@ -649,7 +649,7 @@ begin
     end;
 
     if Parts.Count > 0 then
-      Clipboard.AsText := Parts.DelimitedText;
+      VittixSetClipboardText(Parts.DelimitedText);
   finally
     Parts.Free;
   end;

@@ -16,6 +16,7 @@ uses
   Vittix.DBGrid,
   Vittix.DBGrid.ColumnInfo,
   Vittix.DBGrid.Controller,
+  Vittix.DBGrid.Clipboard,
   Vittix.DBGrid.ColumnChooser,
   Vittix.DBGrid.Filter.Popup,
   Vittix.DBGrid.FooterPanel,
@@ -1082,9 +1083,9 @@ begin
   try
     Footer.Attach(FGrid, nil);
     FGrid.ColumnInfoByColumn(FGrid.Columns[1]).FooterText := 'Sum: 42';
-    Clipboard.AsText := '';
+    VittixSetClipboardText('');
     Footer.CopyAggregationForColumn(FGrid.Columns[1]);
-    Assert.AreEqual('Sum: 42', Clipboard.AsText);
+    Assert.AreEqual('Sum: 42', VittixGetClipboardText);
   finally
     Footer.Free;
   end;
@@ -1099,10 +1100,10 @@ begin
     Footer.Attach(FGrid, nil);
     FGrid.ColumnInfoByColumn(FGrid.Columns[1]).FooterText := 'Sum: 42';
     FGrid.ColumnInfoByColumn(FGrid.Columns[2]).FooterText := 'Avg: 5';
-    Clipboard.AsText := '';
+    VittixSetClipboardText('');
     Footer.CopyAllAggregations;
-    Assert.IsTrue(Clipboard.AsText.Contains('Name: Sum: 42'));
-    Assert.IsTrue(Clipboard.AsText.Contains('Amount: Avg: 5'));
+    Assert.IsTrue(VittixGetClipboardText.Contains('Name: Sum: 42'));
+    Assert.IsTrue(VittixGetClipboardText.Contains('Amount: Avg: 5'));
   finally
     Footer.Free;
   end;
@@ -1117,7 +1118,7 @@ begin
     Footer.Attach(FGrid, nil);
     FGrid.ColumnInfoByColumn(FGrid.Columns[1]).FooterText := 'Sum: 42';
     FGrid.ColumnInfoByColumn(FGrid.Columns[2]).FooterText := 'Avg: 5';
-    Clipboard.AsText := '';
+    VittixSetClipboardText('');
     Footer.CopyFooterSummary;
     Assert.IsTrue(Clipboard.AsText.Contains('Sum: 42'#9'Avg: 5'));
   finally

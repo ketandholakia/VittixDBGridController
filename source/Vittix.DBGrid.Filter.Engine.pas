@@ -424,7 +424,16 @@ begin
 
   FDataSet.DisableControls;
   try
-    FDataSet.Filtered := True;
+    if FDataSet.Filtered then
+    begin
+      // Already filtered (the application's own filter): assigning True
+      // again is a no-op and would never re-evaluate the records against
+      // the new filter. Toggle to force a fresh pass.
+      FDataSet.Filtered := False;
+      FDataSet.Filtered := True;
+    end
+    else
+      FDataSet.Filtered := True;
   finally
     FDataSet.EnableControls;
   end;
@@ -438,17 +447,21 @@ begin
   try
     if FFilterInstalled then
     begin
-      // Restore the Filtered value the dataset had before the engine hook
-      // was installed instead of forcing False: an application that was
-      // already filtering (its own Filter string or OnFilterRecord) keeps
-      // filtering after the engine's filter is cleared.
-      FDataSet.Filtered := FSavedFiltered;
+      // Force a re-evaluation pass: assigning the same Filtered value the
+      // dataset already has would be a no-op and would leave the engine's
+      // filtered view on screen.
+      FDataSet.Filtered := False;
 
-      // Restore the user's original event handler
+      // Restore the user's original event handler...
       FDataSet.OnFilterRecord := FOldOnFilterRecord;
       FOldOnFilterRecord := nil;
-
       FFilterInstalled := False;
+
+      // ...then restore the Filtered value the dataset had before the
+      // engine hook was installed: an application that was already
+      // filtering (its own Filter string or OnFilterRecord) keeps
+      // filtering after the engine's filter is cleared.
+      FDataSet.Filtered := FSavedFiltered;
     end;
   finally
     FDataSet.EnableControls;

@@ -24,6 +24,7 @@ type
     FEngine: TVittixDBGridFilterEngine;
     FOuterHandlerCalled: Boolean;
     procedure RejectAllButRowFour(DataSet: TDataSet; var Accept: Boolean);
+    procedure AcceptLowIds(DataSet: TDataSet; var Accept: Boolean);
     procedure RejectAllFilters(Sender: TObject; const FieldName, FilterText: string;
       var IsValid: Boolean; var ErrorMessage: string);
   public
@@ -65,6 +66,8 @@ type
     procedure DoesNotContainOperatorExcludesSubstring;
     [Test]
     procedure ClearFilterRestoresOriginalFilteredState;
+    [Test]
+    procedure ClearFilterRestoresOriginalOnFilterRecord;
     [Test]
     procedure FilterPopupRestoresOperatorFromSavedText;
     [Test]
@@ -383,6 +386,42 @@ begin
   finally
     LocalSet.Free;
   end;
+end;
+
+procedure TVittixFilterEngineTests.AcceptLowIds(DataSet: TDataSet;
+  var Accept: Boolean);
+begin
+  Accept := DataSet.FieldByName('ID').AsInteger <= 2;
+end;
+
+procedure TVittixFilterEngineTests.ClearFilterRestoresOriginalOnFilterRecord;
+var
+  Info: TVittixDBGridColumnInfo;
+  SavedHandler: TFilterRecordEvent;
+begin
+  // The application filters on its own before the engine hooks in
+  SavedHandler := AcceptLowIds;
+  FDataSet.OnFilterRecord := SavedHandler;
+  FDataSet.Filtered := True;
+  Assert.AreEqual(2, CountVisibleRecords(FDataSet), 'app filter active');
+
+  Info := FColumns.FindByFieldName('Name');
+  Assert.IsNotNull(Info);
+  Info.FilterText := 'Alpha';
+  Info.HasFilter := True;
+  FEngine.Active := True;
+  // Engine chain: Alpha rows are ID 1 and 4; the app handler drops ID 4
+  Assert.AreEqual(1, CountVisibleRecords(FDataSet), 'engine chains the app filter');
+
+  FEngine.Active := False;
+
+  // Handler reference and Filtered=True must both be restored
+  Assert.IsTrue(
+    (TMethod(FDataSet.OnFilterRecord).Code = TMethod(SavedHandler).Code) and
+    (TMethod(FDataSet.OnFilterRecord).Data = TMethod(SavedHandler).Data),
+    'original OnFilterRecord restored');
+  Assert.IsTrue(FDataSet.Filtered, 'original Filtered=True restored');
+  Assert.AreEqual(2, CountVisibleRecords(FDataSet), 'app filter still applies');
 end;
 
 procedure TVittixFilterEngineTests.NotEqualsOperatorMatchesExactValue;

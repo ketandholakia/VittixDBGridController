@@ -61,6 +61,13 @@ type
   TVittixColumnMovedEvent = procedure(Sender: TObject; Column: TColumn;
     OldIndex, NewIndex: Integer) of object;
 
+  /// <summary>Raised when a header-click sort failed (for example a dataset
+  /// without IndexFieldNames support). Only fired from interactive title
+  /// clicks; the exception is re-raised when no handler is assigned. The
+  /// sort state is rolled back before this fires.</summary>
+  TVittixSortErrorEvent = procedure(Sender: TObject; Column: TColumn;
+    AError: Exception) of object;
+
   TVittixGridDataLink = class(TDataLink)
   private
     FController: TVittixDBGridController;
@@ -105,6 +112,7 @@ type
     // engine recreation while datasets close/reopen) and pushed to the
     // engines in CreateEngines / the property setters.
     FOnAfterSort: TVittixAfterSortEvent;
+    FOnSortError: TVittixSortErrorEvent;
     FOnFilterApplied: TVittixFilterAppliedEvent;
     FOnAfterApplyLayout: TNotifyEvent;
     FOnColumnMoved: TVittixColumnMovedEvent;
@@ -230,6 +238,10 @@ type
     // so an operation fires exactly once). Sender is the controller.
     property OnAfterSort: TVittixAfterSortEvent
       read FOnAfterSort write FOnAfterSort;
+    /// <summary>Handler for failed interactive sorts. Without a handler the
+    /// underlying EVittixSortError is re-raised.</summary>
+    property OnSortError: TVittixSortErrorEvent
+      read FOnSortError write FOnSortError;
     property OnFilterApplied: TVittixFilterAppliedEvent
       read FOnFilterApplied write FOnFilterApplied;
     property OnAfterApplyLayout: TNotifyEvent
@@ -784,10 +796,26 @@ procedure TVittixDBGridController.DoTitleClick(Column: TColumn);
 begin
   if Assigned(FSortEngine) then
   begin
-    FSortEngine.ToggleSort(
-      Column,
-      (GetKeyState(VK_CONTROL) and $8000) <> 0
-    );
+    try
+      FSortEngine.ToggleSort(
+        Column,
+        (GetKeyState(VK_CONTROL) and $8000) <> 0
+      );
+    except
+      on E: EVittixSortError do
+      begin
+        // A header click on a dataset that cannot sort must not crash the
+        // application: surface the error to a handler when one is assigned,
+        // otherwise keep the failure loud. ToggleSort already rolled the
+        // column sort state back.
+        if Assigned(FOnSortError) then
+        begin
+          FOnSortError(Self, Column, E);
+          Exit;
+        end;
+        raise;
+      end;
+    end;
     SetAggregationDirty;
     Refresh;
     // Reached only when ToggleSort applied without raising.

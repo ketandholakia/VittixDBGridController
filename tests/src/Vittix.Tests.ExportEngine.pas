@@ -61,6 +61,12 @@ type
     [Test]
     procedure TsvNeutralizesFormulaLeadingValues;
     [Test]
+    procedure CsvNeutralizesFormulaLikeText;
+    [Test]
+    procedure CsvLocaleFormatOptionKeepsDisplayFormatting;
+    [Test]
+    procedure EmptyDatasetExportsInEveryFormat;
+    [Test]
     procedure CsvKeepsNumericValuesUnneutralized;
     [Test]
     procedure CancelledExportDoesNotPoisonNextExport;
@@ -192,7 +198,8 @@ implementation
 uses
   System.IOUtils,
   System.JSON,
-  Vittix.Tests.TestData;
+  Vittix.Tests.TestData,
+  Vittix.DBGrid.Clipboard;
 
 // Splits CSV text into logical records. Commas, quotes and line breaks
 // inside quoted fields (RFC 4180 style) must not start a new record.
@@ -657,6 +664,124 @@ begin
   Assert.IsTrue(Xml.Contains('badcharhere'), 'surrounding text preserved');
 end;
 
+procedure TVittixExportEngineTests.CsvNeutralizesFormulaLikeText;
+var
+  Output: string;
+begin
+  // A string cell that only LOOKS like it could compute: it is not a valid
+  // number, so the injection guard must still fire.
+  FDataSet.First;
+  FDataSet.Edit;
+  FDataSet.FieldByName('Name').AsString := '-1+1';
+  FDataSet.Post;
+
+  Output := FExporter.ExportToString(vefCSV);
+
+  Assert.IsTrue(Output.Contains('''-1+1'),
+    'formula-like text still neutralized');
+end;
+
+procedure TVittixExportEngineTests.CsvLocaleFormatOptionKeepsDisplayFormatting;
+var
+  Output: string;
+begin
+  FDataSet.First;
+  FDataSet.Edit;
+  FDataSet.FieldByName('Score').AsFloat := 1234.5678;
+  FDataSet.Post;
+
+  // Opt-out for consumers who open the CSV in locale-sensitive tools
+  FExporter.Options.ExportLocaleFormat := True;
+  Output := FExporter.ExportToString(vefCSV);
+
+  Assert.IsTrue(Output.Contains('1234.57') or Output.Contains('1234,57'),
+    'ExportLocaleFormat keeps the configured display formatting');
+  Assert.IsFalse(Output.Contains('1234.5678'),
+    'full precision must not be used when the locale option is on');
+end;
+
+procedure TVittixExportEngineTests.EmptyDatasetExportsInEveryFormat;
+var
+  EmptySet: TClientDataSet;
+  EmptyForm: TForm;
+  EmptyGrid: TVittixDBGrid;
+  EmptyExporter: TVittixDBGridExporter;
+  Output: string;
+  Lines: TStringList;
+  Stream: TMemoryStream;
+  Parsed: TJSONValue;
+begin
+  EmptySet := CreateSampleDataSet;
+  try
+    EmptySet.EmptyDataSet;
+    EmptyGrid := CreateHeadlessGrid(EmptySet, EmptyForm);
+    try
+      EmptyExporter := TVittixDBGridExporter.Create(EmptyGrid);
+      try
+        // Row-oriented formats: header only, never an exception
+        Output := EmptyExporter.ExportToString(vefCSV);
+        Lines := TStringList.Create;
+        try
+          Lines.Text := Output;
+          Assert.AreEqual(1, Lines.Count, 'CSV: header only');
+        finally
+          Lines.Free;
+        end;
+
+        Output := EmptyExporter.ExportToString(vefTSV);
+        Assert.IsTrue(Output.Contains('ID'), 'TSV header present');
+        Output := EmptyExporter.ExportToString(vefText);
+        Assert.IsTrue(Output.Contains('ID'), 'Text header present');
+
+        Output := EmptyExporter.ExportToString(vefHTML);
+        Assert.IsTrue(Output.Contains('<table>'), 'HTML table emitted');
+
+        Output := EmptyExporter.ExportToString(vefXML);
+        Assert.IsTrue(Output.Contains('<data>'), 'XML root emitted');
+        Assert.IsTrue(Output.Contains('</data>'), 'XML root closed');
+
+        Output := EmptyExporter.ExportToString(vefJSON);
+        Parsed := TJSONObject.ParseJSONValue(Output);
+        try
+          Assert.IsNotNull(Parsed, 'empty JSON parses');
+          Assert.IsTrue(Parsed is TJSONArray, 'empty JSON is an array');
+        finally
+          Parsed.Free;
+        end;
+
+        // XLSX must stay a valid zip package
+        Stream := TMemoryStream.Create;
+        try
+          EmptyExporter.ExportToStream(Stream, vefExcelXLSX);
+          Stream.Position := 0;
+          Assert.IsTrue(ExtractSheetXml(Stream).Contains('<sheetData>'),
+            'empty XLSX sheet valid');
+        finally
+          Stream.Free;
+        end;
+
+        // Footer options must not break the empty-dataset shapes either
+        EmptyExporter.Options.IncludeFooter := True;
+        Output := EmptyExporter.ExportToString(vefJSON);
+        Parsed := TJSONObject.ParseJSONValue(Output);
+        try
+          Assert.IsNotNull(Parsed, 'empty JSON with footer parses');
+        finally
+          Parsed.Free;
+        end;
+        Output := EmptyExporter.ExportToString(vefXML);
+        Assert.IsTrue(Output.Contains('<footer>'), 'empty XML footer emitted');
+      finally
+        EmptyExporter.Free;
+      end;
+    finally
+      EmptyForm.Free;
+    end;
+  finally
+    EmptySet.Free;
+  end;
+end;
+
 procedure TVittixExportEngineTests.XlsxWritesNumbersAsNumericCells;
 var
   Stream: TMemoryStream;
@@ -721,11 +846,11 @@ end;
 
 procedure TVittixExportEngineTests.ClipboardExportWritesExpectedText;
 begin
-  Clipboard.AsText := '';
+  VittixSetClipboardText('');
   FExporter.ExportToClipboard(vefTSV);
 
-  Assert.IsTrue(Clipboard.AsText.Contains('ID'#9'Name'#9'Amount'));
-  Assert.IsTrue(Clipboard.AsText.Contains('1'#9'Alpha'));
+  Assert.IsTrue(VittixGetClipboardText.Contains('ID'#9'Name'#9'Amount'));
+  Assert.IsTrue(VittixGetClipboardText.Contains('1'#9'Alpha'));
 end;
 
 procedure TVittixExportEngineTests.ExportDialogStateRoundTripsThroughIni;

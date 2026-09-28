@@ -48,6 +48,8 @@ type
     // operation fires exactly once.
     function GetOnAfterSort: TVittixAfterSortEvent;
     procedure SetOnAfterSort(const Value: TVittixAfterSortEvent);
+    function GetOnSortError: TVittixSortErrorEvent;
+    procedure SetOnSortError(const Value: TVittixSortErrorEvent);
     function GetOnFilterApplied: TVittixFilterAppliedEvent;
     procedure SetOnFilterApplied(const Value: TVittixFilterAppliedEvent);
     function GetOnAfterApplyLayout: TNotifyEvent;
@@ -112,6 +114,8 @@ type
     // getters/setters above). Sender in the handlers is the controller.
     property OnAfterSort: TVittixAfterSortEvent
       read GetOnAfterSort write SetOnAfterSort;
+    property OnSortError: TVittixSortErrorEvent
+      read GetOnSortError write SetOnSortError;
     property OnFilterApplied: TVittixFilterAppliedEvent
       read GetOnFilterApplied write SetOnFilterApplied;
     property OnAfterApplyLayout: TNotifyEvent
@@ -494,6 +498,20 @@ begin
     Result := FController.OnAfterSort
   else
     Result := nil;
+end;
+
+function TVittixDBGrid.GetOnSortError: TVittixSortErrorEvent;
+begin
+  if Assigned(FController) then
+    Result := FController.OnSortError
+  else
+    Result := nil;
+end;
+
+procedure TVittixDBGrid.SetOnSortError(const Value: TVittixSortErrorEvent);
+begin
+  if Assigned(FController) then
+    FController.OnSortError := Value;
 end;
 
 procedure TVittixDBGrid.SetOnAfterSort(const Value: TVittixAfterSortEvent);

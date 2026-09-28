@@ -4,7 +4,9 @@ interface
 
 uses
   System.Classes,
+  System.SysUtils,
   System.TypInfo,
+  Data.DB,
   Datasnap.DBClient,
   Vcl.Forms,
   Vcl.DBGrids,
@@ -24,7 +26,9 @@ type
     FEngine: TVittixDBGridSortEngine;
     FValidatedField: string;
     FValidationFound: Boolean;
+    FSortErrorReported: Boolean;
     procedure HandleFieldValidation(const FieldName: string; Found: Boolean);
+    procedure HandleSortError(Sender: TObject; Column: TColumn; AError: Exception);
   public
     [Setup]
     procedure Setup;
@@ -46,12 +50,66 @@ type
     procedure SortIndicesAreNormalizedWhenMiddleColumnRemoved;
     [Test]
     procedure ClearSortingRestoresOriginalDatasetIndexState;
+    [Test]
+    procedure UnsupportedDatasetRaisesOnApplySorting;
+    [Test]
+    procedure TitleClickOnUnsupportedDatasetRaisesWithoutHandler;
+    [Test]
+    procedure TitleClickOnUnsupportedDatasetReportsAndRollsBackWithHandler;
   end;
 
 implementation
 
 uses
   Vittix.Tests.TestData;
+
+type
+  /// <summary>A dataset that deliberately does NOT publish IndexFieldNames,
+  /// standing in for backends like TADODataSet. Opens as an empty cursor;
+  /// the unsupported-sort path never touches records.</summary>
+  TDataSetWithoutIndexFields = class(TDataSet)
+  private
+    FOpened: Boolean;
+  protected
+    function GetRecord(Buffer: TRecordBuffer; GetMode: TGetMode;
+      DoCheck: Boolean): TGetResult; override;
+    procedure InternalClose; override;
+    procedure InternalHandleException; override;
+    procedure InternalInitFieldDefs; override;
+    procedure InternalOpen; override;
+    function IsCursorOpen: Boolean; override;
+  end;
+
+function TDataSetWithoutIndexFields.GetRecord(Buffer: TRecordBuffer;
+  GetMode: TGetMode; DoCheck: Boolean): TGetResult;
+begin
+  Result := grEOF;
+end;
+
+procedure TDataSetWithoutIndexFields.InternalClose;
+begin
+  FOpened := False;
+end;
+
+procedure TDataSetWithoutIndexFields.InternalHandleException;
+begin
+  // Not reached by the unsupported-sort path
+end;
+
+procedure TDataSetWithoutIndexFields.InternalInitFieldDefs;
+begin
+  // Intentionally fieldless
+end;
+
+procedure TDataSetWithoutIndexFields.InternalOpen;
+begin
+  FOpened := True;
+end;
+
+function TDataSetWithoutIndexFields.IsCursorOpen: Boolean;
+begin
+  Result := FOpened;
+end;
 
 procedure TVittixSortEngineTests.Setup;
 begin
@@ -173,6 +231,132 @@ begin
   Assert.AreEqual(-1, FColumns.FindByFieldName('Amount').SortIndex);
   Assert.AreEqual(0, FColumns.FindByFieldName('Name').SortIndex);
   Assert.AreEqual(1, FColumns.FindByFieldName('Score').SortIndex);
+end;
+
+procedure TVittixSortEngineTests.HandleSortError(Sender: TObject;
+  Column: TColumn; AError: Exception);
+begin
+  FSortErrorReported := True;
+end;
+
+procedure TVittixSortEngineTests.UnsupportedDatasetRaisesOnApplySorting;
+var
+  BareSet: TDataSetWithoutIndexFields;
+  BareColumns: TVittixDBGridColumns;
+  BareEngine: TVittixDBGridSortEngine;
+  Info: TVittixDBGridColumnInfo;
+begin
+  BareSet := TDataSetWithoutIndexFields.Create(nil);
+  try
+    BareSet.Open;
+    Assert.IsTrue(BareSet.Active, 'precondition: bare dataset is open');
+
+    BareColumns := TVittixDBGridColumns.Create(nil);
+    try
+      Info := BareColumns.Add;
+      Info.FieldName := 'Any';
+      Info.SortOrder := vsoAsc;
+      Info.SortIndex := 0;
+
+      BareEngine := TVittixDBGridSortEngine.Create(BareSet, BareColumns);
+      try
+        Assert.WillRaise(
+          procedure
+          begin
+            BareEngine.ApplySorting;
+          end,
+          EVittixSortError);
+      finally
+        BareEngine.Free;
+      end;
+    finally
+      BareColumns.Free;
+    end;
+  finally
+    BareSet.Free;
+  end;
+end;
+
+procedure TVittixSortEngineTests.TitleClickOnUnsupportedDatasetRaisesWithoutHandler;
+var
+  BareSet: TDataSetWithoutIndexFields;
+  Grid: TVittixDBGrid;
+  OwnerForm: TForm;
+begin
+  BareSet := TDataSetWithoutIndexFields.Create(nil);
+  try
+    BareSet.Open;
+    Grid := CreateHeadlessGrid(BareSet, OwnerForm);
+    try
+      Grid.Columns.BeginUpdate;
+      try
+        Grid.Columns.Clear;
+        with Grid.Columns.Add do
+        begin
+          FieldName := 'Any';
+          Title.Caption := 'Any';
+        end;
+      finally
+        Grid.Columns.EndUpdate;
+      end;
+
+      // No OnSortError handler: the error must stay loud, and the click
+      // must not leave a sort arrow behind.
+      Assert.WillRaise(
+        procedure
+        begin
+          Grid.Controller.DoTitleClick(Grid.Columns[0]);
+        end,
+        EVittixSortError);
+      Assert.AreEqual(vsoNone, Grid.ColumnInfo[0].SortOrder,
+        'failed toggle rolls the column state back');
+    finally
+      Grid.Free;
+      OwnerForm.Free;
+    end;
+  finally
+    BareSet.Free;
+  end;
+end;
+
+procedure TVittixSortEngineTests.TitleClickOnUnsupportedDatasetReportsAndRollsBackWithHandler;
+var
+  BareSet: TDataSetWithoutIndexFields;
+  Grid: TVittixDBGrid;
+  OwnerForm: TForm;
+begin
+  BareSet := TDataSetWithoutIndexFields.Create(nil);
+  try
+    BareSet.Open;
+    Grid := CreateHeadlessGrid(BareSet, OwnerForm);
+    try
+      Grid.Columns.BeginUpdate;
+      try
+        Grid.Columns.Clear;
+        with Grid.Columns.Add do
+        begin
+          FieldName := 'Any';
+          Title.Caption := 'Any';
+        end;
+      finally
+        Grid.Columns.EndUpdate;
+      end;
+
+      FSortErrorReported := False;
+      Grid.Controller.OnSortError := HandleSortError;
+
+      Grid.Controller.DoTitleClick(Grid.Columns[0]);
+
+      Assert.IsTrue(FSortErrorReported, 'OnSortError fired for the failed sort');
+      Assert.AreEqual(vsoNone, Grid.ColumnInfo[0].SortOrder,
+        'failed toggle rolls the column state back');
+    finally
+      Grid.Free;
+      OwnerForm.Free;
+    end;
+  finally
+    BareSet.Free;
+  end;
 end;
 
 procedure TVittixSortEngineTests.ClearSortingRestoresOriginalDatasetIndexState;

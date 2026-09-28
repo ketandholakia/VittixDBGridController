@@ -101,8 +101,10 @@ Provides IDE integration and component registration:
 > Sorting uses the dataset's `IndexFieldNames` mechanism. Datasets that do
 > not publish `IndexFieldNames` (for example `TADODataSet`) raise a clear
 > `EVittixSortError` when a sort is applied instead of silently doing
-> nothing. `TClientDataSet` descendants get true descending indexes; other
-> datasets use the FireDAC-style `:D` suffix.
+> nothing. On a header click the sort state is rolled back and the error
+> is reported through `OnSortError` when a handler is assigned, or
+> re-raised otherwise. `TClientDataSet` descendants get true descending
+> indexes; other datasets use the FireDAC-style `:D` suffix.
 
 ---
 
@@ -184,7 +186,9 @@ Behavior worth knowing:
 - **Machine-readable vs display formats.** CSV, TSV, XML, JSON and XLSX
   write numbers with full precision and an invariant decimal separator.
   HTML and Text keep the configured display formats (`FloatFormat`,
-  `CurrencyFormat`).
+  `CurrencyFormat`). Set `ExportLocaleFormat := True` to make the
+  machine formats use the locale-aware display formatting instead (for
+  consumers who open exports in comma-decimal Excel).
 - **Dataset friendly.** Exports preserve the current record, temporarily
   lift the grid's filter when `ExportFilteredOnly = False`, and support
   cancellation through `OnProgress` or `Cancel`.
