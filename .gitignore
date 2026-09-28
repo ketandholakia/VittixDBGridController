@@ -60,5 +60,27 @@ modules/
 .DS_Store
 Thumbs.db
 
+# --- Generated resource / tool settings ---
+*.drc
+*.mes
+
 # --- Test artifacts ---
 tests/TestResults.xml
+tests/dunitx-results.xml
+tests/VittixDBGridFilterHistory.ini
+
+# --- Demo build output ---
+demos/features-demo/build/
+
+# --- Local AI / agent tooling state (not project source) ---
+.agents/
+.commandcode/
+.openclaw/
+.zcode/
+memory/
+AGENTS.md
+HEARTBEAT.md
+IDENTITY.md
+SOUL.md
+TOOLS.md
+USER.md
