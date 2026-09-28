@@ -2,15 +2,11 @@
 
 {$REGION 'Documentation'}
 /// <summary>
-/// FIXED VERSION - Controller for TVittixDBGrid
+/// Controller for TVittixDBGrid: wires the grid to the sort, filter and
+/// aggregation engines, owns the footer panel and syncs it through the
+/// hooked WindowProc.
 ///
-/// CRITICAL FIXES APPLIED:
-/// 1. Enhanced WindowProc hook to handle all footer sync messages
-/// 2. Removed need for duplicate TVittixGridHook in FooterPanel
-/// 3. Added proper notification forwarding for DataSource changes
-/// 4. Added re-entrance protection in engine operations
-///
-/// THREAD SAFETY: Not thread-safe. Must be used from main VCL thread only.
+/// THREAD SAFETY: Not thread-safe. Must be used from the main VCL thread only.
 /// </summary>
 {$ENDREGION}
 
@@ -89,7 +85,7 @@ type
     FActive: Boolean;
     FShowFooter: Boolean;
     FAutoRefresh: Boolean;
-    FUpdating: Boolean;  // NEW: Re-entrance guard
+    FUpdating: Boolean;  // Re-entrance guard
 
     FAlternatingRowColors: Boolean;
     FAlternateRowColor: TColor;
@@ -133,6 +129,10 @@ type
     procedure UnhookGrid;
     procedure HookDataSource;
     procedure UnhookDataSource;
+
+    // Rebinds the FDataset field with matching FreeNotification bookkeeping
+    // (the dataset usually outlives the controller's knowledge of it).
+    procedure ReplaceDatasetPointer(ADataSet: TDataSet);
 
     procedure DataLinkActiveChanged;
     procedure DataLinkDataSetChanged;
@@ -381,7 +381,7 @@ begin
     if AComponent = FGrid then
       SetGrid(nil)
     else if AComponent = FDataset then
-      UnhookDataSource // FIX: Semicolon removed here
+      UnhookDataSource
     else if AComponent = FFooterPanel then
       FFooterPanel := nil;
   end;
@@ -430,9 +430,16 @@ begin
   if FGrid = Value then Exit;
 
   UnhookGrid;
+  if Assigned(FGrid) then
+    RemoveFreeNotification(FGrid);
   FGrid := Value;
 
   if not Assigned(FGrid) then Exit;
+
+  // The grid is typically not owned by the controller; without the
+  // notification the controller keeps a dangling FGrid pointer when the
+  // grid's owner destroys it first.
+  FGrid.FreeNotification(Self);
 
   // PRIMARY GATE: csDesigning is set by Delphi 12.2 before any install
   // callback fires. Also block during streaming (csLoading).
@@ -536,12 +543,22 @@ begin
   HookGrid;
 end;
 
+procedure TVittixDBGridController.ReplaceDatasetPointer(ADataSet: TDataSet);
+begin
+  if FDataset = ADataSet then Exit;
+  if Assigned(FDataset) then
+    RemoveFreeNotification(FDataset);
+  FDataset := ADataSet;
+  if Assigned(FDataset) then
+    FDataset.FreeNotification(Self);
+end;
+
 procedure TVittixDBGridController.HookDataSource;
 begin
   if not Assigned(FGrid) or not Assigned(FGrid.DataSource) then Exit;
 
   FDataLink.DataSource := FGrid.DataSource;
-  FDataset := FDataLink.DataSet;
+  ReplaceDatasetPointer(FDataLink.DataSet);
   if not Assigned(FDataset) then Exit;
   if FDataset.Active then
     DataLinkActiveChanged;
@@ -551,6 +568,8 @@ procedure TVittixDBGridController.UnhookDataSource;
 begin
   if Assigned(FDataLink) then
     FDataLink.DataSource := nil;
+  if Assigned(FDataset) then
+    RemoveFreeNotification(FDataset);
   FDataset := nil;
 end;
 
@@ -558,7 +577,7 @@ procedure TVittixDBGridController.DataLinkActiveChanged;
 begin
   if not Assigned(FDataLink) then Exit;
   if FAggregationBusy then Exit;
-  FDataset := FDataLink.DataSet;
+  ReplaceDatasetPointer(FDataLink.DataSet);
   if Assigned(FDataset) and FDataset.Active then
     CreateEngines
   else
@@ -589,11 +608,11 @@ begin
     Exit;
   end;
 
-  FDataset := nil;
+  ReplaceDatasetPointer(nil);
   DestroyEngines;
 
   if Assigned(FDataLink) then
-    FDataset := FDataLink.DataSet;
+    ReplaceDatasetPointer(FDataLink.DataSet);
 
   if Assigned(FDataset) and FDataset.Active then
     DataLinkActiveChanged;
@@ -893,7 +912,13 @@ begin
   end;
 
   if Assigned(FGrid) then
+  begin
     FGrid.Invalidate;
+    // Aggregation values shown in the footer must repaint with the grid:
+    // the footer no longer invalidates itself from every grid WM_PAINT.
+    if Assigned(FFooterPanel) then
+      FFooterPanel.Invalidate;
+  end;
 end;
 
 procedure TVittixDBGridController.GridLayoutChanged;
@@ -1141,6 +1166,8 @@ var
   State: TVittixDBGridLayoutState;
   Storage: TVittixDBGridLayoutJsonStorage;
   TargetFile: string;
+  TempFile: string;
+  BackupFile: string;
   Stream: TFileStream;
 begin
   if FileName <> '' then
@@ -1153,19 +1180,46 @@ begin
     raise EVittixLayoutError.Create(
       'No layout file name: pass FileName, set LayoutStorageFileName, or set PersistenceRootPath');
 
+  // Stage next to the target so the final swap is an atomic same-volume
+  // rename: a crash mid-write can then never leave a corrupt layout file.
+  TempFile := TPath.Combine(TPath.GetDirectoryName(TargetFile),
+    '~vittix-' + TPath.GetGUIDFileName(False) + '.tmp');
+  BackupFile := TempFile + '.bak';
+
   State := TVittixDBGridLayoutState.Create;
   try
-    CaptureLayout(State);
-    Storage := TVittixDBGridLayoutJsonStorage.Create;
     try
-      Stream := TFileStream.Create(TargetFile, fmCreate);
+      CaptureLayout(State);
+      Storage := TVittixDBGridLayoutJsonStorage.Create;
       try
-        Storage.SaveToStream(State, Stream);
+        Stream := TFileStream.Create(TempFile, fmCreate);
+        try
+          Storage.SaveToStream(State, Stream);
+        finally
+          Stream.Free;
+        end;
       finally
-        Stream.Free;
+        Storage.Free;
       end;
-    finally
-      Storage.Free;
+
+      // TFile.Replace needs a backup name (an empty one raises before the
+      // swap); the backup is deleted again once the swap succeeded.
+      if TFile.Exists(TargetFile) then
+      begin
+        TFile.Replace(TempFile, TargetFile, BackupFile);
+        if TFile.Exists(BackupFile) then
+          try TFile.Delete(BackupFile) except end;
+      end
+      else
+        TFile.Move(TempFile, TargetFile);
+    except
+      // Never leave the staged temp file behind on failure.
+      on E: Exception do
+      begin
+        if TFile.Exists(TempFile) then
+          try TFile.Delete(TempFile) except end;
+        raise;
+      end;
     end;
   finally
     State.Free;

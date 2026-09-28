@@ -201,10 +201,9 @@ begin
                 IntVal := AField.AsLargeInt;
                 Agg.HasInt := True;
                 Agg.SumInt := Agg.SumInt + IntVal;
-                // FIX BUG 11: Removed the fragile (Count = 1) guard.
-                // Clear() already sets MinInt := High(Int64) and MaxInt := Low(Int64)
-                // as proper sentinels, so a simple comparison is sufficient and correct
-                // for all records including the first one.
+                // Clear() seeds MinInt/MaxInt with proper sentinels, so the
+                // plain comparison is correct for every record including the
+                // first one.
                 if IntVal < Agg.MinInt then Agg.MinInt := IntVal;
                 if IntVal > Agg.MaxInt then Agg.MaxInt := IntVal;
               end;
@@ -235,9 +234,8 @@ begin
         if IsStringField(AField) and (AggType in [vatMin, vatMax]) then
         begin
           StrVal := AField.AsString;
-          // FIX BUG 11 (string): The original '' check was wrong — empty string
-          // is a valid data value and would incorrectly be skipped as a min.
-          // Use HasString as the first-record flag, consistent with numeric types.
+          // HasString flags the first record: an empty string is a valid
+          // Min/Max value and must not be skipped.
           if not Agg.HasString then
           begin
             Agg.HasString := True;

@@ -61,7 +61,7 @@ type
     // Class vars below remain only as process-wide fallback defaults.
     FRootPath: string;
     FStateFileName: string;
-    // FIX BUG 9: Snapshot of original column indices taken when dialog opens.
+    // Snapshot of original column indices taken when the dialog opens.
     // On Cancel, we roll back the live reorder that drag-drop applies immediately.
     FOriginalColumnOrder: TArray<Integer>;
     FOriginalColumnWidths: TArray<Integer>;
@@ -149,7 +149,7 @@ begin
     FStateFileName := TVittixDBGrid(AGrid).ChooserStateFileName;
   end;
 
-  // FIX BUG 9: Snapshot the current column order so we can roll it back
+  // Snapshot the current column order so we can roll it back
   // if the user clicks Cancel. Drag-drop applies reordering to the grid live,
   // so without this snapshot, Cancel cannot undo a reorder.
   SetLength(FOriginalColumnOrder, FGrid.Columns.Count);
@@ -278,7 +278,7 @@ procedure TVittixDBGridColumnChooserForm.RollbackColumnOrder;
 var
   I, OldIndex: Integer;
 begin
-  // FIX BUG 9: Restore each column to its original index position.
+  // Restore each column to its original index position.
   // We iterate in forward order; the grid engine re-indexes on each assignment.
   if not Assigned(FGrid) then Exit;
   if Length(FOriginalColumnOrder) <> FGrid.Columns.Count then Exit;

@@ -3,27 +3,30 @@ unit Vittix.DBGrid.Export.Engine;
 {$REGION 'Documentation'}
 /// <summary>
 /// Export Engine for Vittix.DBGrid Component Suite
-/// 
+///
 /// SUPPORTED FORMATS:
-/// 1. Excel (XLSX) - Using FlexCel or manual XML generation
-/// 2. Excel (XLS) - Legacy format via OLE Automation
-/// 3. CSV - Comma-Separated Values
-/// 4. TSV - Tab-Separated Values
-/// 5. HTML - Formatted HTML table
-/// 6. XML - Structured XML document
-/// 7. JSON - JSON array format
-/// 8. PDF - Via ReportBuilder or FastReport (optional)
-/// 9. Clipboard - Copy to Windows clipboard
-/// 10. Text - Fixed-width text format
+/// 1. Excel (XLSX) - Built-in SpreadsheetML writer (no external dependencies)
+/// 2. CSV - Comma-Separated Values
+/// 3. TSV - Tab-Separated Values
+/// 4. HTML - Formatted HTML table
+/// 5. XML - Structured XML document
+/// 6. JSON - JSON array format
+/// 7. Clipboard - Copy to Windows clipboard
+/// 8. Text - Fixed-width text format
+/// (PDF and legacy XLS are not implemented; PDF requires a reporting engine.)
 ///
 /// FEATURES:
 /// - Export visible columns only or all columns
 /// - Export filtered data or all data
+/// - Optional header and footer (aggregation) rows
 /// - Custom formatting per column
-/// - Progress callback for large exports
-/// - Memory-efficient streaming
+/// - Progress callback with cancellation
 /// - Unicode support
 /// - Configurable delimiters and encoding
+///
+/// Machine-readable formats (CSV, TSV, XML, JSON, XLSX) write numbers with
+/// full precision and an invariant decimal separator; HTML and Text keep the
+/// configurable display formatting (FloatFormat, CurrencyFormat).
 ///
 /// USAGE:
 ///   var Exporter: TVittixDBGridExporter;
@@ -125,7 +128,13 @@ type
 
     // function GetVisibleColumns: TList<TColumn>; // Removed, logic integrated into GetExportColumns
     function GetExportColumns: TList<TColumn>;
-    function FormatFieldValue(Field: TField): string;
+    function FormatFieldValue(Field: TField): string; overload;
+    function FormatFieldValue(Field: TField;
+      AMachineReadable: Boolean): string; overload;
+    function FormatNumberInvariant(Value: Double): string;
+    function IsNumericValueText(const Value: string): Boolean;
+    function IsNumericFieldType(AField: TField): Boolean;
+    function JSONValueForField(AField: TField): string;
     function EscapeCSV(const Value: string): string;
     function NeutralizeFormulaInjection(const Value: string): string;
     function EscapeHTML(const Value: string): string;
@@ -143,6 +152,8 @@ type
   public
     constructor Create(AGrid: TVittixDBGrid); reintroduce;
     destructor Destroy; override;
+    procedure Notification(AComponent: TComponent;
+      Operation: TOperation); override;
 
     // Main export methods
     procedure ExportToFile(const FileName: string; Format: TVittixExportFormat);
@@ -265,12 +276,36 @@ begin
     
   FOptions := TVittixExportOptions.Create;
   FCancelled := False;
+
+  // The exporter only holds raw references; ask both components to signal
+  // their destruction so the pointers are cleared instead of dangling
+  // (a dataset on a data module outlives no one's assumptions).
+  if Assigned(FGrid) then
+    FGrid.FreeNotification(Self);
+  if Assigned(FDataset) then
+    FDataset.FreeNotification(Self);
 end;
 
 destructor TVittixDBGridExporter.Destroy;
 begin
   FOptions.Free;
   inherited;
+end;
+
+procedure TVittixDBGridExporter.Notification(AComponent: TComponent;
+  Operation: TOperation);
+begin
+  inherited;
+  if Operation = opRemove then
+  begin
+    if AComponent = FDataset then
+      FDataset := nil
+    else if AComponent = FGrid then
+    begin
+      FGrid := nil;
+      FDataset := nil;
+    end;
+  end;
 end;
 
 function TVittixDBGridExporter.GetExportColumns: TList<TColumn>;
@@ -299,59 +334,100 @@ end;
 
 function TVittixDBGridExporter.FormatFieldValue(Field: TField): string;
 begin
+  Result := FormatFieldValue(Field, False);
+end;
+
+function TVittixDBGridExporter.FormatFieldValue(Field: TField;
+  AMachineReadable: Boolean): string;
+begin
   if Field.IsNull then
   begin
     Result := FOptions.NullText;
     Exit;
   end;
-  
+
   case Field.DataType of
     ftString, ftWideString, ftMemo, ftWideMemo, ftFmtMemo:
       Result := Field.AsString;
-      
+
     ftSmallint, ftInteger, ftWord, ftLargeint, ftAutoInc:
       Result := Field.AsString;
-      
+
     ftBoolean:
       if FOptions.BooleanAsText then
         Result := IfThen(Field.AsBoolean, FOptions.TrueText, FOptions.FalseText)
       else
         Result := Field.AsString;
-        
+
     ftFloat, ftCurrency, ftBCD, ftFMTBcd:
-      if Field.DataType = ftCurrency then
+      if AMachineReadable then
+        Result := FormatNumberInvariant(Field.AsFloat)
+      else if Field.DataType = ftCurrency then
         Result := FormatFloat(FOptions.CurrencyFormat, Field.AsFloat)
       else
         Result := FormatFloat(FOptions.FloatFormat, Field.AsFloat);
-        
+
     ftDate:
       Result := FormatDateTime(FOptions.DateFormat, Field.AsDateTime);
-      
+
     ftTime:
       Result := FormatDateTime(FOptions.TimeFormat, Field.AsDateTime);
-      
+
     ftDateTime, ftTimeStamp:
       Result := FormatDateTime(FOptions.DateTimeFormat, Field.AsDateTime);
-      
+
   else
     Result := Field.AsString;
   end;
+end;
+
+function TVittixDBGridExporter.FormatNumberInvariant(Value: Double): string;
+begin
+  // Full precision (the default '0.00' display format silently rounds
+  // 1234.5678 down to 1234.57) with '.' as decimal separator regardless of
+  // the machine locale, so machine-readable output stays parseable.
+  Result := FloatToStrF(Value, ffGeneral, 15, 0, TFormatSettings.Invariant);
+end;
+
+function TVittixDBGridExporter.IsNumericValueText(const Value: string): Boolean;
+var
+  V: Extended;
+begin
+  // Locale parse first, then invariant, so "1234.5" counts as numeric even
+  // on machines whose decimal separator is ','.
+  Result := TryStrToFloat(Trim(Value), V);
+  if not Result then
+    Result := TryStrToFloat(Trim(Value), V, TFormatSettings.Invariant);
+end;
+
+function TVittixDBGridExporter.IsNumericFieldType(AField: TField): Boolean;
+begin
+  Result := AField.DataType in [ftSmallint, ftInteger, ftWord, ftLongWord,
+    ftAutoInc, ftLargeint, ftShortint, ftByte, ftSingle, ftFloat,
+    ftCurrency, ftBCD, ftFMTBcd, ftExtended];
 end;
 
 function TVittixDBGridExporter.EscapeCSV(const Value: string): string;
 var
   NeedsQuotes: Boolean;
 begin
-  Result := NeutralizeFormulaInjection(Value);
+  // Formula-injection neutralization is only for text Excel could evaluate.
+  // Values that parse as numbers (-5, -12.50, +441234567890) are genuine
+  // numeric data and must survive export unchanged so they paste back into
+  // Excel as numbers instead of text.
+  if IsNumericValueText(Value) then
+    Result := Value
+  else
+    Result := NeutralizeFormulaInjection(Value);
 
-  NeedsQuotes := (Pos(FOptions.Delimiter, Value) > 0) or 
+  NeedsQuotes := (Pos(FOptions.Delimiter, Value) > 0) or
                  (Pos(FOptions.QuoteChar, Value) > 0) or
-                 (Pos(#13, Result) > 0) or 
+                 (Pos(#13, Result) > 0) or
                  (Pos(#10, Result) > 0);
-                 
+
   if NeedsQuotes then
   begin
-    Result := StringReplace(Result, FOptions.QuoteChar, 
+    Result := StringReplace(Result, FOptions.QuoteChar,
       FOptions.QuoteChar + FOptions.QuoteChar, [rfReplaceAll]);
     Result := FOptions.QuoteChar + Result + FOptions.QuoteChar;
   end
@@ -379,36 +455,94 @@ begin
 end;
 
 function TVittixDBGridExporter.EscapeXML(const Value: string): string;
+var
+  SB: TStringBuilder;
+  Ch: Char;
 begin
-  Result := StringReplace(Value, '&', '&amp;', [rfReplaceAll]);
-  Result := StringReplace(Result, '<', '&lt;', [rfReplaceAll]);
-  Result := StringReplace(Result, '>', '&gt;', [rfReplaceAll]);
-  Result := StringReplace(Result, '"', '&quot;', [rfReplaceAll]);
-  Result := StringReplace(Result, '''', '&apos;', [rfReplaceAll]);
+  SB := TStringBuilder.Create(Length(Value) + 8);
+  try
+    for Ch in Value do
+    begin
+      // Characters illegal in XML 1.0 (0x00-0x08, 0x0B, 0x0C, 0x0E-0x1F)
+      // make Excel reject the file; drop them. Tab, CR and LF are legal.
+      if (Ord(Ch) < $20) and not (Ord(Ch) in [9, 10, 13]) then
+        Continue;
+
+      case Ch of
+        '&': SB.Append('&amp;');
+        '<': SB.Append('&lt;');
+        '>': SB.Append('&gt;');
+        '"': SB.Append('&quot;');
+        '''': SB.Append('&apos;');
+      else
+        SB.Append(Ch);
+      end;
+    end;
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
 end;
 
 function TVittixDBGridExporter.EscapeJSON(const Value: string): string;
+var
+  SB: TStringBuilder;
+  Ch: Char;
 begin
-  Result := StringReplace(Value, '\', '\\', [rfReplaceAll]);
-  Result := StringReplace(Result, '"', '\"', [rfReplaceAll]);
-  Result := StringReplace(Result, #13, '\r', [rfReplaceAll]);
-  Result := StringReplace(Result, #10, '\n', [rfReplaceAll]);
-  Result := StringReplace(Result, #9, '\t', [rfReplaceAll]);
+  SB := TStringBuilder.Create(Length(Value) + 8);
+  try
+    for Ch in Value do
+    begin
+      case Ch of
+        '\': SB.Append('\\');
+        '"': SB.Append('\"');
+        #8:  SB.Append('\b');
+        #9:  SB.Append('\t');
+        #10: SB.Append('\n');
+        #12: SB.Append('\f');
+        #13: SB.Append('\r');
+      else
+        // Escape the remaining control characters (0x00-0x1F): raw control
+        // bytes produce invalid JSON that most parsers reject.
+        if Ord(Ch) < $20 then
+        begin
+          SB.Append('\u');
+          SB.Append(IntToHex(Ord(Ch), 4));
+        end
+        else
+          SB.Append(Ch);
+      end;
+    end;
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
 end;
 
 function TVittixDBGridExporter.SanitizeXMLTagName(const TagName: string): string;
 var
-  S: string;
+  SB: TStringBuilder;
+  Ch: Char;
 begin
-  S := TagName;
-  // Replace invalid characters with underscore
-  S := StringReplace(S, ' ', '_', [rfReplaceAll]);
-  S := StringReplace(S, '-', '_', [rfReplaceAll]);
-  S := StringReplace(S, '.', '_', [rfReplaceAll]);
-  // Ensure it doesn't start with a number or invalid char
-  if (Length(S) > 0) and CharInSet(S[1], ['0'..'9']) then
-    S := '_' + S;
-  Result := S;
+  SB := TStringBuilder.Create(Length(TagName) + 1);
+  try
+    for Ch in TagName do
+    begin
+      if CharInSet(Ch, ['A'..'Z', 'a'..'z', '0'..'9', '_', '-', '.']) then
+        SB.Append(Ch)
+      else
+        SB.Append('_');
+    end;
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+
+  // XML names must not start with a digit, '-' or '.'.
+  if (Length(Result) > 0) and CharInSet(Result[1], ['0'..'9', '-', '.']) then
+    Result := '_' + Result;
+  if Result = '' then
+    Result := '_field';
 end;
 
 procedure TVittixDBGridExporter.CheckProgress(Current, Total: Integer);
@@ -448,12 +582,19 @@ procedure TVittixDBGridExporter.ExportToFileAtomic(const FileName: string;
   const ExportProc: TProc<TStream>);
 var
   TempFileName: string;
+  BackupFileName: string;
   TempStream: TFileStream;
 begin
+  // Every entry point must reset the cancel flag here: the file-format
+  // methods (ExportToCSV, ExportToHTML, ...) come straight through this
+  // helper, so a cancelled export must not poison the next one.
+  FCancelled := False;
+
   // Stage the temp file next to the target so the final Move stays on one
   // volume (an atomic rename rather than a slow cross-volume copy).
   TempFileName := TPath.Combine(TPath.GetDirectoryName(FileName),
     '~vittix-' + TPath.GetGUIDFileName(False) + '.tmp');
+  BackupFileName := TempFileName + '.bak';
   try
     TempStream := TFileStream.Create(TempFileName, fmCreate);
     try
@@ -464,9 +605,19 @@ begin
       TempStream.Free;
     end;
 
+    // TFile.Replace swaps the staged file over the existing target in one
+    // operation: if the target is locked the original file survives, which
+    // a delete-then-move sequence cannot guarantee. A backup name must be
+    // supplied (an empty one raises before the swap), and is removed again
+    // once the swap succeeded.
     if TFile.Exists(FileName) then
-      TFile.Delete(FileName);
-    TFile.Move(TempFileName, FileName);
+    begin
+      TFile.Replace(TempFileName, FileName, BackupFileName);
+      if TFile.Exists(BackupFileName) then
+        try TFile.Delete(BackupFileName) except end;
+    end
+    else
+      TFile.Move(TempFileName, FileName);
   except
     // Never leave the staged temp file behind, cancellation included.
     on E: Exception do
@@ -608,6 +759,10 @@ begin
   if not Assigned(FDataset) or not FDataset.Active then
     raise EVittixExportError.Create('Dataset is not active');
 
+  // Direct stream calls bypass ExportToFileAtomic, so reset the flag here
+  // as well: one cancelled export must not poison the next.
+  FCancelled := False;
+
   Writer := TStreamWriter.Create(Stream, FOptions.Encoding);
   try
     Columns := GetExportColumns;
@@ -648,7 +803,7 @@ begin
 
             Col := Columns[I];
             if Assigned(Col.Field) then
-              Line := Line + EscapeCSV(FormatFieldValue(Col.Field));
+              Line := Line + EscapeCSV(FormatFieldValue(Col.Field, True));
           end;
 
           Writer.WriteLine(Line);
@@ -709,16 +864,19 @@ var
   I, J, RowCount: Integer;
   Col: TColumn;
   MaxLengths: TArray<Integer>;
-  // FIX BUG 6: Cache all formatted row data in the first pass so we never
-  // need to call Dataset.First between passes. The original code called
-  // Dataset.First outside of DisableControls which could trigger a costly
-  // re-query on server-side datasets (FireDAC, dbExpress). Now we scan
-  // once, cache, then write from the cache — zero second dataset traversal.
+  // Single traversal: rows are formatted in the first pass so no second
+  // dataset scan is needed to compute column widths (server-side datasets
+  // make a second First/Next sweep expensive).
   RowCache: TArray<TArray<string>>;
   RowData: TArray<string>;
+  FooterRow: TArray<string>;
+  Bookmark: TBookmark;
+  FilteredToggledOff: Boolean;
 begin
   if not Assigned(FDataset) or not FDataset.Active then
     raise EVittixExportError.Create('Dataset is not active');
+
+  FCancelled := False;
 
   Writer := TStreamWriter.Create(Stream, FOptions.Encoding);
   try
@@ -729,6 +887,10 @@ begin
         MaxLengths[I] := Length(Columns[I].Title.Caption);
 
       SetLength(RowCache, 0);
+
+      // Prepare iteration: preserve position; when ExportFilteredOnly is False
+      // and the dataset is filtered, export all records.
+      Bookmark := BeginExportIteration(FilteredToggledOff);
 
       // Single pass: collect all data AND compute max widths simultaneously
       FDataset.DisableControls;
@@ -745,7 +907,11 @@ begin
           begin
             Col := Columns[I];
             if Assigned(Col.Field) then
-              RowData[I] := FormatFieldValue(Col.Field)
+              // A fixed-width row cannot carry line breaks: flatten any
+              // embedded CR/LF so one record stays one output line.
+              RowData[I] := StringReplace(
+                StringReplace(FormatFieldValue(Col.Field), sLineBreak, ' ', [rfReplaceAll]),
+                #10, ' ', [rfReplaceAll])
             else
               RowData[I] := '';
 
@@ -763,6 +929,7 @@ begin
           FDataset.Next;
         end;
       finally
+        EndExportIteration(Bookmark, FilteredToggledOff);
         FDataset.EnableControls;
       end;
 
@@ -787,6 +954,16 @@ begin
         Line := '';
         for I := 0 to Columns.Count - 1 do
           Line := Line + Format('%-*s', [MaxLengths[I] + 1, RowCache[J][I]]);
+        Writer.WriteLine(Line);
+      end;
+
+      // Footer row (aggregation / footer text), aligned like the data rows
+      if FOptions.IncludeFooter then
+      begin
+        FooterRow := BuildFooterRow(Columns);
+        Line := '';
+        for I := 0 to Columns.Count - 1 do
+          Line := Line + Format('%-*s', [MaxLengths[I] + 1, FooterRow[I]]);
         Writer.WriteLine(Line);
       end;
 
@@ -835,6 +1012,8 @@ var
 begin
   if not Assigned(FDataset) or not FDataset.Active then
     raise EVittixExportError.Create('Dataset is not active');
+
+  FCancelled := False;
 
   Writer := TStreamWriter.Create(Stream, TEncoding.UTF8);
   try
@@ -958,60 +1137,94 @@ var
   I, RowCount: Integer;
   Col: TColumn;
   FieldName: string;
+  FooterRow: TArray<string>;
+  Bookmark: TBookmark;
+  FilteredToggledOff: Boolean;
 begin
   if not Assigned(FDataset) or not FDataset.Active then
     raise EVittixExportError.Create('Dataset is not active');
-    
+
+  FCancelled := False;
+
   Writer := TStreamWriter.Create(Stream, TEncoding.UTF8);
   try
     Columns := GetExportColumns;
     try
       Writer.WriteLine('<?xml version="1.0" encoding="UTF-8"?>');
       Writer.WriteLine('<data>');
-      
+
+      // Prepare iteration: preserve position; when ExportFilteredOnly is False
+      // and the dataset is filtered, export all records.
+      Bookmark := BeginExportIteration(FilteredToggledOff);
+
       FDataset.DisableControls;
       try
         FDataset.First;
         RowCount := 0;
-        
+
         while not FDataset.Eof do
         begin
           if FCancelled then
             Break;
-            
+
           Writer.WriteLine('  <row>');
-          
+
           for I := 0 to Columns.Count - 1 do
           begin
             Col := Columns[I];
             if Assigned(Col.Field) then
             begin
-              FieldName := StringReplace(Col.Field.FieldName, ' ', '_', [rfReplaceAll]);
-              FieldName := SanitizeXMLTagName(Col.Field.FieldName); // Use sanitized name
+              FieldName := SanitizeXMLTagName(Col.Field.FieldName);
               Writer.Write('    <'); // Indent for readability
               Writer.Write(FieldName);
               Writer.Write('>');
-              Writer.Write(EscapeXML(FormatFieldValue(Col.Field)));
+              Writer.Write(EscapeXML(FormatFieldValue(Col.Field, True)));
               Writer.Write('</');
               Writer.Write(FieldName);
               Writer.WriteLine('>');
             end;
           end;
-          
+
           Writer.WriteLine('  </row>');
-          
+
           Inc(RowCount);
           if RowCount mod 100 = 0 then
             CheckProgress(RowCount, FDataset.RecordCount);
-            
+
           FDataset.Next;
         end;
       finally
+        EndExportIteration(Bookmark, FilteredToggledOff);
         FDataset.EnableControls;
       end;
-      
+
+      // Footer row (aggregation / footer text)
+      if FOptions.IncludeFooter then
+      begin
+        FooterRow := BuildFooterRow(Columns);
+        Writer.WriteLine('  <footer>');
+        for I := 0 to Columns.Count - 1 do
+        begin
+          Col := Columns[I];
+          if not Assigned(Col) or (Col.FieldName = '') then
+            Continue;
+          if Assigned(Col.Field) then
+            FieldName := SanitizeXMLTagName(Col.Field.FieldName)
+          else
+            FieldName := SanitizeXMLTagName(Col.FieldName);
+          Writer.Write('    <');
+          Writer.Write(FieldName);
+          Writer.Write('>');
+          Writer.Write(EscapeXML(FooterRow[I]));
+          Writer.Write('</');
+          Writer.Write(FieldName);
+          Writer.WriteLine('>');
+        end;
+        Writer.WriteLine('  </footer>');
+      end;
+
       Writer.WriteLine('</data>');
-      
+
     finally
       Columns.Free;
     end;
@@ -1032,6 +1245,29 @@ begin
     end);
 end;
 
+function TVittixDBGridExporter.JSONValueForField(AField: TField): string;
+begin
+  if AField.IsNull then
+    Exit('null');
+
+  case AField.DataType of
+    ftBoolean:
+      if AField.AsBoolean then
+        Result := 'true'
+      else
+        Result := 'false';
+
+    ftSmallint, ftInteger, ftWord, ftLongWord, ftAutoInc, ftLargeint,
+    ftShortint, ftByte:
+      Result := AField.AsString;
+
+    ftSingle, ftFloat, ftCurrency, ftBCD, ftFMTBcd, ftExtended:
+      Result := FormatNumberInvariant(AField.AsFloat);
+  else
+    Result := '"' + EscapeJSON(FormatFieldValue(AField, True)) + '"';
+  end;
+end;
+
 procedure TVittixDBGridExporter.ExportToJSONStream(Stream: TStream);
 var
   Writer: TStreamWriter;
@@ -1039,33 +1275,42 @@ var
   I, RowCount: Integer;
   Col: TColumn;
   FirstRow, FirstCol: Boolean;
+  FooterRow: TArray<string>;
+  Bookmark: TBookmark;
+  FilteredToggledOff: Boolean;
 begin
   if not Assigned(FDataset) or not FDataset.Active then
     raise EVittixExportError.Create('Dataset is not active');
-    
+
+  FCancelled := False;
+
   Writer := TStreamWriter.Create(Stream, TEncoding.UTF8);
   try
     Columns := GetExportColumns;
     try
       Writer.WriteLine('[');
-      
+
+      // Prepare iteration: preserve position; when ExportFilteredOnly is False
+      // and the dataset is filtered, export all records.
+      Bookmark := BeginExportIteration(FilteredToggledOff);
+
       FDataset.DisableControls;
       try
         FDataset.First;
         RowCount := 0;
         FirstRow := True;
-        
+
         while not FDataset.Eof do
         begin
           if FCancelled then
             Break;
-            
+
           if not FirstRow then
             Writer.WriteLine(',');
           FirstRow := False;
-          
+
           Writer.Write('  {');
-          
+
           FirstCol := True;
           for I := 0 to Columns.Count - 1 do
           begin
@@ -1075,31 +1320,64 @@ begin
               if not FirstCol then
                 Writer.Write(', ');
               FirstCol := False;
-              
+
               Writer.Write('"');
               Writer.Write(EscapeJSON(Col.Field.FieldName));
-              Writer.Write('": "');
-              Writer.Write(EscapeJSON(FormatFieldValue(Col.Field)));
-              Writer.Write('"');
+              Writer.Write('": ');
+              Writer.Write(JSONValueForField(Col.Field));
             end;
           end;
-          
+
           Writer.Write('}');
-          
+
           Inc(RowCount);
           if RowCount mod 100 = 0 then
             CheckProgress(RowCount, FDataset.RecordCount);
-            
+
           FDataset.Next;
         end;
-        
+
+        // Footer values are display text, so they stay strings. The
+        // "__footer__" key marks the trailing object so consumers iterating
+        // data rows never mistake it for a record.
+        if FOptions.IncludeFooter then
+        begin
+          FooterRow := BuildFooterRow(Columns);
+          if not FirstRow then
+            Writer.WriteLine(',');
+          Writer.Write('  {"__footer__": {');
+
+          FirstCol := True;
+          for I := 0 to Columns.Count - 1 do
+          begin
+            Col := Columns[I];
+            if not Assigned(Col) or (Col.FieldName = '') then
+              Continue;
+            if not FirstCol then
+              Writer.Write(', ');
+            FirstCol := False;
+
+            Writer.Write('"');
+            if Assigned(Col.Field) then
+              Writer.Write(EscapeJSON(Col.Field.FieldName))
+            else
+              Writer.Write(EscapeJSON(Col.FieldName));
+            Writer.Write('": "');
+            Writer.Write(EscapeJSON(FooterRow[I]));
+            Writer.Write('"');
+          end;
+
+          Writer.Write('}}');
+        end;
+
         Writer.WriteLine;
       finally
+        EndExportIteration(Bookmark, FilteredToggledOff);
         FDataset.EnableControls;
       end;
-      
+
       Writer.WriteLine(']');
-      
+
     finally
       Columns.Free;
     end;
@@ -1192,7 +1470,8 @@ function TVittixExcelExporter.BuildSheetXML: string;
             XML.Add(Format('<c r="%s%d" t="inlineStr">', [
               ColumnLetter(I), Row
             ]));
-            XML.Add('<is><t>' + FExporter.EscapeXML(Columns[I].Title.Caption) + '</t></is>');
+            XML.Add('<is><t xml:space="preserve">' +
+              FExporter.EscapeXML(Columns[I].Title.Caption) + '</t></is>');
             XML.Add('</c>');
           end;
           XML.Add('</row>');
@@ -1221,12 +1500,31 @@ function TVittixExcelExporter.BuildSheetXML: string;
               Col := Columns[I];
               if Assigned(Col.Field) then
               begin
-                Value := FExporter.FormatFieldValue(Col.Field);
-                XML.Add(Format('<c r="%s%d" t="inlineStr">', [
-                  ColumnLetter(I), Row
-                ]));
-                XML.Add('<is><t>' + FExporter.EscapeXML(Value) + '</t></is>');
-                XML.Add('</c>');
+                if FExporter.IsNumericFieldType(Col.Field) and not Col.Field.IsNull then
+                begin
+                  // Numbers as real numeric cells so Excel computes on them
+                  // instead of treating every value as text.
+                  XML.Add(Format('<c r="%s%d"><v>%s</v></c>', [
+                    ColumnLetter(I), Row,
+                    FExporter.FormatNumberInvariant(Col.Field.AsFloat)
+                  ]));
+                end
+                else if (Col.Field.DataType = ftBoolean) and not Col.Field.IsNull then
+                begin
+                  XML.Add(Format('<c r="%s%d" t="b"><v>%d</v></c>', [
+                    ColumnLetter(I), Row, Ord(Col.Field.AsBoolean)
+                  ]));
+                end
+                else
+                begin
+                  Value := FExporter.FormatFieldValue(Col.Field, True);
+                  XML.Add(Format('<c r="%s%d" t="inlineStr">', [
+                    ColumnLetter(I), Row
+                  ]));
+                  XML.Add('<is><t xml:space="preserve">' +
+                    FExporter.EscapeXML(Value) + '</t></is>');
+                  XML.Add('</c>');
+                end;
               end;
             end;
 
@@ -1254,7 +1552,8 @@ function TVittixExcelExporter.BuildSheetXML: string;
             XML.Add(Format('<c r="%s%d" t="inlineStr">', [
               ColumnLetter(I), Row
             ]));
-            XML.Add('<is><t>' + FExporter.EscapeXML(FooterRow[I]) + '</t></is>');
+            XML.Add('<is><t xml:space="preserve">' +
+              FExporter.EscapeXML(FooterRow[I]) + '</t></is>');
             XML.Add('</c>');
           end;
           XML.Add('</row>');

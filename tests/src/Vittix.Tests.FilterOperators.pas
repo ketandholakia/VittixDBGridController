@@ -43,6 +43,8 @@ type
     [Test]
     procedure EmptyTextParsesAsContainsWithEmptyValue;
     [Test]
+    procedure NotContainsAndNotEqualsModesAreDistinct;
+    [Test]
     procedure IndexByPrefixReturnsContainsForUnknownPrefix;
   end;
 
@@ -257,6 +259,16 @@ begin
 
   Assert.IsFalse(VittixFilterTryParseOperatorText('   ', OperatorIndex, Value));
   Assert.AreEqual('', Value);
+end;
+
+procedure TVittixFilterOperatorTableTests.NotContainsAndNotEqualsModesAreDistinct;
+begin
+  // '!' (Does Not Contain) and '<>' (Not Equals) share the table slots they
+  // always had — persisted operator indexes stay valid — but they must map
+  // to different match modes now: '<>' is an exact-value comparison, '!'
+  // remains a substring exclusion.
+  Assert.AreEqual(vfmDoesNotContain, VittixFilterOperatorDefinition(4).Mode);
+  Assert.AreEqual(vfmNotEquals, VittixFilterOperatorDefinition(5).Mode);
 end;
 
 procedure TVittixFilterOperatorTableTests.IndexByPrefixReturnsContainsForUnknownPrefix;

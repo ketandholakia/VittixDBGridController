@@ -2,17 +2,9 @@
 
 {$REGION 'Documentation'}
 /// <summary>
-/// FIXED VERSION - Footer Panel for TVittixDBGrid
-/// 
-/// CRITICAL FIXES APPLIED:
-/// 1. Removed TVittixGridHook class (duplicate WindowProc hook)
-/// 2. Controller now handles all sync messages via its WindowProc
-/// 3. Simplified Attach method
-/// 4. Fixed integer overflow protection in Paint
-///
-/// The Controller's GridWindowProc now calls SyncLayout directly for all
-/// necessary messages (WM_SIZE, WM_HSCROLL, etc.), eliminating the need
-/// for a separate hook that was causing conflicts.
+/// Footer Panel for TVittixDBGrid: renders the aggregation footer under the
+/// grid. The controller's GridWindowProc calls SyncLayout for the relevant
+/// window messages; this panel owns no hooks itself.
 /// </summary>
 {$ENDREGION}
 
@@ -47,6 +39,10 @@ type
     FPopup: TPopupMenu;
     FContextColumn: TColumn;
     FSyncingLayout: Boolean;
+    // Cached text metrics: SyncLayout runs on every WM_PAINT and scroll
+    // message, and recomputing them needs a screen DC each time.
+    FCachedHeight: Integer;
+    FCachedFontHandle: THandle;
 
     procedure BuildPopup;
     procedure PopupClick(Sender: TObject);
@@ -115,7 +111,7 @@ end;
 
 destructor TVittixDBGridFooterPanel.Destroy;
 begin
-  // FIX: Memory Leak - Popup must be freed
+  // The popup is rebuilt on every open; free the previous one first
   FreeAndNil(FPopup);
   inherited;
 end;
@@ -148,6 +144,7 @@ var
   NewTop: Integer;
   NewWidth: Integer;
   NewHeight: Integer;
+  Changed: Boolean;
 begin
   if not Assigned(FGrid) then Exit;
   if FSyncingLayout then Exit;
@@ -157,18 +154,28 @@ begin
 
   FSyncingLayout := True;
   try
-  DC := GetDC(0);
-  try
-    SelectObject(DC, FGrid.Font.Handle);
-    GetTextMetrics(DC, TM);
-    NewHeight := TM.tmHeight + TM.tmExternalLeading + 8;
-  finally
-    ReleaseDC(0, DC);
-  end;
+    // Text metrics only change when the grid font changes, so cache them
+    // instead of allocating a screen DC on every WM_PAINT/scroll sync.
+    if (FCachedHeight = 0) or (FGrid.Font.Handle <> FCachedFontHandle) then
+    begin
+      DC := GetDC(0);
+      try
+        SelectObject(DC, FGrid.Font.Handle);
+        GetTextMetrics(DC, TM);
+        FCachedHeight := TM.tmHeight + TM.tmExternalLeading + 8;
+        FCachedFontHandle := FGrid.Font.Handle;
+      finally
+        ReleaseDC(0, DC);
+      end;
+    end;
+    NewHeight := FCachedHeight;
 
     NewLeft := FGrid.Left;
     NewTop := FGrid.Top + FGrid.Height - NewHeight;
     NewWidth := FGrid.Width;
+
+    Changed := (Left <> NewLeft) or (Top <> NewTop) or
+               (Width <> NewWidth) or (Height <> NewHeight);
 
     if (Left <> NewLeft) then
       Left := NewLeft;
@@ -179,7 +186,11 @@ begin
     if (Height <> NewHeight) then
       Height := NewHeight;
 
-    Invalidate;
+    // Invalidate only when the geometry actually moved; data changes reach
+    // the footer through the controller's explicit Invalidate instead, so
+    // paint cycles no longer re-request themselves via this path.
+    if Changed then
+      Invalidate;
   finally
     FSyncingLayout := False;
   end;

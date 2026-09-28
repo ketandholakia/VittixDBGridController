@@ -61,6 +61,20 @@ type
     [Test]
     procedure TsvNeutralizesFormulaLeadingValues;
     [Test]
+    procedure CsvKeepsNumericValuesUnneutralized;
+    [Test]
+    procedure CancelledExportDoesNotPoisonNextExport;
+    [Test]
+    procedure JsonExportsTypedValues;
+    [Test]
+    procedure JsonEscapesControlCharacters;
+    [Test]
+    procedure MachineFormatsKeepFullFloatPrecision;
+    [Test]
+    procedure XmlDropsIllegalControlCharacters;
+    [Test]
+    procedure XlsxWritesNumbersAsNumericCells;
+    [Test]
     procedure XlsxReportsProgressDuringExport;
     [Test]
     procedure ClipboardExportWritesExpectedText;
@@ -109,6 +123,24 @@ type
     procedure Html_ExportFilteredOnlyTrue_WithActiveFilter;
     [Test]
     procedure Xlsx_ExportFilteredOnlyTrue_WithActiveFilter;
+    [Test]
+    procedure Xml_ExportFilteredOnlyTrue_WithActiveFilter;
+    [Test]
+    procedure Json_ExportFilteredOnlyTrue_WithActiveFilter;
+    [Test]
+    procedure Text_ExportFilteredOnlyTrue_WithActiveFilter;
+    [Test]
+    procedure Xml_ExportFilteredOnlyFalse_AllRecords;
+    [Test]
+    procedure Json_ExportFilteredOnlyFalse_AllRecords;
+    [Test]
+    procedure Text_ExportFilteredOnlyFalse_AllRecords;
+    [Test]
+    procedure PositionPreserved_AfterXmlExport;
+    [Test]
+    procedure PositionPreserved_AfterJsonExport;
+    [Test]
+    procedure PositionPreserved_AfterTextExport;
     function ExtractSheetXml(Stream: TMemoryStream): string;
   end;
 
@@ -143,6 +175,12 @@ type
     [Test]
     procedure IncludeFooterTrue_WithAggregation_FooterRow_Xlsx;
     [Test]
+    procedure IncludeFooterTrue_WithAggregation_FooterRow_Xml;
+    [Test]
+    procedure IncludeFooterTrue_WithAggregation_FooterRow_Json;
+    [Test]
+    procedure IncludeFooterTrue_WithAggregation_FooterRow_Text;
+    [Test]
     procedure IncludeFooterTrue_EmptyDataset_EmptyFooterRow_Csv;
     [Test]
     procedure IncludeFooterRespectsExportVisibleOnly_Csv;
@@ -153,6 +191,7 @@ implementation
 
 uses
   System.IOUtils,
+  System.JSON,
   Vittix.Tests.TestData;
 
 // Splits CSV text into logical records. Commas, quotes and line breaks
@@ -456,6 +495,187 @@ begin
   Output := FExporter.ExportToString(vefTSV);
 
   Assert.IsTrue(Output.Contains('''+SUM(1,2)'));
+end;
+
+procedure TVittixExportEngineTests.CsvKeepsNumericValuesUnneutralized;
+var
+  Output: string;
+begin
+  FDataSet.First;
+  FDataSet.Edit;
+  FDataSet.FieldByName('Name').AsString := '+441234567890';
+  FDataSet.FieldByName('Amount').AsCurrency := -12.50;
+  FDataSet.Post;
+
+  Output := FExporter.ExportToString(vefCSV);
+
+  // Numbers that parse as numbers (-12.50, +441234567890) are genuine
+  // numeric data: they must survive as numbers so Excel does not turn
+  // them into text cells with a leading apostrophe.
+  Assert.IsTrue(Output.Contains('-12.5'), 'negative amount exported as a number');
+  Assert.IsFalse(Output.Contains('''-12.5'), 'negative amount not neutralized');
+  Assert.IsTrue(Output.Contains('+441234567890'), 'plus-prefixed number exported as-is');
+  Assert.IsFalse(Output.Contains('''+441234567890'), 'plus-prefixed number not neutralized');
+end;
+
+procedure TVittixExportEngineTests.CancelledExportDoesNotPoisonNextExport;
+var
+  TempFile: string;
+  LargeDataSet: TClientDataSet;
+  LargeForm: TForm;
+  LargeGrid: TVittixDBGrid;
+  LargeExporter: TVittixDBGridExporter;
+  Lines: TStringList;
+begin
+  TempFile := TPath.Combine(TPath.GetTempPath, TGuid.NewGuid.ToString + '.csv');
+  LargeDataSet := CreateLargeDataSet(250);
+  try
+    LargeGrid := CreateHeadlessGrid(LargeDataSet, LargeForm);
+    try
+      LargeExporter := TVittixDBGridExporter.Create(LargeGrid);
+      try
+        // The first export is cancelled and aborts...
+        LargeExporter.OnProgress := CancelAtFirstProgress;
+        Assert.WillRaise(
+          procedure
+          begin
+            LargeExporter.ExportToCSV(TempFile);
+          end,
+          EAbort
+        );
+
+        // ...and the second export on the SAME exporter must run to
+        // completion: the cancel flag used to stay set for the file paths.
+        LargeExporter.OnProgress := nil;
+        LargeExporter.ExportToCSV(TempFile);
+
+        Lines := TStringList.Create;
+        try
+          Lines.Text := TFile.ReadAllText(TempFile, TEncoding.UTF8);
+          Assert.AreEqual(251, Lines.Count, 'header + 250 rows after re-export');
+        finally
+          Lines.Free;
+        end;
+      finally
+        LargeExporter.Free;
+      end;
+    finally
+      LargeForm.Free;
+    end;
+  finally
+    LargeDataSet.Free;
+    if FileExists(TempFile) then
+      TFile.Delete(TempFile);
+  end;
+end;
+
+procedure TVittixExportEngineTests.JsonExportsTypedValues;
+var
+  Json: string;
+  Parsed: TJSONValue;
+begin
+  Json := FExporter.ExportToString(vefJSON);
+
+  // Numbers as numbers, booleans as true/false, nulls as null
+  Assert.IsTrue(Json.Contains('"ID": 1'), 'ID exported as a JSON number');
+  Assert.IsTrue(Json.Contains('"Score": 3.5'), 'Score exported as a JSON number');
+  Assert.IsTrue(Json.Contains('"IsActive": true'), 'boolean true');
+  Assert.IsTrue(Json.Contains('"IsActive": false'), 'boolean false');
+  Assert.IsTrue(Json.Contains('"Notes": null'), 'null exported as null');
+
+  // The whole export must parse as real JSON
+  Parsed := TJSONObject.ParseJSONValue(Json);
+  try
+    Assert.IsNotNull(Parsed, 'export produces valid JSON');
+    Assert.IsTrue(Parsed is TJSONArray, 'top level is a JSON array');
+  finally
+    Parsed.Free;
+  end;
+end;
+
+procedure TVittixExportEngineTests.JsonEscapesControlCharacters;
+var
+  Json: string;
+  Parsed: TJSONValue;
+begin
+  FDataSet.First;
+  FDataSet.Edit;
+  FDataSet.FieldByName('Notes').AsString := 'bell'#7'and'#27'esc';
+  FDataSet.Post;
+
+  Json := FExporter.ExportToString(vefJSON);
+
+  // Control characters below 0x20 must be \u-escaped, not emitted raw
+  Assert.IsTrue(Json.Contains('\u0007'), '0x07 escaped as \u0007');
+  Assert.IsTrue(Json.Contains('\u001B'), '0x1B escaped as \u001B');
+
+  Parsed := TJSONObject.ParseJSONValue(Json);
+  try
+    Assert.IsNotNull(Parsed, 'control characters do not break the JSON');
+  finally
+    Parsed.Free;
+  end;
+end;
+
+procedure TVittixExportEngineTests.MachineFormatsKeepFullFloatPrecision;
+var
+  Csv: string;
+  Json: string;
+  Html: string;
+begin
+  FDataSet.First;
+  FDataSet.Edit;
+  FDataSet.FieldByName('Score').AsFloat := 1234.5678;
+  FDataSet.Post;
+
+  Csv := FExporter.ExportToString(vefCSV);
+  Json := FExporter.ExportToString(vefJSON);
+  Html := FExporter.ExportToString(vefHTML);
+
+  // Machine formats keep the stored precision with an invariant separator
+  Assert.IsTrue(Csv.Contains('1234.5678'), 'CSV keeps full precision');
+  Assert.IsTrue(Json.Contains('"Score": 1234.5678'), 'JSON keeps full precision');
+  // HTML keeps the configured display formatting (default 0.00)
+  Assert.IsTrue(Html.Contains('1234.57') or Html.Contains('1234,57'),
+    'HTML keeps display formatting');
+end;
+
+procedure TVittixExportEngineTests.XmlDropsIllegalControlCharacters;
+var
+  Xml: string;
+begin
+  FDataSet.First;
+  FDataSet.Edit;
+  FDataSet.FieldByName('Notes').AsString := 'bad'#1'char'#2'here';
+  FDataSet.Post;
+
+  Xml := FExporter.ExportToString(vefXML);
+
+  // 0x01/0x02 are illegal in XML 1.0 and make Excel reject the file
+  Assert.IsFalse(Xml.Contains(#1), '0x01 dropped');
+  Assert.IsFalse(Xml.Contains(#2), '0x02 dropped');
+  Assert.IsTrue(Xml.Contains('badcharhere'), 'surrounding text preserved');
+end;
+
+procedure TVittixExportEngineTests.XlsxWritesNumbersAsNumericCells;
+var
+  Stream: TMemoryStream;
+  SheetXml: string;
+begin
+  Stream := TMemoryStream.Create;
+  try
+    FExporter.ExportToStream(Stream, vefExcelXLSX);
+    Stream.Position := 0;
+    SheetXml := ExtractSheetXml(Stream);
+
+    // Amount (column C, row 2 = 100.50) as a numeric cell, not inlineStr
+    Assert.IsTrue(SheetXml.Contains('<c r="C2"><v>100.5</v></c>'),
+      'numbers are stored as numeric cells');
+    Assert.IsTrue(SheetXml.Contains('xml:space="preserve"'),
+      'string cells preserve whitespace');
+  finally
+    Stream.Free;
+  end;
 end;
 
 procedure TVittixExportEngineTests.XlsxReportsProgressDuringExport;
@@ -983,6 +1203,205 @@ begin
   end;
 end;
 
+{ B3: XML/JSON/Text parity — ExportFilteredOnly, cursor restore }
+
+function CountXmlRows(const Xml: string): Integer;
+var
+  SearchFrom: Integer;
+begin
+  Result := 0;
+  SearchFrom := 1;
+  while Pos('<row>', Xml, SearchFrom) > 0 do
+  begin
+    Inc(Result);
+    SearchFrom := Pos('<row>', Xml, SearchFrom) + 1;
+  end;
+end;
+
+function CountJsonRows(const Json: string): Integer;
+var
+  P: Integer;
+  KeyLen: Integer;
+begin
+  // Data rows carry {"ID": <number>; the footer object (when present) holds
+  // "ID": "<text>" nested inside {"__footer__": ...} and must not be
+  // counted, so keys followed by a quoted value are skipped.
+  Result := 0;
+  KeyLen := Length('{"ID": ');
+  P := Pos('{"ID": ', Json);
+  while P > 0 do
+  begin
+    if (P + KeyLen <= Length(Json)) and (Json[P + KeyLen] <> '"') then
+      Inc(Result);
+    P := Pos('{"ID": ', Json, P + 1);
+  end;
+end;
+
+procedure TVittixExportFilteredOnlyTests.Xml_ExportFilteredOnlyTrue_WithActiveFilter;
+var
+  Output: string;
+  Info: TVittixDBGridColumnInfo;
+begin
+  Info := FGrid.ColumnInfo.FindByFieldName('Name');
+  Assert.IsNotNull(Info);
+  Info.FilterText := 'Alpha';
+  Info.HasFilter := True;
+  FFilterEngine.Active := True;
+
+  FExporter.Options.ExportFilteredOnly := True;
+  Output := FExporter.ExportToString(vefXML);
+  Assert.AreEqual(2, CountXmlRows(Output), 'only the 2 filtered rows');
+end;
+
+procedure TVittixExportFilteredOnlyTests.Json_ExportFilteredOnlyTrue_WithActiveFilter;
+var
+  Output: string;
+  Info: TVittixDBGridColumnInfo;
+begin
+  Info := FGrid.ColumnInfo.FindByFieldName('Name');
+  Assert.IsNotNull(Info);
+  Info.FilterText := 'Alpha';
+  Info.HasFilter := True;
+  FFilterEngine.Active := True;
+
+  FExporter.Options.ExportFilteredOnly := True;
+  Output := FExporter.ExportToString(vefJSON);
+  Assert.AreEqual(2, CountJsonRows(Output), 'only the 2 filtered rows');
+end;
+
+procedure TVittixExportFilteredOnlyTests.Text_ExportFilteredOnlyTrue_WithActiveFilter;
+var
+  Output: string;
+  Lines: TStringList;
+  Info: TVittixDBGridColumnInfo;
+begin
+  Info := FGrid.ColumnInfo.FindByFieldName('Name');
+  Assert.IsNotNull(Info);
+  Info.FilterText := 'Alpha';
+  Info.HasFilter := True;
+  FFilterEngine.Active := True;
+
+  FExporter.Options.ExportFilteredOnly := True;
+  Output := FExporter.ExportToString(vefText);
+  Lines := TStringList.Create;
+  try
+    Lines.Text := Output;
+    // header + separator + 2 filtered rows
+    Assert.AreEqual(4, Lines.Count);
+  finally
+    Lines.Free;
+  end;
+end;
+
+procedure TVittixExportFilteredOnlyTests.Xml_ExportFilteredOnlyFalse_AllRecords;
+var
+  Output: string;
+  Info: TVittixDBGridColumnInfo;
+begin
+  Info := FGrid.ColumnInfo.FindByFieldName('Name');
+  Assert.IsNotNull(Info);
+  Info.FilterText := 'Alpha';
+  Info.HasFilter := True;
+  FFilterEngine.Active := True;
+
+  FExporter.Options.ExportFilteredOnly := False;
+  Output := FExporter.ExportToString(vefXML);
+  Assert.AreEqual(5, CountXmlRows(Output), 'all records despite the filter');
+end;
+
+procedure TVittixExportFilteredOnlyTests.Json_ExportFilteredOnlyFalse_AllRecords;
+var
+  Output: string;
+  Info: TVittixDBGridColumnInfo;
+begin
+  Info := FGrid.ColumnInfo.FindByFieldName('Name');
+  Assert.IsNotNull(Info);
+  Info.FilterText := 'Alpha';
+  Info.HasFilter := True;
+  FFilterEngine.Active := True;
+
+  FExporter.Options.ExportFilteredOnly := False;
+  Output := FExporter.ExportToString(vefJSON);
+  Assert.AreEqual(5, CountJsonRows(Output), 'all records despite the filter');
+end;
+
+procedure TVittixExportFilteredOnlyTests.Text_ExportFilteredOnlyFalse_AllRecords;
+var
+  Output: string;
+  Lines: TStringList;
+  Info: TVittixDBGridColumnInfo;
+begin
+  Info := FGrid.ColumnInfo.FindByFieldName('Name');
+  Assert.IsNotNull(Info);
+  Info.FilterText := 'Alpha';
+  Info.HasFilter := True;
+  FFilterEngine.Active := True;
+
+  FExporter.Options.ExportFilteredOnly := False;
+  Output := FExporter.ExportToString(vefText);
+  Lines := TStringList.Create;
+  try
+    Lines.Text := Output;
+    // header + separator + all 5 rows
+    Assert.AreEqual(7, Lines.Count);
+  finally
+    Lines.Free;
+  end;
+end;
+
+procedure TVittixExportFilteredOnlyTests.PositionPreserved_AfterXmlExport;
+var
+  Info: TVittixDBGridColumnInfo;
+begin
+  Info := FGrid.ColumnInfo.FindByFieldName('Name');
+  Assert.IsNotNull(Info);
+  Info.FilterText := 'Alpha';
+  Info.HasFilter := True;
+  FFilterEngine.Active := True;
+
+  Assert.IsTrue(FDataSet.Locate('ID', 4, []));
+  FExporter.ExportToString(vefXML);
+
+  // The export used to leave the cursor at EOF, jumping the grid to the
+  // last record.
+  Assert.AreEqual(4, FDataSet.FieldByName('ID').AsInteger,
+    'XML export preserves the dataset position');
+end;
+
+procedure TVittixExportFilteredOnlyTests.PositionPreserved_AfterJsonExport;
+var
+  Info: TVittixDBGridColumnInfo;
+begin
+  Info := FGrid.ColumnInfo.FindByFieldName('Name');
+  Assert.IsNotNull(Info);
+  Info.FilterText := 'Alpha';
+  Info.HasFilter := True;
+  FFilterEngine.Active := True;
+
+  Assert.IsTrue(FDataSet.Locate('ID', 4, []));
+  FExporter.ExportToString(vefJSON);
+
+  Assert.AreEqual(4, FDataSet.FieldByName('ID').AsInteger,
+    'JSON export preserves the dataset position');
+end;
+
+procedure TVittixExportFilteredOnlyTests.PositionPreserved_AfterTextExport;
+var
+  Info: TVittixDBGridColumnInfo;
+begin
+  Info := FGrid.ColumnInfo.FindByFieldName('Name');
+  Assert.IsNotNull(Info);
+  Info.FilterText := 'Alpha';
+  Info.HasFilter := True;
+  FFilterEngine.Active := True;
+
+  Assert.IsTrue(FDataSet.Locate('ID', 4, []));
+  FExporter.ExportToString(vefText);
+
+  Assert.AreEqual(4, FDataSet.FieldByName('ID').AsInteger,
+    'Text export preserves the dataset position');
+end;
+
 { =============================================================================
   B1: IncludeFooter regression tests
   ============================================================================= }
@@ -1006,13 +1425,14 @@ end;
 procedure TVittixExportIncludeFooterTests.SetAggregation(AFieldName: string; AAgg: TVittixAggregationType);
 var
   Col: TColumn;
-  Info: TVittixDBGridColumnInfo;
 begin
   Col := FGrid.Controller.FindColumnByFieldName(AFieldName);
   Assert.IsNotNull(Col);
-  Info := FGrid.ColumnInfo.FindByFieldName(AFieldName);
-  Assert.IsNotNull(Info);
-  Info.AggregationType := AAgg;
+  // Go through the controller API: it marks the aggregation dirty and
+  // recalculates. Writing Info.AggregationType directly leaves the runtime
+  // aggregation state stale, so footer text would depend on unrelated
+  // recalculation side effects.
+  FGrid.Controller.SetColumnAggregation(Col, AAgg);
 end;
 
 procedure TVittixExportIncludeFooterTests.SetFooterText(AFieldName: string; AText: string);
@@ -1181,6 +1601,55 @@ begin
       'Footer row should contain aggregation value');
   finally
     Stream.Free;
+  end;
+end;
+
+procedure TVittixExportIncludeFooterTests.IncludeFooterTrue_WithAggregation_FooterRow_Xml;
+var
+  Output: string;
+begin
+  SetAggregation('Amount', vatSum);
+  FExporter.Options.IncludeFooter := True;
+  Output := FExporter.ExportToString(vefXML);
+
+  Assert.AreEqual(5, CountXmlRows(Output), '5 data rows');
+  Assert.IsTrue(Output.Contains('<footer>'), 'footer element present');
+  Assert.IsTrue(Output.Contains('750.75') or Output.Contains('750,75'),
+    'footer should contain the Amount sum');
+end;
+
+procedure TVittixExportIncludeFooterTests.IncludeFooterTrue_WithAggregation_FooterRow_Json;
+var
+  Output: string;
+begin
+  SetAggregation('Amount', vatSum);
+  FExporter.Options.IncludeFooter := True;
+  Output := FExporter.ExportToString(vefJSON);
+
+  Assert.AreEqual(5, CountJsonRows(Output), '5 data rows');
+  Assert.IsTrue(Output.Contains('"__footer__"'), 'marked footer object present');
+  Assert.IsTrue(Output.Contains('750.75') or Output.Contains('750,75'),
+    'footer should contain the Amount sum');
+end;
+
+procedure TVittixExportIncludeFooterTests.IncludeFooterTrue_WithAggregation_FooterRow_Text;
+var
+  Output: string;
+  Lines: TStringList;
+begin
+  SetAggregation('Amount', vatSum);
+  FExporter.Options.IncludeFooter := True;
+  Output := FExporter.ExportToString(vefText);
+
+  Lines := TStringList.Create;
+  try
+    Lines.Text := Output;
+    // header + separator + 5 data rows + footer
+    Assert.AreEqual(8, Lines.Count);
+    Assert.IsTrue(Lines[7].Contains('750.75') or Lines[7].Contains('750,75'),
+      'footer line should contain the Amount sum');
+  finally
+    Lines.Free;
   end;
 end;
 

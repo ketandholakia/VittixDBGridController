@@ -21,7 +21,8 @@ type
   TVittixFilterMatchMode = (
     vfmContains, vfmEquals, vfmStartsWith, vfmEndsWith,
     vfmNotEquals, vfmGreaterThan, vfmGreaterOrEqual, vfmLessThan, vfmLessOrEqual,
-    vfmBetween, vfmNotBetween, vfmIsNull, vfmIsNotNull, vfmIsEmpty, vfmIsNotEmpty
+    vfmBetween, vfmNotBetween, vfmIsNull, vfmIsNotNull, vfmIsEmpty, vfmIsNotEmpty,
+    vfmDoesNotContain
   );
 
   /// <summary>
@@ -40,7 +41,7 @@ type
     IsWordOperator: Boolean;
   end;
 
-  // NEW: Filter validation event
+  // Filter validation event
   TFilterValidationEvent = procedure(
     Sender: TObject;
     const FieldName: string;
@@ -66,6 +67,10 @@ type
 
     FOldOnFilterRecord: TFilterRecordEvent;
     FFilterInstalled: Boolean;
+    // The dataset's Filtered value captured when the engine hook was
+    // installed, restored on clear so an application's own filter state
+    // (Filter string, OnFilterRecord) survives engine teardown.
+    FSavedFiltered: Boolean;
     FUpdating: Boolean;
 
     // Performance optimization: Cache fields instead of looking them up every row
@@ -170,7 +175,7 @@ begin
   AddFilterOperator(vfmEquals,         '=',     'Equals',           False);
   AddFilterOperator(vfmStartsWith,     '^',     'Starts With',      False);
   AddFilterOperator(vfmEndsWith,       '$',     'Ends With',        False);
-  AddFilterOperator(vfmNotEquals,      '!',     'Does Not Contain', False);
+  AddFilterOperator(vfmDoesNotContain, '!',     'Does Not Contain', False);
   AddFilterOperator(vfmNotEquals,      '<>',    'Not Equals',       False);
   AddFilterOperator(vfmGreaterThan,    '>',     'Greater Than',     False);
   AddFilterOperator(vfmGreaterOrEqual, '>=',    'Greater or Equal', False);
@@ -371,7 +376,7 @@ begin
   begin
     FOnValidateFilter(Self, FieldName, FilterText, Result, ErrMsg);
 
-    // FIX BUG 5: Engines must never call ShowMessage or any VCL UI directly.
+    // Engines must never call ShowMessage or any VCL UI directly.
     // This violated the separation of concerns the architecture is built on.
     // Raise an exception instead so the calling UI layer can catch and display
     // the error however it chooses (MessageDlg, status bar, inline label, etc.)
@@ -412,6 +417,7 @@ begin
   if not FFilterInstalled then
   begin
     FOldOnFilterRecord := FDataSet.OnFilterRecord;
+    FSavedFiltered := FDataSet.Filtered;
     FDataSet.OnFilterRecord := DoFilterRecord;
     FFilterInstalled := True;
   end;
@@ -432,12 +438,16 @@ begin
   try
     if FFilterInstalled then
     begin
-      FDataSet.Filtered := False;
-      
+      // Restore the Filtered value the dataset had before the engine hook
+      // was installed instead of forcing False: an application that was
+      // already filtering (its own Filter string or OnFilterRecord) keeps
+      // filtering after the engine's filter is cleared.
+      FDataSet.Filtered := FSavedFiltered;
+
       // Restore the user's original event handler
       FDataSet.OnFilterRecord := FOldOnFilterRecord;
       FOldOnFilterRecord := nil;
-      
+
       FFilterInstalled := False;
     end;
   finally
@@ -646,7 +656,12 @@ begin
           Exit(False);
         Result := SameText(Copy(Hay, StartPos, MaxInt), Needle);
       end;
-    vfmNotEquals: Result := Pos(UpperCase(Needle), UpperCase(Hay)) = 0;
+    // Not Equals is an exact-value comparison: it matches records whose
+    // display text differs from the needle as a whole. Does Not Contain
+    // (vfmDoesNotContain, the '!' prefix) is the substring exclusion and
+    // keeps the historic Pos-based behaviour of the old vfmNotEquals.
+    vfmNotEquals: Result := not SameText(Needle, Hay);
+    vfmDoesNotContain: Result := Pos(UpperCase(Needle), UpperCase(Hay)) = 0;
     vfmGreaterThan,
     vfmGreaterOrEqual,
     vfmLessThan,

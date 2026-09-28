@@ -84,6 +84,8 @@ type
     [Test]
     procedure GridCanSaveAndLoadLayoutToExplicitFile;
     [Test]
+    procedure SaveLayoutToFile_OverwritesExistingFile;
+    [Test]
     procedure GridExplicitLayoutFileOverridesRootPath;
     [Test]
     procedure GridUsesRootPathForLayoutWhenNoExplicitFileIsSet;
@@ -793,6 +795,43 @@ begin
 
       Assert.AreEqual(180, Grid.Columns[0].Width);
       Assert.IsTrue(FileExists(TempFile));
+    finally
+      Grid.Free;
+      OwnerForm.Free;
+    end;
+  finally
+    if FileExists(TempFile) then
+      DeleteFile(TempFile);
+  end;
+end;
+
+procedure TVittixLayoutTests.SaveLayoutToFile_OverwritesExistingFile;
+var
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+  TempFile: string;
+begin
+  TempFile := TPath.Combine(TPath.GetTempPath, 'VittixDBGridLayout.overwrite.json');
+  OwnerForm := TForm.CreateNew(nil);
+  try
+    Grid := TVittixDBGrid.Create(OwnerForm);
+    try
+      PopulateSampleColumns(Grid);
+      Grid.LayoutStorageFileName := TempFile;
+
+      Grid.Columns[0].Width := 180;
+      Grid.Controller.SaveLayoutToFile;
+      Assert.IsTrue(FileExists(TempFile));
+
+      // The second save replaces an existing file (the replace path) and
+      // must leave a complete, loadable file behind — a crash mid-write
+      // used to be able to corrupt the saved layout.
+      Grid.Columns[0].Width := 90;
+      Grid.Controller.SaveLayoutToFile;
+
+      Grid.Columns[0].Width := 50;
+      Grid.Controller.LoadLayoutFromFile;
+      Assert.AreEqual(90, Grid.Columns[0].Width);
     finally
       Grid.Free;
       OwnerForm.Free;

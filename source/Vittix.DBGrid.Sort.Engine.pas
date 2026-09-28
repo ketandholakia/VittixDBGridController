@@ -18,6 +18,10 @@ const
   TEMP_CLIENT_DATASET_INDEX = '__VITTIX_SORT__';
 
 type
+  // Raised when sorting cannot be applied to the bound dataset (no
+  // IndexFieldNames property) instead of silently doing nothing.
+  EVittixSortError = class(Exception);
+
   TFieldValidationEvent = procedure(const FieldName: string; Found: Boolean) of object;
 
   /// <summary>
@@ -176,6 +180,7 @@ end;
 procedure TVittixDBGridSortEngine.ApplySorting;
 var
   IndexFields: string;
+  I: Integer;
 begin
   if not Assigned(FDataSet) or not FDataSet.Active then Exit;
 
@@ -188,7 +193,19 @@ begin
       Exit;
     end;
 
-    if not DataSetSupportsIndexFieldNames then Exit;
+    if not DataSetSupportsIndexFieldNames then
+    begin
+      // A request to actually sort must fail loudly: silently doing nothing
+      // made the grid appear sorted while the data stayed unsorted. Clearing
+      // (no sort configured) stays a harmless no-op here.
+      for I := 0 to FColumns.Count - 1 do
+        if FColumns[I].SortOrder <> vsoNone then
+          raise EVittixSortError.CreateFmt(
+            '%s does not support index-based sorting (no IndexFieldNames ' +
+            'property). Use a dataset that publishes IndexFieldNames, such ' +
+            'as TClientDataSet or a FireDAC dataset.', [FDataSet.ClassName]);
+      Exit;
+    end;
 
     IndexFields := BuildIndexFieldNames;
 

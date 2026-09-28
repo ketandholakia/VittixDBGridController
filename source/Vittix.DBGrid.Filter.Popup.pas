@@ -40,7 +40,7 @@ type
     // popups created without a TVittixDBGrid owner keep working.
     FRootPath: string;
     FHistoryFileName: string;
-    // FIX BUG 12: Scoped history key prevents two grids sharing history for
+    // Scoped history key prevents two grids sharing history for
     // same-named fields. Key is "OwnerClassName.FieldName".
     FHistoryKey: string;
     FOperatorHistoryKey: string;
@@ -157,7 +157,7 @@ begin
     FHistoryFileName := TVittixDBGrid(AOwner).FilterHistoryFileName;
   end;
 
-  // FIX BUG 12: Build a scoped history key using owner's class name so that
+  // Build a scoped history key using the owner's class name so that
   // two grids on the same form don't share filter history for the same field.
   if Assigned(AOwner) then
     FHistoryKey := AOwner.ClassName + '.' + AColumnInfo.FieldName

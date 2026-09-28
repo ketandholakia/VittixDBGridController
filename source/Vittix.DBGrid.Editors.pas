@@ -67,7 +67,7 @@ type
     function Execute(var AValue: TDateTime; var SetNull: Boolean): Boolean;
   end;
 
-  // NEW: Validation event types
+  // Validation event types
   TFieldValidationEvent = procedure(
     Sender: TObject;
     Field: TField;
@@ -88,7 +88,7 @@ type
       Column: TColumn
     ): Boolean;
     
-    // NEW: Global validation hook
+    // Global validation hook
     class property OnValidateField: TFieldValidationEvent 
       read FOnValidateField write FOnValidateField;
   end;
@@ -369,7 +369,7 @@ begin
         MemoEditor := TVittixDBGridMemoEditor.CreateEditor(Grid, Text);
         if MemoEditor.Execute(Text) then
         begin
-          // NEW: Validate before assigning
+          // Validate before assigning
           if Assigned(FOnValidateField) then
           begin
             NewValue := Text;
@@ -416,7 +416,7 @@ begin
 
         if DateEditor.Execute(DT, SetNull) then
         begin
-          // NEW: Validate before assigning
+          // Validate before assigning
           if Assigned(FOnValidateField) then
           begin
             if SetNull then

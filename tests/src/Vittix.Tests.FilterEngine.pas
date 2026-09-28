@@ -60,6 +60,12 @@ type
     [Test]
     procedure FilterOperatorsSupportEmptyChecks;
     [Test]
+    procedure NotEqualsOperatorMatchesExactValue;
+    [Test]
+    procedure DoesNotContainOperatorExcludesSubstring;
+    [Test]
+    procedure ClearFilterRestoresOriginalFilteredState;
+    [Test]
     procedure FilterPopupRestoresOperatorFromSavedText;
     [Test]
     procedure FilterPopupRestoresBetweenOperatorFromSavedText;
@@ -377,6 +383,77 @@ begin
   finally
     LocalSet.Free;
   end;
+end;
+
+procedure TVittixFilterEngineTests.NotEqualsOperatorMatchesExactValue;
+var
+  Info: TVittixDBGridColumnInfo;
+begin
+  // A row whose value merely CONTAINS the needle must survive <>: the
+  // operator used to behave as does-not-contain and wrongly exclude it.
+  FDataSet.First;
+  FDataSet.Edit;
+  FDataSet.FieldByName('Name').AsString := 'AlphaX';
+  FDataSet.Post;
+
+  Info := FColumns.FindByFieldName('Name');
+  Assert.IsNotNull(Info);
+  Info.FilterText := '<>Alpha';
+  Info.HasFilter := True;
+  FEngine.Active := True;
+
+  // Row 1 was edited to AlphaX: only the exact 'Alpha' (ID 4) drops out,
+  // AlphaX survives. The old does-not-contain behaviour excluded it too.
+  Assert.AreEqual(4, CountVisibleRecords(FDataSet),
+    '<> keeps rows that contain but do not equal the needle');
+
+  // Exact inequality still excludes the equal value
+  Info.FilterText := '<>beta';
+  FEngine.ApplyFilter;
+  Assert.AreEqual(4, CountVisibleRecords(FDataSet),
+    '<> excludes exactly the equal value');
+end;
+
+procedure TVittixFilterEngineTests.DoesNotContainOperatorExcludesSubstring;
+var
+  Info: TVittixDBGridColumnInfo;
+begin
+  FDataSet.First;
+  FDataSet.Edit;
+  FDataSet.FieldByName('Name').AsString := 'AlphaX';
+  FDataSet.Post;
+
+  Info := FColumns.FindByFieldName('Name');
+  Assert.IsNotNull(Info);
+  Info.FilterText := '!Alpha';
+  Info.HasFilter := True;
+  FEngine.Active := True;
+
+  // '!' keeps its historic substring exclusion: AlphaX and Alpha both drop
+  Assert.AreEqual(3, CountVisibleRecords(FDataSet),
+    '! excludes every value containing the needle');
+end;
+
+procedure TVittixFilterEngineTests.ClearFilterRestoresOriginalFilteredState;
+var
+  Info: TVittixDBGridColumnInfo;
+begin
+  // The application was already filtering before the engine installed its
+  // hook; clearing the engine's filter must not switch that off.
+  FDataSet.Filtered := True;
+
+  Info := FColumns.FindByFieldName('Name');
+  Assert.IsNotNull(Info);
+  Info.FilterText := 'Alpha';
+  Info.HasFilter := True;
+  FEngine.Active := True;
+  Assert.IsTrue(FDataSet.Filtered);
+  Assert.AreEqual(2, CountVisibleRecords(FDataSet));
+
+  FEngine.Active := False;
+
+  Assert.IsTrue(FDataSet.Filtered,
+    'original Filtered=True must survive engine teardown');
 end;
 
 procedure TVittixFilterEngineTests.FilterPopupRestoresOperatorFromSavedText;
