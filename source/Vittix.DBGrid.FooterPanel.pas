@@ -32,14 +32,17 @@ uses
   Vcl.Menus,
   Vcl.Clipbrd,
   Data.DB,
-  Vittix.DBGrid,
   Vittix.DBGrid.ColumnInfo,
   Vittix.DBGrid.Aggregation.Engine;
 
 type
   TVittixDBGridFooterPanel = class(TCustomControl)
   private
-    FGrid: TVittixDBGrid;
+    // TDBGrid-typed so this unit does not need Vittix.DBGrid in its
+    // interface (Vittix.DBGrid.Controller uses this unit in ITS interface).
+    // Attach is only called with a TVittixDBGrid; the implementation-side
+    // VittixGrid() helper gives typed access to the grid-specific helpers.
+    FGrid: TDBGrid;
     FAggregationEngine: TVittixDBGridAggregationEngine;
     FPopup: TPopupMenu;
     FContextColumn: TColumn;
@@ -70,7 +73,7 @@ type
     procedure ClearAggregationAtClientX(X: Integer);
     procedure CopyAggregationAtClientX(X: Integer);
     procedure Attach(
-      AGrid: TVittixDBGrid;
+      AGrid: TDBGrid;
       AEngine: TVittixDBGridAggregationEngine
     );
     procedure SyncLayout;
@@ -83,9 +86,20 @@ type
 
 implementation
 
-type
-  // Cracker class to access protected 'LeftCol' of TCustomGrid/TDBGrid
-  TVittixGridAccess = class(TDBGrid);
+uses
+  // Implementation-only on purpose: Vittix.DBGrid.Controller (which this
+  // unit's interface is used by) requires TVittixDBGrid in its interface.
+  Vittix.DBGrid;
+
+function VittixGrid(AGrid: TDBGrid): TVittixDBGrid;
+begin
+  // Attach is only ever called with a TVittixDBGrid; the guard keeps the
+  // helper nil-safe regardless.
+  if AGrid is TVittixDBGrid then
+    Result := TVittixDBGrid(AGrid)
+  else
+    Result := nil;
+end;
 
 { TVittixDBGridFooterPanel }
 
@@ -107,7 +121,7 @@ begin
 end;
 
 procedure TVittixDBGridFooterPanel.Attach(
-  AGrid: TVittixDBGrid;
+  AGrid: TDBGrid;
   AEngine: TVittixDBGridAggregationEngine);
 begin
   FGrid := AGrid;
@@ -174,9 +188,9 @@ end;
 function TVittixDBGridFooterPanel.GetIndicatorOffset: Integer;
 begin
   Result := 0;
-  if Assigned(FGrid) then
+  if VittixGrid(FGrid) <> nil then
     // Use the public helper we added to TVittixDBGrid
-    Result := FGrid.GetIndicatorWidth;
+    Result := VittixGrid(FGrid).GetIndicatorWidth;
 end;
 
 function TVittixDBGridFooterPanel.GetIndicatorRect: TRect;
@@ -184,13 +198,13 @@ var
   GridRect: TRect;
 begin
   Result := Rect(0, 0, 0, 0);
-  if not Assigned(FGrid) then
+  if VittixGrid(FGrid) = nil then
     Exit;
 
   if GetIndicatorOffset <= 0 then
     Exit;
 
-  GridRect := TVittixGridAccess(FGrid).CellRect(0, 1);
+  GridRect := VittixGrid(FGrid).GetCellRect(0, 1);
   Result := Rect(GridRect.Left, 0, GridRect.Right, Height);
 end;
 
@@ -201,7 +215,7 @@ var
   I: Integer;
 begin
   Result := Rect(0, 0, 0, 0);
-  if not Assigned(FGrid) or not Assigned(AColumn) then
+  if (VittixGrid(FGrid) = nil) or not Assigned(AColumn) then
     Exit;
 
   VisibleIndex := 0;
@@ -218,8 +232,8 @@ begin
 
   // CellRect gives the actual painted grid cell geometry, including indicator
   // offset and current grid line spacing. Convert it into footer-local coords.
-  GridRect := TVittixGridAccess(FGrid).CellRect(
-    VisibleIndex + TVittixGridAccess(FGrid).IndicatorOffset,
+  GridRect := VittixGrid(FGrid).GetCellRect(
+    VisibleIndex + VittixGrid(FGrid).GetIndicatorOffset,
     1
   );
   Result := Rect(
@@ -255,7 +269,7 @@ var
   DrawFlags: Cardinal;
   StartCol: Integer;
 begin
-  if not Assigned(FGrid) then Exit;
+  if not Assigned(FGrid) or (VittixGrid(FGrid) = nil) then Exit;
 
   Canvas.Font.Assign(FGrid.Font);
   Canvas.Font.Style := Canvas.Font.Style + [fsBold];
@@ -285,8 +299,7 @@ begin
     Canvas.LineTo(R.Right, R.Bottom - 1);
   end;
 
-  // FIX: Access protected LeftCol using the cracker class
-  StartCol := TVittixGridAccess(FGrid).LeftCol;
+  StartCol := VittixGrid(FGrid).GetLeftCol;
 
   // Safety check for empty grid or invalid index
   if (StartCol < 0) or (StartCol >= FGrid.Columns.Count) then
@@ -316,10 +329,10 @@ begin
     Canvas.MoveTo(R.Right - 1, R.Top);
     Canvas.LineTo(R.Right - 1, R.Bottom);
     Canvas.MoveTo(R.Left, R.Bottom - 1);
-    Canvas.LineTo(R.Right, R.Bottom - 1);
+    Canvas.LineTo(R.Right - 1, R.Bottom - 1);
 
     // Text
-    Info := FGrid.ColumnInfoByColumn(Col);
+    Info := VittixGrid(FGrid).ColumnInfoByColumn(Col);
     if Assigned(Info) and Assigned(FAggregationEngine) then
       Text := FAggregationEngine.GetAggregationDisplayText(Info)
     else
@@ -327,7 +340,7 @@ begin
 
     if Text = '' then
     begin
-      Info := FGrid.ColumnInfoByColumn(Col);
+      Info := VittixGrid(FGrid).ColumnInfoByColumn(Col);
       if Assigned(Info) then
         Text := Info.FooterText;
     end;
@@ -356,10 +369,9 @@ var
   R: TRect;
 begin
   Result := nil;
-  if not Assigned(FGrid) then Exit;
+  if (FGrid = nil) or (VittixGrid(FGrid) = nil) then Exit;
 
-  // FIX: Access protected LeftCol using the cracker class
-  StartCol := TVittixGridAccess(FGrid).LeftCol;
+  StartCol := VittixGrid(FGrid).GetLeftCol;
 
   if (StartCol < 0) or (StartCol >= FGrid.Columns.Count) then
     StartCol := 0;
@@ -409,7 +421,7 @@ begin
   Result := '';
   if not Assigned(AColumn) or not Assigned(FGrid) then Exit;
 
-  Info := FGrid.ColumnInfoByColumn(AColumn);
+  Info := VittixGrid(FGrid).ColumnInfoByColumn(AColumn);
   if not Assigned(Info) then Exit;
 
   if Info.FooterText <> '' then
@@ -445,7 +457,7 @@ begin
   FreeAndNil(FPopup);
   FPopup := TPopupMenu.Create(Self);
 
-  Info := FGrid.ColumnInfoByColumn(FContextColumn);
+  Info := VittixGrid(FGrid).ColumnInfoByColumn(FContextColumn);
 
   Item := TMenuItem.Create(FPopup);
   Item.Caption := '&Clear aggregation';
@@ -540,7 +552,7 @@ begin
   if not Assigned(AColumn) then Exit;
   if not Assigned(FGrid) then Exit;
 
-  Info := FGrid.ColumnInfoByColumn(AColumn);
+  Info := VittixGrid(FGrid).ColumnInfoByColumn(AColumn);
   if not Assigned(Info) then Exit;
 
   if Info.AggregationType <> vatNone then
@@ -585,7 +597,7 @@ begin
   try
     for I := 0 to FGrid.Columns.Count - 1 do
     begin
-      Info := FGrid.ColumnInfoByColumn(FGrid.Columns[I]);
+      Info := VittixGrid(FGrid).ColumnInfoByColumn(FGrid.Columns[I]);
       if not Assigned(Info) then
         Continue;
 
@@ -640,7 +652,7 @@ begin
   if not Assigned(FContextColumn) then Exit;
 
   Agg := TVittixAggregationType(TMenuItem(Sender).Tag);
-  Info := FGrid.ColumnInfoByColumn(FContextColumn);
+  Info := VittixGrid(FGrid).ColumnInfoByColumn(FContextColumn);
 
   if Assigned(Info) then
   begin

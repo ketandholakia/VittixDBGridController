@@ -276,7 +276,7 @@ end;
 
 procedure TVittixDBGridColumnChooserForm.RollbackColumnOrder;
 var
-  I: Integer;
+  I, OldIndex: Integer;
 begin
   // FIX BUG 9: Restore each column to its original index position.
   // We iterate in forward order; the grid engine re-indexes on each assignment.
@@ -287,7 +287,13 @@ begin
   begin
     if (FOriginalColumnOrder[I] < FGrid.Columns.Count) and
        (FGrid.Columns[I].Index <> FOriginalColumnOrder[I]) then
+    begin
+      OldIndex := FGrid.Columns[I].Index;
       FGrid.Columns[I].Index := FOriginalColumnOrder[I];
+      if FGrid is TVittixDBGrid then
+        TVittixDBGrid(FGrid).NotifyColumnMoved(
+          FGrid.Columns[I], OldIndex, FOriginalColumnOrder[I]);
+    end;
   end;
 end;
 
@@ -579,6 +585,7 @@ var
   DropIndex: Integer;
   DraggedChecked: Boolean;
   Col: TColumn;
+  OldIndex: Integer;
 begin
   if FDraggedIndex < 0 then Exit;
 
@@ -596,6 +603,10 @@ begin
     // grid by the dragged list index can move the wrong column once the two
     // orders have ever diverged.
     Col := TColumn(FCheckList.Items.Objects[FDraggedIndex]);
+    if Assigned(Col) then
+      OldIndex := Col.Index
+    else
+      OldIndex := -1;
 
     // Save the checked state before moving
     DraggedChecked := FCheckList.Checked[FDraggedIndex];
@@ -608,7 +619,11 @@ begin
 
     // Move the actual grid column to match
     if Assigned(Col) and Assigned(Col.Collection) then
+    begin
       Col.Index := DropIndex;
+      if (OldIndex >= 0) and (FGrid is TVittixDBGrid) then
+        TVittixDBGrid(FGrid).NotifyColumnMoved(Col, OldIndex, DropIndex);
+    end;
 
     // Select the moved item
     FCheckList.ItemIndex := DropIndex;
@@ -709,6 +724,7 @@ end;
 procedure TVittixDBGridColumnChooserForm.MoveSelectedItem(Delta: Integer);
 var
   FromIndex, ToIndex: Integer;
+  OldIndex: Integer;
   DraggedChecked: Boolean;
   Col: TColumn;
 begin
@@ -726,11 +742,19 @@ begin
 
   // Resolve the column before moving the list item (see CheckListDragDrop)
   Col := TColumn(FCheckList.Items.Objects[FromIndex]);
+  if Assigned(Col) then
+    OldIndex := Col.Index
+  else
+    OldIndex := -1;
   DraggedChecked := FCheckList.Checked[FromIndex];
   FCheckList.Items.Move(FromIndex, ToIndex);
   FCheckList.Checked[ToIndex] := DraggedChecked;
   if Assigned(Col) and Assigned(Col.Collection) then
+  begin
     Col.Index := ToIndex;
+    if (OldIndex >= 0) and (FGrid is TVittixDBGrid) then
+      TVittixDBGrid(FGrid).NotifyColumnMoved(Col, OldIndex, ToIndex);
+  end;
   FCheckList.ItemIndex := ToIndex;
 end;
 

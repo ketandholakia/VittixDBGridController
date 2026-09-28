@@ -24,6 +24,22 @@ type
     vfmBetween, vfmNotBetween, vfmIsNull, vfmIsNotNull, vfmIsEmpty, vfmIsNotEmpty
   );
 
+  /// <summary>
+  /// Single authoritative description of one filter operator: the DSL prefix,
+  /// the popup display caption, the match mode it selects, and whether it is
+  /// a "word" operator. Word operators (the null/empty family) match only
+  /// when they are the ENTIRE filter text and take no value, which keeps
+  /// inputs like "nullity" parsing as a plain Contains filter.
+  /// The definition order is the filter popup's combo order and MUST stay
+  /// stable: the persisted operator memory stores combo indexes.
+  /// </summary>
+  TVittixFilterOperatorDefinition = record
+    Mode: TVittixFilterMatchMode;
+    Prefix: string;
+    DisplayName: string;
+    IsWordOperator: Boolean;
+  end;
+
   // NEW: Filter validation event
   TFilterValidationEvent = procedure(
     Sender: TObject;
@@ -101,11 +117,172 @@ type
     property Active: Boolean read FActive write SetActive;
     property GlobalSearchText: string read FGlobalSearchText write FGlobalSearchText;
 
-    property OnValidateFilter: TFilterValidationEvent 
+    property OnValidateFilter: TFilterValidationEvent
       read FOnValidateFilter write FOnValidateFilter;
   end;
 
+/// Number of defined filter operators (equals the popup combo item count).
+function VittixFilterOperatorCount: Integer;
+/// <summary>Definition by operator index (popup combo order). Out-of-range
+/// indexes return the default Contains definition.</summary>
+function VittixFilterOperatorDefinition(Index: Integer): TVittixFilterOperatorDefinition;
+/// <summary>Operator index for an exact prefix match; 0 (Contains) when the
+/// prefix is unknown.</summary>
+function VittixFilterOperatorIndexByPrefix(const APrefix: string): Integer;
+/// <summary>Splits filter text into operator index + value using the shared
+/// operator table. Returns False when the text carries no operator prefix
+/// (plain Contains; AValue receives the trimmed text). Word operators consume
+/// the whole text (AValue = ''). Longer prefixes win over shorter ones
+/// ('&gt;=' before '&gt;', '!..' before '!').</summary>
+function VittixFilterTryParseOperatorText(const AText: string;
+  out AOperatorIndex: Integer; out AValue: string): Boolean;
+
 implementation
+
+{ =============================================================================
+  SHARED FILTER OPERATOR TABLE
+  One authoritative definition of the operator prefix DSL. The engine parses
+  filter text through it, and the popup builds its combo, generates prefixes
+  and restores persisted text through it — the three copies that used to be
+  kept in sync by hand are gone.
+  ============================================================================= }
+
+var
+  // Built once in the initialization section; treated as read-only after.
+  GFilterOperators: TArray<TVittixFilterOperatorDefinition>;
+  GFilterOperatorParseOrder: TArray<Integer>;
+
+procedure AddFilterOperator(AMode: TVittixFilterMatchMode;
+  const APrefix, ADisplayName: string; AWordOperator: Boolean);
+begin
+  SetLength(GFilterOperators, Length(GFilterOperators) + 1);
+  GFilterOperators[High(GFilterOperators)].Mode := AMode;
+  GFilterOperators[High(GFilterOperators)].Prefix := APrefix;
+  GFilterOperators[High(GFilterOperators)].DisplayName := ADisplayName;
+  GFilterOperators[High(GFilterOperators)].IsWordOperator := AWordOperator;
+end;
+
+procedure BuildFilterOperators;
+begin
+  // Order = popup combo order = persisted OperatorIndex values. Do not
+  // reorder or insert; only append is safe for forward compatibility.
+  AddFilterOperator(vfmContains,       '',      'Contains',         False);
+  AddFilterOperator(vfmEquals,         '=',     'Equals',           False);
+  AddFilterOperator(vfmStartsWith,     '^',     'Starts With',      False);
+  AddFilterOperator(vfmEndsWith,       '$',     'Ends With',        False);
+  AddFilterOperator(vfmNotEquals,      '!',     'Does Not Contain', False);
+  AddFilterOperator(vfmNotEquals,      '<>',    'Not Equals',       False);
+  AddFilterOperator(vfmGreaterThan,    '>',     'Greater Than',     False);
+  AddFilterOperator(vfmGreaterOrEqual, '>=',    'Greater or Equal', False);
+  AddFilterOperator(vfmLessThan,       '<',     'Less Than',        False);
+  AddFilterOperator(vfmLessOrEqual,    '<=',    'Less or Equal',    False);
+  AddFilterOperator(vfmBetween,        '..',    'Between',          False);
+  AddFilterOperator(vfmNotBetween,     '!..',   'Not Between',      False);
+  AddFilterOperator(vfmIsNull,         'null',  'Is Null',          True);
+  AddFilterOperator(vfmIsNotNull,      '!null', 'Is Not Null',      True);
+  AddFilterOperator(vfmIsEmpty,        'empty', 'Is Empty',         True);
+  AddFilterOperator(vfmIsNotEmpty,     '!empty','Is Not Empty',     True);
+end;
+
+procedure BuildFilterOperatorParseOrder;
+var
+  I, J, Key: Integer;
+begin
+  // Longest prefix first so '>=', '<=', '<>' and '!..' win over the 1-char
+  // prefixes they start with. Word operators match the whole text only, so
+  // they cannot collide with shorter prefixes ('=null' still parses as
+  // Equals with value 'null'); the stable sort keeps their order
+  // deterministic anyway.
+  SetLength(GFilterOperatorParseOrder, Length(GFilterOperators));
+  for I := 0 to High(GFilterOperators) do
+    GFilterOperatorParseOrder[I] := I;
+
+  for I := 1 to High(GFilterOperatorParseOrder) do
+  begin
+    Key := GFilterOperatorParseOrder[I];
+    J := I - 1;
+    while (J >= 0) and
+          (Length(GFilterOperators[GFilterOperatorParseOrder[J]].Prefix) <
+           Length(GFilterOperators[Key].Prefix)) do
+    begin
+      GFilterOperatorParseOrder[J + 1] := GFilterOperatorParseOrder[J];
+      Dec(J);
+    end;
+    GFilterOperatorParseOrder[J + 1] := Key;
+  end;
+end;
+
+function VittixFilterOperatorCount: Integer;
+begin
+  Result := Length(GFilterOperators);
+end;
+
+function VittixFilterOperatorDefinition(
+  Index: Integer): TVittixFilterOperatorDefinition;
+begin
+  if (Index < 0) or (Index >= Length(GFilterOperators)) then
+  begin
+    Result.Mode := vfmContains;
+    Result.Prefix := '';
+    Result.DisplayName := '';
+    Result.IsWordOperator := False;
+    Exit;
+  end;
+  Result := GFilterOperators[Index];
+end;
+
+function VittixFilterOperatorIndexByPrefix(const APrefix: string): Integer;
+var
+  I: Integer;
+begin
+  for I := 0 to High(GFilterOperators) do
+    if GFilterOperators[I].Prefix = APrefix then
+      Exit(I);
+  Result := 0;
+end;
+
+function VittixFilterTryParseOperatorText(const AText: string;
+  out AOperatorIndex: Integer; out AValue: string): Boolean;
+var
+  Text: string;
+  I, DefIndex: Integer;
+  Def: TVittixFilterOperatorDefinition;
+begin
+  Result := False;
+  AOperatorIndex := 0;
+  Text := Trim(AText);
+  AValue := Text;
+  if Text = '' then
+    Exit(False);
+
+  for I := 0 to High(GFilterOperatorParseOrder) do
+  begin
+    DefIndex := GFilterOperatorParseOrder[I];
+    Def := GFilterOperators[DefIndex];
+    if Def.Prefix = '' then
+      Continue; // Contains is the fallback, never a prefix match
+
+    if Def.IsWordOperator then
+    begin
+      // Length-delimited: the WHOLE text must equal the prefix, so inputs
+      // like 'nullity' or '!nullable' never parse as null operators.
+      if Text = Def.Prefix then
+      begin
+        Result := True;
+        AOperatorIndex := DefIndex;
+        AValue := '';
+        Exit;
+      end;
+    end
+    else if Copy(Text, 1, Length(Def.Prefix)) = Def.Prefix then
+    begin
+      Result := True;
+      AOperatorIndex := DefIndex;
+      AValue := Trim(Copy(Text, Length(Def.Prefix) + 1, MaxInt));
+      Exit;
+    end;
+  end;
+end;
 
 { TVittixDBGridFilterEngine }
 
@@ -382,29 +559,17 @@ end;
 
 function TVittixDBGridFilterEngine.ParseFilterMode(const FilterText: string;
   out Mode: TVittixFilterMatchMode; out Value: string): Boolean;
+var
+  OperatorIndex: Integer;
 begin
-  Value := Trim(FilterText);
-  Mode := vfmContains;
+  // The shared operator table owns prefix recognition; this method only maps
+  // the parsed operator to the engine's match mode. Unrecognized text is a
+  // plain Contains filter (Value = trimmed text), so parsing never fails.
+  if VittixFilterTryParseOperatorText(FilterText, OperatorIndex, Value) then
+    Mode := VittixFilterOperatorDefinition(OperatorIndex).Mode
+  else
+    Mode := vfmContains;
   Result := True;
-  if Value = '' then Exit;
-
-  if Copy(Value, 1, 2) = '>=' then begin Mode := vfmGreaterOrEqual; Delete(Value, 1, 2); Exit; end;
-  if Copy(Value, 1, 2) = '<=' then begin Mode := vfmLessOrEqual; Delete(Value, 1, 2); Exit; end;
-  if Copy(Value, 1, 2) = '<>' then begin Mode := vfmNotEquals; Delete(Value, 1, 2); Exit; end;
-  if Copy(Value, 1, 3) = '!..' then begin Mode := vfmNotBetween; Delete(Value, 1, 3); Exit; end;
-  if Copy(Value, 1, 2) = '..' then begin Mode := vfmBetween; Delete(Value, 1, 2); Exit; end;
-  // Word operators match the WHOLE filter text: "nullity" must stay a plain
-  // contains-filter for the literal text, not an Is-Null operator.
-  if Value = '!null' then begin Mode := vfmIsNotNull; Value := ''; Exit; end;
-  if Value = '!empty' then begin Mode := vfmIsNotEmpty; Value := ''; Exit; end;
-  if Value = 'null' then begin Mode := vfmIsNull; Value := ''; Exit; end;
-  if Value = 'empty' then begin Mode := vfmIsEmpty; Value := ''; Exit; end;
-  if Copy(Value, 1, 1) = '=' then begin Mode := vfmEquals; Delete(Value, 1, 1); Exit; end;
-  if Copy(Value, 1, 1) = '!' then begin Mode := vfmNotEquals; Delete(Value, 1, 1); Exit; end;
-  if Copy(Value, 1, 1) = '>' then begin Mode := vfmGreaterThan; Delete(Value, 1, 1); Exit; end;
-  if Copy(Value, 1, 1) = '<' then begin Mode := vfmLessThan; Delete(Value, 1, 1); Exit; end;
-  if Copy(Value, 1, 1) = '^' then begin Mode := vfmStartsWith; Delete(Value, 1, 1); Exit; end;
-  if Copy(Value, 1, 1) = '$' then begin Mode := vfmEndsWith; Delete(Value, 1, 1); Exit; end;
 end;
 
 function TVittixDBGridFilterEngine.TryParseNumericText(const S: string;
@@ -564,5 +729,9 @@ begin
     Result := AField.DisplayText;
   end;
 end;
+
+initialization
+  BuildFilterOperators;
+  BuildFilterOperatorParseOrder;
 
 end.

@@ -39,8 +39,8 @@ begin
        end;
 
     1: begin
-         if Assigned(Grid.Controller) and (Grid.Controller is TVittixDBGridController) then
-           TVittixDBGridController(Grid.Controller).ShowColumnChooser;
+         if Assigned(Grid.Controller) then
+           Grid.Controller.ShowColumnChooser;
          Designer.Modified;
        end;
 

@@ -110,35 +110,52 @@ stale pre-move index. Correct only while list and grid stay in sync.
 
 ## Milestone 2 — Structural refactor (medium effort, removes a whole bug class)
 
-### 2.1 [R] Replace event-handler hooking with virtual overrides
+### 2.1 [R] Replace event-handler hooking with virtual overrides — ✅ COMPLETED 2026-08-18
 The controller saves/replaces `OnTitleClick`, `OnDrawColumnCell`, `OnMouseDown`,
 `OnDblClick`, `OnKeyDown` and the `WindowProc` on the grid. Any later assignment
 to those properties by application code silently unhooks sorting/colors, and
 stacked hooks are a recurring source of ordering bugs.
 
-- `source/Vittix.DBGrid.Controller.pas:395-460` (`HookGrid`/`UnhookGrid`), `:593-615` (`GridWindowProc`)
-- Fix: override the corresponding virtual methods in `TVittixDBGrid`
-  (`TitleClick`, `DrawCell`, `MouseDown`, `DblClick`, `KeyDown`) and call the
-  controller from there; fire NEW public events (`OnAfterSort`,
-  `OnFilterApplied`, `OnAfterApplyLayout`) so consumers no longer need to reach
-  into the controller's engines. Keep the WindowProc hook only for footer sync
-  messages.
+- Implemented: `TVittixDBGrid` now overrides `TitleClick`, `DrawColumnCell`,
+  `MouseDown`, `DblClick`, `KeyDown` and calls new public controller methods
+  (`DoTitleClick`, `DoDrawColumnCell`, `DoMouseDown`, `DoDblClick`,
+  `DoKeyDown`). The mouse/dblclick/keydown methods return `True` when the
+  controller consumed the event (filter popup, column chooser, memo editor, F2).
+- `DrawColumnCell`: controller tweaks Brush/Font first, then the application's
+  `OnDrawColumnCell` fires via inherited, else `DefaultDrawColumnCell` runs —
+  matching the previous hook behavior.
+- All five `FOldXxx` event fields and the save/restore in `HookGrid`/`UnhookGrid`
+  are gone. Only the `WindowProc` hook remains (footer sync messages — no VCL
+  virtual exists for those).
+- Application event assignment after startup can no longer unhook the
+  integration — covered by new regression tests
+  (`ApplicationTitleClickHandlerFiresAndSortingStillWorks`,
+  `ApplicationKeyDownHandlerStillFires`, `ApplicationDblClickHandlerStillFires`).
+- New public events (`OnAfterSort`, `OnFilterApplied`, `OnAfterApplyLayout`)
+  deferred to the feature backlog.
 
-### 2.2 [R] Eliminate the protected-member crackers
+### 2.2 [R] Eliminate the protected-member crackers — ✅ COMPLETED 2026-08-18
 `TVittixGridHelper = class(TCustomDBGrid)` and `TVittixGridAccess = class(TDBGrid)`
-reach protected members from outside. Since `TVittixDBGrid` is our own
+reached protected members from outside. Since `TVittixDBGrid` is our own
 descendant, promote the needed members (`LeftCol`, `CellRect`,
 `IndicatorOffset`) as public utilities on `TVittixDBGrid` instead.
 
-- `source/Vittix.DBGrid.Controller.pas:50`, `source/Vittix.DBGrid.FooterPanel.pas:88`
+- Implemented: `TVittixDBGrid.GetLeftCol`, `GetCellRect`, `GetIndicatorOffset`
+  are public; both grid cracker classes are deleted. `TVittixCDSAccess` in the
+  sort engine stays — `IndexName` is protected on `TCustomClientDataSet`, a
+  framework class we don't own, so cracking there remains the correct pattern.
 
-### 2.3 [R] Single source of truth for visual properties
+### 2.3 [R] Single source of truth for visual properties — ✅ COMPLETED 2026-08-18
 The grid keeps local copies of `FooterVisible`/`AlternatingRowColors`/
 `AlternateRowColor` AND pushes them to the controller. Replace the duplicated
 fields with direct delegation to the controller (keep published property
 signatures unchanged for DFM compatibility).
 
-- `source/Vittix.DBGrid.pas:34-35, 129-132, 210-246`
+- Implemented: the grid's local `FFooterVisible`/`FAlternatingRowColors`/
+  `FAlternateRowColor` fields are gone. Published properties delegate to the
+  controller (with static-default fallbacks when the controller is absent
+  during early teardown). `ApplyLayout` pushes through the grid setters only —
+  the old dual-setter workaround is removed since desync is no longer possible.
 
 ### 2.4 [R] Delete dead scaffolding — ✅ COMPLETED 2026-08-16
 - Empty `TraceGrid`/`TraceController`/`TraceFooter` stubs called ~45 times
@@ -297,3 +314,155 @@ mostly don't) and consider generating an API reference from them.
 4. Milestone 3 performance items (each independently shippable).
 5. Milestone 6 hygiene (any time; ideally before the next release).
 6. Milestones 4–5 and the feature backlog, prioritized by user demand.
+
+---
+
+# Future Development Plan (September 2026 review)
+
+Fresh full-repo review after Milestones 1–2 landed (grid↔controller integration
+is now virtual-override based; single source of truth for visual properties;
+132 tests passing). This section supersedes the feature backlog above with a
+phased plan. Each phase is independently shippable.
+
+## Phase A — Feature foundation (small, unblocks everything)
+
+- **A1 [F] Public notification events — ✅ COMPLETED 2026-09-04**
+  - New typed events on the controller (implementation owner) with matching
+    published surfaces on `TVittixDBGrid`: `OnAfterSort(Sender, Column)`,
+    `OnFilterApplied(Sender, FieldName)`, `OnAfterApplyLayout`,
+    `OnColumnMoved(Sender, Column, OldIndex, NewIndex)`. Both surfaces share
+    one handler storage, so an operation fires exactly once. Sender is the
+    controller.
+  - Engine callbacks now reachable: `OnValidateFilter`, `OnFormatAggregation`,
+    `OnFieldValidation` are public properties on the controller. Handlers are
+    cached on the controller and pushed to the engines whenever they are
+    (re)created, so assignment survives dataset churn. The filter popup also
+    receives `OnValidateFilter` for live in-dialog validation.
+  - Firing points: `DoTitleClick` (only after `ToggleSort` applied without
+    raising), `ApplyState`/`Clear` (Column = nil), popup commit /
+    `SetGlobalFilter` / `ClearFilters`, end of `ApplyLayout`, and column moves
+    (chooser drag/keyboard/rollback, `ApplyLayout` restore, and the new
+    `TVittixDBGrid.ColumnMoved` override for VCL-initiated moves).
+  - Covered by `TVittixControllerEventTests` (assignment, invocation,
+    no-duplicate, nil-safety with freed controller / closed dataset,
+    coexistence with application event handlers).
+
+- **A2 [R] Strongly typed `TVittixDBGrid.Controller` — ✅ COMPLETED 2026-09-04**
+  - `Controller` is now `TVittixDBGridController` (public, not streamed — no
+    DFM impact). To break the unit cycle, `Vittix.DBGrid.Controller` and
+    `Vittix.DBGrid.FooterPanel` moved their `Vittix.DBGrid` dependency to the
+    implementation section; the controller's `Grid` property and the footer's
+    `Attach` are `TDBGrid`-typed with implementation-side `VittixGrid()`
+    helpers, and `SetGrid` raises `EArgumentException` for non-Vittix grids
+    (previously enforced only at compile time through the property type).
+  - All ~15 `is TVittixDBGridController` casts removed from the grid, the
+    design-time editor, the demo, and the tests.
+
+- **A3 [R] Single filter-operator table — ✅ COMPLETED 2026-09-04**
+  - One authoritative table in `Vittix.DBGrid.Filter.Engine`
+    (`TVittixFilterOperatorDefinition` + parse/lookup functions, built once in
+    the unit initialization). The engine's `ParseFilterMode`, the popup's
+    combo fill / prefix generation / persisted-text restoration now all use
+    it; the three hand-synced copies are gone. The table order is the combo
+    order and the persisted `OperatorIndex` contract.
+  - Observable syntax unchanged, including `!..` (Not Between) and
+    length-delimited word operators (`nullity` stays a Contains filter).
+    Side effect: the popup now splits stored text exactly like the engine
+    (trimmed), so hand-set filter texts with leading spaces restore
+    consistently. Covered by `Vittix.Tests.FilterOperators`.
+
+- **Discovered while testing A1 [B] — fixed**: applying any filter through
+  the controller silently undid itself. The engine's
+  `DisableControls/EnableControls` around `Filtered := True` fires
+  `deDataSetChange`, and `DataLinkDataSetChanged` responded by destroying the
+  engines — the dying engine's destructor reset `Filtered` and unhooked
+  `OnFilterRecord`. `DataLinkDataSetChanged` now checks dataset identity and
+  only rebuilds when the dataset actually changed or closed (previously
+  sorting survived this thrash by luck because index state lives on the
+  dataset; filter state does not). This also removes most of the engine
+  churn called out in C5.
+
+- **A4 [F] Layout schema v2** (versioned JSON): add pinned/fixed flag, title
+  caption, format/DisplayFormat, per-column export settings (include,
+  caption override, mask). Today only fieldName/displayIndex/width/visible/
+  sort/aggregation/footerText/cellConditions round-trip
+  (`Layout.pas:152-160`). Needed by D3 (freezing) and export quality work.
+  Still pending.
+
+## Phase B — Finish the half-built features (quick wins)
+
+- **B1 [B] Implement `ExportFilteredOnly` and `IncludeFooter`** — declared,
+  defaulted, and persisted by the export dialog but never read by any export
+  routine (`Export.Engine.pas:74-98, 205-232`). Add footer/aggregation row
+  output to CSV/HTML/XLSX paths.
+- **B2 [F] XLSX numeric cells** — emit `<c t="n">` for numeric/boolean field
+  types, `xml:space="preserve"` on inline strings, and column widths
+  (`Export.Engine.pas:1050-1203`). Milestone 4.2.
+- **B3 [F] PDF: implement a minimal writer or hide it** from the dialog
+  (`Export.Engine.pas:498` raises). Milestone 4.3.
+- **B4 [F] VCL Styles support** for footer panel + filter popup
+  (Milestone 4.1).
+- **B5 [F] Design-time polish** — Milestone 5 (property categories, palette
+  glyph, aggregation property editor, design-time footer preview).
+
+## Phase C — Performance (Milestone 3, unchanged) plus one addition
+
+- Milestone 3.1–3.4 as written (incremental aggregation, uppercase cache,
+  preview row cap, `SyncColumnInfo` index).
+- **C5 [P] Stop destroying engines on every dataset change** —
+  `DataLinkDataSetChanged` frees and recreates sort/filter/aggregation engines
+  on each `DataSetChanged` notification (`Controller.pas:470-481`); reuse and
+  rebind them instead.
+- **C6 [P] Distinct-value scan and `RecordCount` polling** in the filter
+  popup (`Filter.Popup.pas:535-586`) and export progress
+  (`Export.Engine.pas:571, 583`).
+
+## Phase D — New features (ordered by value/effort)
+
+- **D1 [F] Incremental search (type-ahead locate)** — small: the `KeyDown`
+  override already routes to the controller; add a search buffer + `Locate` +
+  optional status hint.
+- **D2 [F] Clipboard selection operations** — copy cell/row/multi-selection,
+  aggregate the selection in the footer; reuse the existing clipboard
+  exporter. (Backlog: "multi-select-aware operations".)
+- **D3 [F] Column freezing (fixed left columns)** — requires A4 schema plus
+  fixed-region awareness in footer `GetColumnRect` and layout apply
+  (`FooterPanel.pas:193-227`, `Controller.pas:944`). Highest user-visible
+  value after search.
+- **D4 [F] Richer in-place editors** — dropdown/picklist, lookup, masked
+  numeric, per-column validation (`Editors.pas` currently: memo + date only).
+- **D5 [F] Saved filter sets + filter builder** — named filter profiles per
+  grid, OR-groups between column filters, date-aware operators (dates are
+  compared as text/float today).
+- **D6 [F] Grouping with group footers** — the largest architectural lift.
+  The footer panel is a manually positioned sibling control
+  (`FooterPanel.pas:105-168`); grouping needs a proper band model. The
+  aggregation engine is already filter-aware and can back group aggregates.
+- **D7 [F] Server-side filter/sort provider** — generate FireDAC/ADO
+  `WHERE`/`ORDER BY` instead of `OnFilterRecord` display-text matching
+  (the key EhLib-parity gap; `Sort.Engine.pas:163-198` already has the
+  FireDAC dialect note).
+- **D8 [F] Printing / print preview** built on the export engine (HTML
+  preview first; shares B3 PDF work).
+- **D9 [F] Pagination / virtual mode** for very large datasets.
+
+## Phase E — Ecosystem & distribution
+
+- CI builds (the DUnitX console runner already exits non-zero on failure —
+  CI-ready); verify the real minimum Delphi version (README says 10.3+,
+  CONTRIBUTING 10.4+, installer ships Delphi 12/Win32 only) — Milestone 6.2.
+- Multi-version installer payloads (D10.4–12, Win32 + Win64); un-hardcode
+  `build-installer.ps1` BPL source paths.
+- Milestone 6.3 (madExcept-free demo) and 6.4 (hygiene: `.pas.bak`, `.dcu`
+  artifacts, `.gitignore` for `.drc`/`.mes`), 6.5 (API docs).
+
+## Recommended sequence
+
+1. A1–A3 (foundation; each ~1 day, regression tests exist).
+2. B1–B3 (close dead options, XLSX quality, PDF decision) + 6.4 hygiene →
+   tag **v1.1**.
+3. D1 + D2 (small user-visible features) + B4/B5 → tag **v1.2**.
+4. C (performance) → tag **v1.3**.
+5. A4 + D3 (column freezing) → tag **v2.0**.
+6. D6 (grouping) and D7 (server-side) as the flagship v2.x tracks.
+7. E runs continuously; CI before the next public release.

@@ -32,7 +32,6 @@ uses
   Data.DB,
 
   // Vittix
-  Vittix.DBGrid,
   Vittix.DBGrid.ColumnInfo,
   Vittix.DBGrid.ColumnChooser,
   Vittix.DBGrid.Editors,
@@ -48,9 +47,23 @@ const
   WM_VITTIX_UPDATE_FIXEDROWS = WM_USER + 1001;
 
 type
-  TVittixGridHelper = class(TCustomDBGrid);
-
   TVittixDBGridController = class;
+
+  /// <summary>Raised after a sort was applied to the dataset. Column is the
+  /// column the user toggled, or nil when sorting was (re)applied wholesale
+  /// (ApplyState / Clear / ApplyLayout).</summary>
+  TVittixAfterSortEvent = procedure(Sender: TObject; Column: TColumn) of object;
+
+  /// <summary>Raised after a filter was applied (popup commit, global filter,
+  /// or clear-all). FieldName is the affected column's field name, or '' for
+  /// global/clear operations.</summary>
+  TVittixFilterAppliedEvent = procedure(Sender: TObject;
+    const FieldName: string) of object;
+
+  /// <summary>Raised after a column's display position changed (column
+  /// chooser drag/keyboard moves, layout restore, VCL column moves).</summary>
+  TVittixColumnMovedEvent = procedure(Sender: TObject; Column: TColumn;
+    OldIndex, NewIndex: Integer) of object;
 
   TVittixGridDataLink = class(TDataLink)
   private
@@ -65,7 +78,11 @@ type
 
   TVittixDBGridController = class(TComponent)
   private
-    FGrid: TVittixDBGrid;
+    // FGrid is typed TDBGrid so this unit does not need Vittix.DBGrid in its
+    // interface (TVittixDBGrid needs this unit in ITS interface to expose the
+    // strongly typed Controller property). SetGrid enforces that the grid is
+    // a TVittixDBGrid; VittixGrid gives typed access to its members.
+    FGrid: TDBGrid;
     FDataset: TDataSet;
     FDataLink: TVittixGridDataLink;
 
@@ -88,21 +105,27 @@ type
     FFooterPanel: TVittixDBGridFooterPanel;
     FAggregationBusy: Boolean;
 
-    // Event hooks
-    FOldTitleClick: TDBGridClickEvent;
-    FOldDrawColumnCell: TDrawColumnCellEvent;
-    FOldMouseDown: TMouseEvent;
-    FOldDblClick: TNotifyEvent;
-    FOldKeyDown: TKeyEvent;
+    // Notification events. Handlers are cached here (assignment must survive
+    // engine recreation while datasets close/reopen) and pushed to the
+    // engines in CreateEngines / the property setters.
+    FOnAfterSort: TVittixAfterSortEvent;
+    FOnFilterApplied: TVittixFilterAppliedEvent;
+    FOnAfterApplyLayout: TNotifyEvent;
+    FOnColumnMoved: TVittixColumnMovedEvent;
+    FOnValidateFilter: TFilterValidationEvent;
+    FOnFormatAggregation: TFormatAggregationEvent;
+    FOnFieldValidation: TFieldValidationEvent;
+
+    // Event hooks — only the WindowProc remains; grid input/draw integration
+    // happens via virtual overrides on TVittixDBGrid calling the DoXxx methods.
     FOldWindowProc: TWndMethod;
 
     // Internal helpers
     function IsReady: Boolean;
     function FindInfoByColumn(AColumn: TColumn): TVittixDBGridColumnInfo;
     function FindColumnByField(AField: TField): TColumn;
-    function FindColumnByFieldName(const FieldName: string): TColumn;
 
-    procedure SetGrid(const Value: TVittixDBGrid);
+    procedure SetGrid(const Value: TDBGrid);
     procedure SetActive(const Value: Boolean);
     procedure SetShowFooter(const Value: Boolean);
 
@@ -120,16 +143,19 @@ type
 
     procedure GridWindowProc(var Message: TMessage);
 
-    // Grid events
-    procedure GridTitleClick(Column: TColumn);
-    procedure GridDrawColumnCell(Sender: TObject; const Rect: TRect;
-      DataCol: Integer; Column: TColumn; State: TGridDrawState);
-    procedure GridMouseDown(Sender: TObject; Button: TMouseButton;
-      Shift: TShiftState; X, Y: Integer);
-    procedure GridDblClick(Sender: TObject);
-    procedure GridKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
-
     procedure SetAggregationDirty;
+
+    // Event dispatch helpers (no-ops without handlers)
+    procedure DoAfterSort(Column: TColumn);
+    procedure DoFilterApplied(const FieldName: string);
+    procedure DoAfterApplyLayout;
+
+    function GetOnValidateFilter: TFilterValidationEvent;
+    procedure SetOnValidateFilter(const Value: TFilterValidationEvent);
+    function GetOnFormatAggregation: TFormatAggregationEvent;
+    procedure SetOnFormatAggregation(const Value: TFormatAggregationEvent);
+    function GetOnFieldValidation: TFieldValidationEvent;
+    procedure SetOnFieldValidation(const Value: TFieldValidationEvent);
 
   protected
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
@@ -138,6 +164,21 @@ type
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
+
+    // Integration points called from TVittixDBGrid's virtual overrides.
+    // DoMouseDown/DoDblClick/DoKeyDown return True when the event was
+    // consumed and must not reach inherited VCL processing.
+    procedure DoTitleClick(Column: TColumn);
+    procedure DoDrawColumnCell(const Rect: TRect; DataCol: Integer;
+      Column: TColumn; State: TGridDrawState);
+    function DoMouseDown(Button: TMouseButton; Shift: TShiftState;
+      X, Y: Integer): Boolean;
+    function DoDblClick: Boolean;
+    function DoKeyDown(var Key: Word; Shift: TShiftState): Boolean;
+
+    // Called by TVittixDBGrid (chooser moves, VCL ColumnMoved) after a
+    // column's display position changed; raises OnColumnMoved.
+    procedure DoColumnMoved(Column: TColumn; OldIndex, NewIndex: Integer);
 
     procedure Detach;
     procedure InstallWindowProc;
@@ -160,12 +201,50 @@ type
     procedure LoadLayoutFromFile(const FileName: string = '');
     procedure ResetLayout;
 
+    /// <summary>Finds a grid column by its FieldName; nil when not found.
+    /// Public helper used by the export engine and tests.</summary>
+    function FindColumnByFieldName(const FieldName: string): TColumn;
+
+    /// <summary>Returns the footer text that should appear for a column
+    /// identified by field name: the aggregation display text when an
+    /// aggregation is configured, otherwise the column's FooterText, or ''
+    /// when neither is set. Used by the export engine when IncludeFooter is
+    /// enabled.</summary>
+    function FooterDisplayText(const FieldName: string): string;
+
     // Called by TVittixDBGrid when its DataSource property changes
     procedure DataSourceChanged;
 
-    property Grid: TVittixDBGrid read FGrid write SetGrid;
+    // Expose engines for testing and advanced scenarios
+    property FilterEngine: TVittixDBGridFilterEngine read FFilterEngine;
+    property SortEngine: TVittixDBGridSortEngine read FSortEngine;
+    property AggregationEngine: TVittixDBGridAggregationEngine read FAggregationEngine;
+
+    property Grid: TDBGrid read FGrid write SetGrid;
     property LayoutStorageFileName: string read FLayoutStorageFileName write FLayoutStorageFileName;
     property PersistenceRootPath: string read FPersistenceRootPath write FPersistenceRootPath;
+
+    // Notification events. The controller is the implementation owner;
+    // TVittixDBGrid re-publishes the first four as convenient surfaces over
+    // this same storage (assigning either side reaches the same handlers,
+    // so an operation fires exactly once). Sender is the controller.
+    property OnAfterSort: TVittixAfterSortEvent
+      read FOnAfterSort write FOnAfterSort;
+    property OnFilterApplied: TVittixFilterAppliedEvent
+      read FOnFilterApplied write FOnFilterApplied;
+    property OnAfterApplyLayout: TNotifyEvent
+      read FOnAfterApplyLayout write FOnAfterApplyLayout;
+    property OnColumnMoved: TVittixColumnMovedEvent
+      read FOnColumnMoved write FOnColumnMoved;
+
+    // Engine callbacks, previously unreachable (the engines are private).
+    // Handlers are cached and pushed to the engines when they (re)appear.
+    property OnValidateFilter: TFilterValidationEvent
+      read GetOnValidateFilter write SetOnValidateFilter;
+    property OnFormatAggregation: TFormatAggregationEvent
+      read GetOnFormatAggregation write SetOnFormatAggregation;
+    property OnFieldValidation: TFieldValidationEvent
+      read GetOnFieldValidation write SetOnFieldValidation;
 
   published
     property Active: Boolean read FActive write SetActive default True;
@@ -181,6 +260,22 @@ type
   end;
 
 implementation
+
+uses
+  // Implementation-only on purpose: TVittixDBGrid needs this unit in its
+  // interface (strongly typed Controller property), so this unit must not
+  // reference Vittix.DBGrid in its own interface section.
+  Vittix.DBGrid;
+
+function VittixGrid(AGrid: TDBGrid): TVittixDBGrid;
+begin
+  // SetGrid guarantees the type; the guard keeps the helper nil-safe for
+  // teardown windows where the grid reference is already cleared.
+  if AGrid is TVittixDBGrid then
+    Result := TVittixDBGrid(AGrid)
+  else
+    Result := nil;
+end;
 
 { TVittixGridDataLink }
 
@@ -324,8 +419,14 @@ end;
 { GRID / DATASET HOOKING }
 { ============================================================================= }
 
-procedure TVittixDBGridController.SetGrid(const Value: TVittixDBGrid);
+procedure TVittixDBGridController.SetGrid(const Value: TDBGrid);
 begin
+  // The controller reaches TVittixDBGrid-specific members (ColumnInfo,
+  // footer plumbing, geometry helpers), so reject other grids up front.
+  if (Value <> nil) and not (Value is TVittixDBGrid) then
+    raise EArgumentException.Create(
+      'TVittixDBGridController requires a TVittixDBGrid instance');
+
   if FGrid = Value then Exit;
 
   UnhookGrid;
@@ -387,23 +488,12 @@ begin
   // correct check for all design-time protection.
   if csDesigning in FGrid.ComponentState then Exit;
 
-  // Secondary runtime check: never hook events when not fully constructed.
+  // Secondary runtime check: never hook when not fully constructed.
   if csLoading in FGrid.ComponentState then Exit;
 
-  FOldTitleClick := FGrid.OnTitleClick;
-  FGrid.OnTitleClick := GridTitleClick;
-
-  FOldDrawColumnCell := FGrid.OnDrawColumnCell;
-  FGrid.OnDrawColumnCell := GridDrawColumnCell;
-
-  FOldMouseDown := FGrid.OnMouseDown;
-  FGrid.OnMouseDown := GridMouseDown;
-
-  FOldDblClick := FGrid.OnDblClick;
-  FGrid.OnDblClick := GridDblClick;
-
-  FOldKeyDown := FGrid.OnKeyDown;
-  FGrid.OnKeyDown := GridKeyDown;
+  // Grid input/draw integration no longer hooks events: TVittixDBGrid's
+  // virtual overrides call the DoXxx methods directly, so application event
+  // assignments can never unhook us.
 
   // WindowProc hooking requires an actual Win32 handle.
   // Only install it if one exists — it will be reinstalled via Loaded otherwise.
@@ -422,12 +512,6 @@ begin
   UnhookDataSource;
 
   if not Assigned(FGrid) then Exit;
-
-  FGrid.OnTitleClick := FOldTitleClick;
-  FGrid.OnDrawColumnCell := FOldDrawColumnCell;
-  FGrid.OnMouseDown := FOldMouseDown;
-  FGrid.OnDblClick := FOldDblClick;
-  FGrid.OnKeyDown := FOldKeyDown;
 
   // CRITICAL: Only restore the WindowProc when the hook was actually
   // installed. HookGrid skips the hook when the grid handle is not yet
@@ -491,6 +575,20 @@ end;
 procedure TVittixDBGridController.DataLinkDataSetChanged;
 begin
   if FAggregationBusy then Exit;
+  // deDataSetChange arrives not only for real dataset swaps but also for
+  // EnableControls and Filtered changes on the SAME open dataset. Tearing
+  // the engines down for those notifications destroyed the engine that just
+  // applied a filter (its destructor resets Filtered and unhooks
+  // OnFilterRecord). Rebuild only when the dataset identity or state really
+  // changed; otherwise the engines self-heal (field-cache stale guard) and
+  // the footer just needs a recalculation.
+  if Assigned(FDataLink) and Assigned(FDataset) and
+     (FDataLink.DataSet = FDataset) and FDataset.Active then
+  begin
+    SetAggregationDirty;
+    Exit;
+  end;
+
   FDataset := nil;
   DestroyEngines;
 
@@ -525,13 +623,19 @@ begin
   if FEnginesCreated or not IsReady then Exit;
 
   FSortEngine :=
-    TVittixDBGridSortEngine.Create(FDataset, FGrid.ColumnInfo);
+    TVittixDBGridSortEngine.Create(FDataset, VittixGrid(FGrid).ColumnInfo);
 
   FFilterEngine :=
-    TVittixDBGridFilterEngine.Create(FDataset, FGrid.ColumnInfo);
+    TVittixDBGridFilterEngine.Create(FDataset, VittixGrid(FGrid).ColumnInfo);
 
   FAggregationEngine :=
-    TVittixDBGridAggregationEngine.Create(FDataset, FGrid.ColumnInfo);
+    TVittixDBGridAggregationEngine.Create(FDataset, VittixGrid(FGrid).ColumnInfo);
+
+  // Engines are recreated on dataset churn — re-attach the cached engine
+  // event handlers so assignments made earlier are not lost.
+  FSortEngine.OnFieldValidation := FOnFieldValidation;
+  FFilterEngine.OnValidateFilter := FOnValidateFilter;
+  FAggregationEngine.OnFormatAggregation := FOnFormatAggregation;
 
   FAggregationEngine.OnAcceptRecord :=
     function: Boolean
@@ -589,9 +693,8 @@ begin
   end;
 end;
 
-procedure TVittixDBGridController.GridDrawColumnCell(
-  Sender: TObject; const Rect: TRect; DataCol: Integer;
-  Column: TColumn; State: TGridDrawState);
+procedure TVittixDBGridController.DoDrawColumnCell(
+  const Rect: TRect; DataCol: Integer; Column: TColumn; State: TGridDrawState);
 var
   IsOddRow: Boolean;
   Info: TVittixDBGridColumnInfo;
@@ -599,6 +702,9 @@ var
   FieldValue: string;
   I: Integer;
 begin
+  // Called from TVittixDBGrid.DrawColumnCell BEFORE the application handler
+  // or default drawing — only tweaks Brush/Font, never paints.
+
   // Check if we should apply the alternate color
   // We skip:
   // 1. Selected rows (let them be blue/highlighted)
@@ -624,7 +730,7 @@ begin
     end;
   end;
 
-  Info := FGrid.ColumnInfoByColumn(Column);
+  Info := VittixGrid(FGrid).ColumnInfoByColumn(Column);
   if Assigned(Info) and Assigned(FGrid.DataSource) and Assigned(FGrid.DataSource.DataSet) and
      (not (gdSelected in State)) and (not (gdFixed in State)) then
   begin
@@ -649,20 +755,13 @@ begin
       end;
     end;
   end;
-
-  // Now call the default drawing.
-  // It will use the Brush.Color we just set for the background.
-  if Assigned(FOldDrawColumnCell) then
-    FOldDrawColumnCell(Sender, Rect, DataCol, Column, State)
-  else
-    FGrid.DefaultDrawColumnCell(Rect, DataCol, Column, State);
 end;
 
 { ============================================================================= }
-{ GRID EVENTS }
+{ GRID EVENT INTEGRATION (called from TVittixDBGrid virtual overrides) }
 { ============================================================================= }
 
-procedure TVittixDBGridController.GridTitleClick(Column: TColumn);
+procedure TVittixDBGridController.DoTitleClick(Column: TColumn);
 begin
   if Assigned(FSortEngine) then
   begin
@@ -672,59 +771,62 @@ begin
     );
     SetAggregationDirty;
     Refresh;
+    // Reached only when ToggleSort applied without raising.
+    DoAfterSort(Column);
   end;
-
-  if Assigned(FOldTitleClick) then
-    FOldTitleClick(Column);
 end;
 
-procedure TVittixDBGridController.GridMouseDown(
-  Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+function TVittixDBGridController.DoMouseDown(Button: TMouseButton;
+  Shift: TShiftState; X, Y: Integer): Boolean;
 var
-  G: TVittixGridHelper;
   Coord: TGridCoord;
   ColIndex: Integer;
   Col: TColumn;
 begin
+  Result := False;
   if not Assigned(FGrid) then Exit;
 
-  G := TVittixGridHelper(FGrid);
   Coord := FGrid.MouseCoord(X, Y);
 
-  // Title click for filter
+  // Right-click on the title row: filter popup / column chooser
   if (Coord.Y = 0) and (Button = mbRight) then
   begin
     if ssCtrl in Shift then
     begin
       ShowColumnChooser;
-      Exit;
+      Exit(True);
     end;
 
-    ColIndex := Coord.X - G.IndicatorOffset;
+    ColIndex := Coord.X - VittixGrid(FGrid).GetIndicatorOffset;
     if (ColIndex >= 0) and (ColIndex < FGrid.Columns.Count) then
     begin
       Col := FGrid.Columns[ColIndex];
+      // Live in-popup validation through the same handler the engine uses
+      // at apply time, when one is assigned.
       if Assigned(Col) and
          TVittixDBGridFilterPopup.Execute(
-           FGrid, FindInfoByColumn(Col)) then
+           FGrid, FindInfoByColumn(Col), FOnValidateFilter) then
       begin
-        FFilterEngine.Active := True;
-        SetAggregationDirty;
-        Refresh;
+        if Assigned(FFilterEngine) then
+        begin
+          FFilterEngine.Active := True;
+          SetAggregationDirty;
+          Refresh;
+          DoFilterApplied(Col.FieldName);
+        end;
+        Exit(True);
       end;
-      Exit;
+      Exit(True);
     end;
   end;
-
-  if Assigned(FOldMouseDown) then
-    FOldMouseDown(Sender, Button, Shift, X, Y);
 end;
 
-procedure TVittixDBGridController.GridDblClick(Sender: TObject);
+function TVittixDBGridController.DoDblClick: Boolean;
 var
   Field: TField;
   Column: TColumn;
 begin
+  Result := False;
   Field := nil;
   if Assigned(FGrid) then
     Field := FGrid.SelectedField;
@@ -735,38 +837,31 @@ begin
      TVittixDBGridEditors.EditField(FGrid, Column) then
   begin
     Refresh;
-    Exit;
+    Result := True; // consumed: the field editor handled it
   end;
-
-  if Assigned(FOldDblClick) then
-    FOldDblClick(Sender);
 end;
 
-procedure TVittixDBGridController.GridKeyDown(Sender: TObject; var Key: Word;
-  Shift: TShiftState);
+function TVittixDBGridController.DoKeyDown(var Key: Word;
+  Shift: TShiftState): Boolean;
 var
   Field: TField;
   Column: TColumn;
 begin
-  if Key = VK_F2 then
+  Result := False;
+  if Key <> VK_F2 then Exit;
+
+  Field := nil;
+  if Assigned(FGrid) then
+    Field := FGrid.SelectedField;
+  Column := FindColumnByField(Field);
+
+  if Assigned(Column) and Assigned(Field) and
+     (Field.DataType in [ftMemo, ftWideMemo, ftFmtMemo, ftDate, ftTime, ftDateTime]) and
+     TVittixDBGridEditors.EditField(FGrid, Column) then
   begin
-    Field := nil;
-    if Assigned(FGrid) then
-      Field := FGrid.SelectedField;
-    Column := FindColumnByField(Field);
-
-    if Assigned(Column) and Assigned(Field) and
-       (Field.DataType in [ftMemo, ftWideMemo, ftFmtMemo, ftDate, ftTime, ftDateTime]) and
-       TVittixDBGridEditors.EditField(FGrid, Column) then
-    begin
-      Refresh;
-      Key := 0;
-      Exit;
-    end;
+    Refresh;
+    Result := True;
   end;
-
-  if Assigned(FOldKeyDown) then
-    FOldKeyDown(Sender, Key, Shift);
 end;
 
 { ============================================================================= }
@@ -826,14 +921,25 @@ begin
     FSortEngine.ClearSorting;
   SetAggregationDirty;
   Refresh;
+  // ClearFilters already raised OnFilterApplied for the filter side.
+  if Assigned(FSortEngine) then
+    DoAfterSort(nil);
 end;
 
 procedure TVittixDBGridController.ApplyState;
+var
+  SortingApplied: Boolean;
 begin
+  SortingApplied := False;
   if Assigned(FSortEngine) then
+  begin
     FSortEngine.ApplySorting;
+    SortingApplied := True;
+  end;
   SetAggregationDirty;
   Refresh;
+  if SortingApplied then
+    DoAfterSort(nil);
 end;
 
 function TVittixDBGridController.IsUpdating: Boolean;
@@ -843,23 +949,25 @@ end;
 
 procedure TVittixDBGridController.SetGlobalFilter(const Text: string);
 begin
-  if Assigned(FFilterEngine) then
-  begin
-    FFilterEngine.GlobalSearchText := Text;
-    FFilterEngine.Active := Text <> '';
-    SetAggregationDirty;
-    Refresh;
-  end;
+  if not Assigned(FFilterEngine) then
+    Exit;
+
+  FFilterEngine.GlobalSearchText := Text;
+  FFilterEngine.Active := Text <> '';
+  SetAggregationDirty;
+  Refresh;
+  DoFilterApplied('');
 end;
 
 procedure TVittixDBGridController.ClearFilters;
 begin
-  if Assigned(FFilterEngine) then
-  begin
-    FFilterEngine.Clear;
-    SetAggregationDirty;
-    Refresh;
-  end;
+  if not Assigned(FFilterEngine) then
+    Exit;
+
+  FFilterEngine.Clear;
+  SetAggregationDirty;
+  Refresh;
+  DoFilterApplied('');
 end;
 
 procedure TVittixDBGridController.SetColumnAggregation(
@@ -900,9 +1008,9 @@ begin
 
   if AColumn.FieldName = '' then Exit;
 
-  for I := 0 to FGrid.ColumnInfo.Count - 1 do
-    if SameText(FGrid.ColumnInfo[I].FieldName, AColumn.FieldName) then
-      Exit(FGrid.ColumnInfo[I]);
+  for I := 0 to VittixGrid(FGrid).ColumnInfo.Count - 1 do
+    if SameText(VittixGrid(FGrid).ColumnInfo[I].FieldName, AColumn.FieldName) then
+      Exit(VittixGrid(FGrid).ColumnInfo[I]);
 end;
 
 function TVittixDBGridController.FindColumnByField(AField: TField): TColumn;
@@ -939,9 +1047,9 @@ var
 begin
   if (State = nil) or not Assigned(FGrid) then Exit;
   State.Clear;
-  State.FooterVisible := FGrid.FooterVisible;
-  State.AlternatingRowColors := FGrid.AlternatingRowColors;
-  State.AlternateRowColor := FGrid.AlternateRowColor;
+  State.FooterVisible := VittixGrid(FGrid).FooterVisible;
+  State.AlternatingRowColors := VittixGrid(FGrid).AlternatingRowColors;
+  State.AlternateRowColor := VittixGrid(FGrid).AlternateRowColor;
   for I := 0 to FGrid.Columns.Count - 1 do
   begin
     Col := FGrid.Columns[I];
@@ -950,7 +1058,7 @@ begin
     Item.DisplayIndex := Col.Index;
     Item.Width := Col.Width;
     Item.Visible := Col.Visible;
-    Info := FGrid.ColumnInfo.FindByFieldName(Col.FieldName);
+    Info := VittixGrid(FGrid).ColumnInfo.FindByFieldName(Col.FieldName);
     if Assigned(Info) then
     begin
       Item.SortOrder := Info.SortOrder;
@@ -969,6 +1077,7 @@ var
   Item: TVittixDBGridLayoutColumnState;
   Col: TColumn;
   Info: TVittixDBGridColumnInfo;
+  OldIndex: Integer;
 begin
   if (State = nil) or not Assigned(FGrid) then Exit;
   FUpdating := True;
@@ -980,8 +1089,13 @@ begin
       if Col = nil then Continue;
       Col.Width := Item.Width;
       Col.Visible := Item.Visible;
-      Col.Index := Item.DisplayIndex;
-      Info := FGrid.ColumnInfo.FindByFieldName(Item.FieldName);
+      OldIndex := Col.Index;
+      if OldIndex <> Item.DisplayIndex then
+      begin
+        Col.Index := Item.DisplayIndex;
+        DoColumnMoved(Col, OldIndex, Item.DisplayIndex);
+      end;
+      Info := VittixGrid(FGrid).ColumnInfo.FindByFieldName(Item.FieldName);
       if Assigned(Info) then
       begin
         Info.SortOrder := Item.SortOrder;
@@ -991,17 +1105,19 @@ begin
         CellConditionsFromJson(Info.CellConditions, Item.CellConditionsJson);
       end;
     end;
-    // Push the footer state through BOTH setters: the grid setter no-ops when
-    // its cached value already matches but the controller may have been
-    // desynced by a direct ShowFooter assignment, and vice versa.
-    FGrid.FooterVisible := State.FooterVisible;
-    ShowFooter := State.FooterVisible;
-    FGrid.AlternatingRowColors := State.AlternatingRowColors;
-    FGrid.AlternateRowColor := State.AlternateRowColor;
+    // Grid visual properties delegate to this controller (single source of
+    // truth), so pushing through the grid setters is sufficient.
+    VittixGrid(FGrid).FooterVisible := State.FooterVisible;
+    VittixGrid(FGrid).AlternatingRowColors := State.AlternatingRowColors;
+    VittixGrid(FGrid).AlternateRowColor := State.AlternateRowColor;
     ApplyState;
   finally
     FUpdating := False;
   end;
+  // Fire only after the state is fully applied (and FUpdating released) so
+  // handlers observe the final layout. ApplyState above already raised
+  // OnAfterSort for the restored sort.
+  DoAfterApplyLayout;
 end;
 
 procedure TVittixDBGridController.SaveLayoutToStream(Stream: TStream);
@@ -1131,6 +1247,96 @@ begin
     SetAggregationDirty;
     Refresh;
   end;
+end;
+
+{ =============================================================================
+  NOTIFICATION EVENTS
+  ============================================================================= }
+
+procedure TVittixDBGridController.DoAfterSort(Column: TColumn);
+begin
+  if Assigned(FOnAfterSort) then
+    FOnAfterSort(Self, Column);
+end;
+
+procedure TVittixDBGridController.DoFilterApplied(const FieldName: string);
+begin
+  if Assigned(FOnFilterApplied) then
+    FOnFilterApplied(Self, FieldName);
+end;
+
+procedure TVittixDBGridController.DoAfterApplyLayout;
+begin
+  if Assigned(FOnAfterApplyLayout) then
+    FOnAfterApplyLayout(Self);
+end;
+
+procedure TVittixDBGridController.DoColumnMoved(Column: TColumn;
+  OldIndex, NewIndex: Integer);
+begin
+  if Assigned(FOnColumnMoved) then
+    FOnColumnMoved(Self, Column, OldIndex, NewIndex);
+end;
+
+function TVittixDBGridController.GetOnValidateFilter: TFilterValidationEvent;
+begin
+  Result := FOnValidateFilter;
+end;
+
+procedure TVittixDBGridController.SetOnValidateFilter(
+  const Value: TFilterValidationEvent);
+begin
+  FOnValidateFilter := Value;
+  if Assigned(FFilterEngine) then
+    FFilterEngine.OnValidateFilter := Value;
+end;
+
+function TVittixDBGridController.GetOnFormatAggregation: TFormatAggregationEvent;
+begin
+  Result := FOnFormatAggregation;
+end;
+
+procedure TVittixDBGridController.SetOnFormatAggregation(
+  const Value: TFormatAggregationEvent);
+begin
+  FOnFormatAggregation := Value;
+  if Assigned(FAggregationEngine) then
+    FAggregationEngine.OnFormatAggregation := Value;
+end;
+
+function TVittixDBGridController.GetOnFieldValidation: TFieldValidationEvent;
+begin
+  Result := FOnFieldValidation;
+end;
+
+procedure TVittixDBGridController.SetOnFieldValidation(
+  const Value: TFieldValidationEvent);
+begin
+  FOnFieldValidation := Value;
+  if Assigned(FSortEngine) then
+    FSortEngine.OnFieldValidation := Value;
+end;
+
+function TVittixDBGridController.FooterDisplayText(
+  const FieldName: string): string;
+var
+  Col: TColumn;
+  Info: TVittixDBGridColumnInfo;
+begin
+  Result := '';
+  if not Assigned(FGrid) then Exit;
+
+  Col := FindColumnByFieldName(FieldName);
+  if not Assigned(Col) then Exit;
+
+  Info := VittixGrid(FGrid).ColumnInfoByColumn(Col);
+  if not Assigned(Info) then Exit;
+
+  if Info.FooterText <> '' then
+    Exit(Info.FooterText);
+
+  if Assigned(FAggregationEngine) then
+    Result := FAggregationEngine.GetAggregationDisplayText(Info);
 end;
 
 initialization

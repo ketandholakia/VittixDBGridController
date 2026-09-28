@@ -132,9 +132,13 @@ type
     function EscapeXML(const Value: string): string;
     function EscapeJSON(const Value: string): string;
     procedure CheckProgress(Current, Total: Integer);
-    function SanitizeXMLTagName(const TagName: string): string; // Helper for XML tag names
-    procedure ExportToTextStream(Stream: TStream); // Implementation for vefText
+    function SanitizeXMLTagName(const TagName: string): string;
+    procedure ExportToTextStream(Stream: TStream);
     procedure ExportToFileAtomic(const FileName: string; const ExportProc: TProc<TStream>);
+
+    function BeginExportIteration(out AFilteredToggledOff: Boolean): TBookmark;
+    procedure EndExportIteration(ABookmark: TBookmark; const AFilteredToggledOff: Boolean);
+    function BuildFooterRow(const AColumns: TList<TColumn>): TArray<string>;
 
   public
     constructor Create(AGrid: TVittixDBGrid); reintroduce;
@@ -189,7 +193,8 @@ uses
   System.StrUtils,
   Winapi.Windows,
   Vcl.Forms,
-  Vcl.Dialogs;
+  Vcl.Dialogs,
+  Vittix.DBGrid.Controller;
 
 { TVittixExportOptions }
 
@@ -514,6 +519,66 @@ begin
   end;
 end;
 
+{ Export iteration and footer helpers }
+
+function TVittixDBGridExporter.BeginExportIteration(
+  out AFilteredToggledOff: Boolean): TBookmark;
+begin
+  Result := nil;
+  AFilteredToggledOff := False;
+  if not Assigned(FDataSet) or not FDataSet.Active then Exit;
+  // Always preserve the current dataset position across the export.
+  Result := FDataSet.GetBookMark;
+  // When ExportFilteredOnly is False but the dataset is currently filtered
+  // (controller filter active), export every record by temporarily disabling
+  // filtering. The fixed DataLinkDataSetChanged no longer tears down engines
+  // for same-dataset Filtered changes, so this is safe.
+  AFilteredToggledOff := (not FOptions.ExportFilteredOnly) and FDataSet.Filtered;
+  if AFilteredToggledOff then
+    FDataSet.Filtered := False;
+end;
+
+procedure TVittixDBGridExporter.EndExportIteration(
+  ABookmark: TBookmark; const AFilteredToggledOff: Boolean);
+begin
+  if not Assigned(FDataSet) or not Assigned(ABookmark) then Exit;
+  // Re-enable filtering first: the bookmark was captured in the filtered
+  // view and re-filtering resets the cursor, so the position must be
+  // restored only after the dataset is back in its original state.
+  if AFilteredToggledOff then
+    FDataSet.Filtered := True;
+  try
+    FDataSet.GotoBookMark(ABookmark);
+  except
+    try
+      FDataSet.First;
+    except
+    end;
+  end;
+  FDataSet.FreeBookmark(ABookmark);
+end;
+
+function TVittixDBGridExporter.BuildFooterRow(
+  const AColumns: TList<TColumn>): TArray<string>;
+var
+  I: Integer;
+  Col: TColumn;
+  Ctrl: TVittixDBGridController;
+begin
+  SetLength(Result, AColumns.Count);
+  for I := 0 to AColumns.Count - 1 do
+  begin
+    Col := AColumns[I];
+    if not Assigned(Col) or (Col.FieldName = '') then
+      Continue;
+    Result[I] := '';
+    if not Assigned(FGrid) then Continue;
+    Ctrl := FGrid.Controller;
+    if Assigned(Ctrl) then
+      Result[I] := Ctrl.FooterDisplayText(Col.FieldName);
+  end;
+end;
+
 { CSV Export }
 
 procedure TVittixDBGridExporter.ExportToCSV(const FileName: string);
@@ -526,6 +591,9 @@ begin
     end);
 end;
 
+{
+  TVittixDBGridExporter.ExportToCSVStream
+}
 procedure TVittixDBGridExporter.ExportToCSVStream(Stream: TStream);
 var
   Writer: TStreamWriter;
@@ -533,11 +601,14 @@ var
   Line: string;
   I, RowCount: Integer;
   Col: TColumn;
+  FooterRow: TArray<string>;
+  Bookmark: TBookmark;
+  FilteredToggledOff: Boolean;
 begin
   if not Assigned(FDataset) or not FDataset.Active then
     raise EVittixExportError.Create('Dataset is not active');
-    
-  Writer := TStreamWriter.Create(Stream, FOptions.Encoding); // Use public Encoding property
+
+  Writer := TStreamWriter.Create(Stream, FOptions.Encoding);
   try
     Columns := GetExportColumns;
     try
@@ -553,41 +624,60 @@ begin
         end;
         Writer.WriteLine(Line);
       end;
-      
+
+      // Prepare iteration: preserve position; when ExportFilteredOnly is False
+      // and the dataset is filtered, export all records.
+      Bookmark := BeginExportIteration(FilteredToggledOff);
+
       // Write data
       FDataset.DisableControls;
       try
         FDataset.First;
         RowCount := 0;
-        
+
         while not FDataset.Eof do
         begin
           if FCancelled then
             Break;
-            
+
           Line := '';
           for I := 0 to Columns.Count - 1 do
           begin
             if I > 0 then
               Line := Line + FOptions.Delimiter;
-              
+
             Col := Columns[I];
             if Assigned(Col.Field) then
               Line := Line + EscapeCSV(FormatFieldValue(Col.Field));
           end;
-          
+
           Writer.WriteLine(Line);
-          
+
           Inc(RowCount);
           if RowCount mod 100 = 0 then
-            CheckProgress(RowCount, FDataset.RecordCount); // FDataset.RecordCount can be slow for some datasets
-            
+            CheckProgress(RowCount, FDataset.RecordCount);
+
           FDataset.Next;
         end;
       finally
+        EndExportIteration(Bookmark, FilteredToggledOff);
         FDataset.EnableControls;
       end;
-      
+
+      // Footer row
+      if FOptions.IncludeFooter then
+      begin
+        FooterRow := BuildFooterRow(Columns);
+        Line := '';
+        for I := 0 to Columns.Count - 1 do
+        begin
+          if I > 0 then
+            Line := Line + FOptions.Delimiter;
+          Line := Line + EscapeCSV(FooterRow[I]);
+        end;
+        Writer.WriteLine(Line);
+      end;
+
     finally
       Columns.Free;
     end;
@@ -739,10 +829,13 @@ var
   Columns: TList<TColumn>;
   I, RowCount: Integer;
   Col: TColumn;
+  FooterRow: TArray<string>;
+  Bookmark: TBookmark;
+  FilteredToggledOff: Boolean;
 begin
   if not Assigned(FDataset) or not FDataset.Active then
     raise EVittixExportError.Create('Dataset is not active');
-    
+
   Writer := TStreamWriter.Create(Stream, TEncoding.UTF8);
   try
     Columns := GetExportColumns;
@@ -759,11 +852,12 @@ begin
       Writer.WriteLine('td { padding: 8px; border: 1px solid #ddd; }');
       Writer.WriteLine('tr:nth-child(even) { background-color: #f2f2f2; }');
       Writer.WriteLine('tr:hover { background-color: #ddd; }');
+      Writer.WriteLine('tr.footer-row td { font-weight: bold; background-color: #d9e1f2; }');
       Writer.WriteLine('</style>');
       Writer.WriteLine('</head>');
       Writer.WriteLine('<body>');
       Writer.WriteLine('<table>');
-      
+
       // Table header
       if FOptions.IncludeHeaders then
       begin
@@ -776,22 +870,26 @@ begin
         end;
         Writer.WriteLine('</tr></thead>');
       end;
-      
+
       // Table body
       Writer.WriteLine('<tbody>');
-      
+
+      // Prepare iteration: preserve position; when ExportFilteredOnly is False
+      // and the dataset is filtered, export all records.
+      Bookmark := BeginExportIteration(FilteredToggledOff);
+
       FDataset.DisableControls;
       try
         FDataset.First;
         RowCount := 0;
-        
+
         while not FDataset.Eof do
         begin
           if FCancelled then
             Break;
-            
+
           Writer.Write('<tr>');
-          
+
           for I := 0 to Columns.Count - 1 do
           begin
             Writer.Write('<td>');
@@ -800,24 +898,39 @@ begin
               Writer.Write(EscapeHTML(FormatFieldValue(Col.Field)));
             Writer.Write('</td>');
           end;
-          
+
           Writer.WriteLine('</tr>');
-          
+
           Inc(RowCount);
           if RowCount mod 100 = 0 then
             CheckProgress(RowCount, FDataset.RecordCount);
-            
+
           FDataset.Next;
         end;
       finally
+        EndExportIteration(Bookmark, FilteredToggledOff);
         FDataset.EnableControls;
       end;
-      
+
+      // Footer row (aggregation / footer text)
+      if FOptions.IncludeFooter then
+      begin
+        FooterRow := BuildFooterRow(Columns);
+        Writer.Write('<tr class="footer-row">');
+        for I := 0 to Columns.Count - 1 do
+        begin
+          Writer.Write('<td>');
+          Writer.Write(EscapeHTML(FooterRow[I]));
+          Writer.Write('</td>');
+        end;
+        Writer.WriteLine('</tr>');
+      end;
+
       Writer.WriteLine('</tbody>');
       Writer.WriteLine('</table>');
       Writer.WriteLine('</body>');
       Writer.WriteLine('</html>');
-      
+
     finally
       Columns.Free;
     end;
@@ -1048,93 +1161,117 @@ begin
 end;
 
 function TVittixExcelExporter.BuildSheetXML: string;
-var
-  XML: TStringList;
-  Columns: TList<TColumn>;
-  I, Row, RowCount: Integer;
-  Col: TColumn;
-  Value: string;
-begin
-  if not Assigned(FExporter.Dataset) or not FExporter.Dataset.Active then
-    raise EVittixExportError.Create('Dataset is not active');
+  var
+    XML: TStringList;
+    Columns: TList<TColumn>;
+    I, Row, RowCount: Integer;
+    Col: TColumn;
+    Value: string;
+    FooterRow: TArray<string>;
+    Bookmark: TBookmark;
+    FilteredToggledOff: Boolean;
+  begin
+    if not Assigned(FExporter.Dataset) or not FExporter.Dataset.Active then
+      raise EVittixExportError.Create('Dataset is not active');
 
-  XML := TStringList.Create;
-  try
-    XML.Add('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>');
-    XML.Add('<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">');
-    XML.Add('<sheetData>');
-
-    Columns := FExporter.GetExportColumns;
+    XML := TStringList.Create;
     try
-      Row := 1;
+      XML.Add('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>');
+      XML.Add('<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">');
+      XML.Add('<sheetData>');
 
-      if FExporter.Options.IncludeHeaders then
-      begin
-        XML.Add(Format('<row r="%d">', [Row]));
-        for I := 0 to Columns.Count - 1 do
-        begin
-          XML.Add(Format('<c r="%s%d" t="inlineStr">', [
-            ColumnLetter(I), Row
-          ]));
-          XML.Add('<is><t>' + FExporter.EscapeXML(Columns[I].Title.Caption) + '</t></is>');
-          XML.Add('</c>');
-        end;
-        XML.Add('</row>');
-        Inc(Row);
-      end;
-      
-      // Data rows
-      FExporter.Dataset.DisableControls;
+      Columns := FExporter.GetExportColumns;
       try
-        FExporter.Dataset.First;
-        RowCount := 0;
-        
-        while not FExporter.Dataset.Eof do
+        Row := 1;
+
+        if FExporter.Options.IncludeHeaders then
         begin
-          if FExporter.FCancelled then
-            Break;
-            
           XML.Add(Format('<row r="%d">', [Row]));
-          
           for I := 0 to Columns.Count - 1 do
           begin
-            Col := Columns[I];
-            if Assigned(Col.Field) then
-            begin
-              Value := FExporter.FormatFieldValue(Col.Field);
-              XML.Add(Format('<c r="%s%d" t="inlineStr">', [
-                ColumnLetter(I), Row
-              ]));
-              XML.Add('<is><t>' + FExporter.EscapeXML(Value) + '</t></is>');
-              XML.Add('</c>');
-            end;
+            XML.Add(Format('<c r="%s%d" t="inlineStr">', [
+              ColumnLetter(I), Row
+            ]));
+            XML.Add('<is><t>' + FExporter.EscapeXML(Columns[I].Title.Caption) + '</t></is>');
+            XML.Add('</c>');
           end;
-          
           XML.Add('</row>');
-          
           Inc(Row);
-          Inc(RowCount);
-          if RowCount mod 100 = 0 then
-            FExporter.CheckProgress(RowCount, FExporter.Dataset.RecordCount);
-            
-          FExporter.Dataset.Next;
         end;
+
+        // Data rows
+        // Prepare iteration: preserve position; when ExportFilteredOnly is False
+        // and the dataset is filtered, export all records.
+        Bookmark := FExporter.BeginExportIteration(FilteredToggledOff);
+
+        FExporter.Dataset.DisableControls;
+        try
+          FExporter.Dataset.First;
+          RowCount := 0;
+
+          while not FExporter.Dataset.Eof do
+          begin
+            if FExporter.FCancelled then
+              Break;
+
+            XML.Add(Format('<row r="%d">', [Row]));
+
+            for I := 0 to Columns.Count - 1 do
+            begin
+              Col := Columns[I];
+              if Assigned(Col.Field) then
+              begin
+                Value := FExporter.FormatFieldValue(Col.Field);
+                XML.Add(Format('<c r="%s%d" t="inlineStr">', [
+                  ColumnLetter(I), Row
+                ]));
+                XML.Add('<is><t>' + FExporter.EscapeXML(Value) + '</t></is>');
+                XML.Add('</c>');
+              end;
+            end;
+
+            XML.Add('</row>');
+
+            Inc(Row);
+            Inc(RowCount);
+            if RowCount mod 100 = 0 then
+              FExporter.CheckProgress(RowCount, FExporter.Dataset.RecordCount);
+
+            FExporter.Dataset.Next;
+          end;
+        finally
+          FExporter.EndExportIteration(Bookmark, FilteredToggledOff);
+          FExporter.Dataset.EnableControls;
+        end;
+
+        // Footer row
+        if FExporter.Options.IncludeFooter then
+        begin
+          FooterRow := FExporter.BuildFooterRow(Columns);
+          XML.Add(Format('<row r="%d">', [Row]));
+          for I := 0 to Columns.Count - 1 do
+          begin
+            XML.Add(Format('<c r="%s%d" t="inlineStr">', [
+              ColumnLetter(I), Row
+            ]));
+            XML.Add('<is><t>' + FExporter.EscapeXML(FooterRow[I]) + '</t></is>');
+            XML.Add('</c>');
+          end;
+          XML.Add('</row>');
+        end;
+
       finally
-        FExporter.Dataset.EnableControls;
+        Columns.Free;
       end;
-      
+
+      XML.Add('</sheetData>');
+      XML.Add('</worksheet>');
+
+      Result := XML.Text;
     finally
-      Columns.Free;
+      XML.Free;
     end;
-
-    XML.Add('</sheetData>');
-    XML.Add('</worksheet>');
-
-    Result := XML.Text;
-  finally
-    XML.Free;
   end;
-end;
 
 procedure TVittixExcelExporter.ExportToXLSX(Stream: TStream);
 var

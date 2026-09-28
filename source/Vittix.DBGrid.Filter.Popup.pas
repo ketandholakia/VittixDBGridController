@@ -109,8 +109,12 @@ const
 
 // Splits a stored filter text into operator selection + value text, applying
 // both to the combo controls. Used for the column's active filter and for
-// restoring persisted history so both paths stay consistent.
+// restoring persisted history so both paths stay consistent. The shared
+// operator table performs the split exactly the way the engine parses it.
 procedure TVittixDBGridFilterPopup.ApplySavedTextToControls(const AText: string);
+var
+  OperatorIndex: Integer;
+  Value: string;
 begin
   if AText = '' then
   begin
@@ -118,49 +122,13 @@ begin
     Exit;
   end;
 
-  if Copy(AText, 1, 2) = '>=' then
+  if VittixFilterTryParseOperatorText(AText, OperatorIndex, Value) then
   begin
-    FOperatorCombo.ItemIndex := OperatorIndexFromPrefix('>=');
-    FRecentCombo.Text := Trim(Copy(AText, 3, MaxInt));
-  end
-  else if Copy(AText, 1, 2) = '<=' then
-  begin
-    FOperatorCombo.ItemIndex := OperatorIndexFromPrefix('<=');
-    FRecentCombo.Text := Trim(Copy(AText, 3, MaxInt));
-  end
-  else if Copy(AText, 1, 2) = '<>' then
-  begin
-    FOperatorCombo.ItemIndex := OperatorIndexFromPrefix('<>');
-    FRecentCombo.Text := Trim(Copy(AText, 3, MaxInt));
-  end
-  else if Copy(AText, 1, 3) = '!..' then
-  begin
-    FOperatorCombo.ItemIndex := OperatorIndexFromPrefix('!..');
-    FRecentCombo.Text := Trim(Copy(AText, 4, MaxInt));
-  end
-  else if Copy(AText, 1, 2) = '..' then
-  begin
-    FOperatorCombo.ItemIndex := OperatorIndexFromPrefix('..');
-    FRecentCombo.Text := Trim(Copy(AText, 3, MaxInt));
-  end
-  // Word operators match the WHOLE filter text (engine parses the same way)
-  else if AText = 'null' then
-    FOperatorCombo.ItemIndex := OperatorIndexFromPrefix('null')
-  else if AText = '!null' then
-    FOperatorCombo.ItemIndex := OperatorIndexFromPrefix('!null')
-  else if AText = 'empty' then
-    FOperatorCombo.ItemIndex := OperatorIndexFromPrefix('empty')
-  else if AText = '!empty' then
-    FOperatorCombo.ItemIndex := OperatorIndexFromPrefix('!empty')
-  else if (AText[1] = '=') or (AText[1] = '^') or
-    (AText[1] = '$') or (AText[1] = '!') or
-    (AText[1] = '>') or
-    (AText[1] = '<') then
-  begin
-    FOperatorCombo.ItemIndex := OperatorIndexFromPrefix(AText[1]);
-    FRecentCombo.Text := Trim(Copy(AText, 2, MaxInt));
+    FOperatorCombo.ItemIndex := OperatorIndex;
+    FRecentCombo.Text := Value;
   end
   else
+    // Plain contains value; the combo never shows a raw operator prefix.
     FRecentCombo.Text := AText;
 end;
 
@@ -169,6 +137,7 @@ constructor TVittixDBGridFilterPopup.CreatePopup(
   AColumnInfo: TVittixDBGridColumnInfo);
 var
   LHistory: TStringList;
+  I: Integer;
 begin
   inherited CreateNew(AOwner);
 
@@ -286,22 +255,10 @@ begin
   FOperatorCombo.AlignWithMargins := True;
   FOperatorCombo.Margins.SetBounds(12, 6, 12, 0);
   FOperatorCombo.Style := csDropDownList;
-  FOperatorCombo.Items.Add('Contains');
-  FOperatorCombo.Items.Add('Equals');
-  FOperatorCombo.Items.Add('Starts With');
-  FOperatorCombo.Items.Add('Ends With');
-  FOperatorCombo.Items.Add('Does Not Contain');
-  FOperatorCombo.Items.Add('Not Equals');
-  FOperatorCombo.Items.Add('Greater Than');
-  FOperatorCombo.Items.Add('Greater or Equal');
-  FOperatorCombo.Items.Add('Less Than');
-  FOperatorCombo.Items.Add('Less or Equal');
-  FOperatorCombo.Items.Add('Between');
-  FOperatorCombo.Items.Add('Not Between');
-  FOperatorCombo.Items.Add('Is Null');
-  FOperatorCombo.Items.Add('Is Not Null');
-  FOperatorCombo.Items.Add('Is Empty');
-  FOperatorCombo.Items.Add('Is Not Empty');
+  // Combo items come from the shared operator table; its index order is the
+  // persistence contract (stored OperatorIndex values).
+  for I := 0 to VittixFilterOperatorCount - 1 do
+    FOperatorCombo.Items.Add(VittixFilterOperatorDefinition(I).DisplayName);
   FOperatorCombo.ItemIndex := 0;
   
   // Load existing filter
@@ -475,46 +432,17 @@ end;
 
 function TVittixDBGridFilterPopup.GetOperatorPrefix: string;
 begin
-  case FOperatorCombo.ItemIndex of
-    1: Result := '=';
-    2: Result := '^';
-    3: Result := '$';
-    4: Result := '!';
-    5: Result := '<>';
-    6: Result := '>';
-    7: Result := '>=';
-    8: Result := '<';
-    9: Result := '<=';
-    10: Result := '..';
-    11: Result := '!..';
-    12: Result := 'null';
-    13: Result := '!null';
-    14: Result := 'empty';
-    15: Result := '!empty';
+  if (FOperatorCombo.ItemIndex >= 0) and
+     (FOperatorCombo.ItemIndex < VittixFilterOperatorCount) then
+    Result := VittixFilterOperatorDefinition(FOperatorCombo.ItemIndex).Prefix
   else
     Result := '';
-  end;
 end;
 
 function TVittixDBGridFilterPopup.OperatorIndexFromPrefix(
   const Prefix: string): Integer;
 begin
-  if Prefix = '=' then Exit(1);
-  if Prefix = '^' then Exit(2);
-  if Prefix = '$' then Exit(3);
-  if Prefix = '!' then Exit(4);
-  if Prefix = '<>' then Exit(5);
-  if Prefix = '>' then Exit(6);
-  if Prefix = '>=' then Exit(7);
-  if Prefix = '<' then Exit(8);
-  if Prefix = '<=' then Exit(9);
-  if Prefix = '..' then Exit(10);
-  if Prefix = '!..' then Exit(11);
-  if Prefix = 'null' then Exit(12);
-  if Prefix = '!null' then Exit(13);
-  if Prefix = 'empty' then Exit(14);
-  if Prefix = '!empty' then Exit(15);
-  Result := 0;
+  Result := VittixFilterOperatorIndexByPrefix(Prefix);
 end;
 
 function TVittixDBGridFilterPopup.GetOperatorIndex: Integer;
@@ -607,11 +535,11 @@ begin
   end;
 
   if IsValid and FUseDistinctValuesOnly and (Trim(FRecentCombo.Text) <> '') and
-    not (FOperatorCombo.ItemIndex in [12, 13, 14, 15]) then
+    not VittixFilterOperatorDefinition(FOperatorCombo.ItemIndex).IsWordOperator then
   begin
     if SameText(Trim(FRecentCombo.Text), BlankValueCaption) then
     begin
-      FOperatorCombo.ItemIndex := 14;
+      FOperatorCombo.ItemIndex := OperatorIndexFromPrefix('empty');
       Exit(True);
     end;
     Found := False;
@@ -654,7 +582,9 @@ begin
   // Only apply if valid
   if not ValidateInput then Exit;
 
-  if FOperatorCombo.ItemIndex in [14, 15] then
+  // Word operators (null/empty family) carry no value; everything else is
+  // prefix + typed text.
+  if VittixFilterOperatorDefinition(FOperatorCombo.ItemIndex).IsWordOperator then
     NewText := GetOperatorPrefix
   else
     NewText := GetOperatorPrefix + Trim(FRecentCombo.Text);

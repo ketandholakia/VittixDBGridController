@@ -10,10 +10,16 @@ uses
   Datasnap.DBClient,
   Vcl.Forms,
   Vcl.Clipbrd,
+  Vcl.DBGrids,
+  Vcl.Grids,
   DUnitX.TestFramework,
   Vittix.DBGrid,
   Vittix.DBGrid.Export.Dialog,
-  Vittix.DBGrid.Export.Engine;
+  Vittix.DBGrid.Export.Engine,
+  Vittix.DBGrid.Filter.Engine,
+  Vittix.DBGrid.ColumnInfo,
+  Vittix.DBGrid.Aggregation.Engine,
+  Vittix.DBGrid.Controller;
 
 type
   [TestFixture]
@@ -61,7 +67,6 @@ type
     [Test]
     procedure ExportDialogStateRoundTripsThroughIni;
     [Test]
-    [Test]
     procedure ExportDialogGeometryAndPageRoundTrip;
     [Test]
     procedure ExportDialogSupportsTextFormat;
@@ -71,11 +76,134 @@ type
     procedure ExportDialogRemembersDestinationPerFormat;
   end;
 
+  [TestFixture]
+  TVittixExportFilteredOnlyTests = class
+  private
+    FDataSet: TClientDataSet;
+    FOwnerForm: TForm;
+    FGrid: TVittixDBGrid;
+    FExporter: TVittixDBGridExporter;
+    FFilterEngine: TVittixDBGridFilterEngine;
+  public
+    [Setup]
+    procedure Setup;
+    [TearDown]
+    procedure TearDown;
+    [Test]
+    procedure NoFilter_ExportFilteredOnlyFalse_ExportAll;
+    [Test]
+    procedure NoFilter_ExportFilteredOnlyTrue_ExportAll;
+    [Test]
+    procedure ActiveFilter_ExportFilteredOnlyTrue_OnlyFiltered;
+    [Test]
+    procedure ActiveFilter_ExportFilteredOnlyFalse_AllRecords;
+    [Test]
+    procedure ActiveFilter_ExportFilteredOnlyTrue_EmptyFilteredResult;
+    [Test]
+    procedure PositionPreserved_AfterExport;
+    [Test]
+    procedure FilterStateUnchanged_AfterExport;
+    [Test]
+    procedure Csv_ExportFilteredOnlyTrue_WithActiveFilter;
+    [Test]
+    procedure Html_ExportFilteredOnlyTrue_WithActiveFilter;
+    [Test]
+    procedure Xlsx_ExportFilteredOnlyTrue_WithActiveFilter;
+    function ExtractSheetXml(Stream: TMemoryStream): string;
+  end;
+
+  [TestFixture]
+  TVittixExportIncludeFooterTests = class
+  private
+    FDataSet: TClientDataSet;
+    FOwnerForm: TForm;
+    FGrid: TVittixDBGrid;
+    FExporter: TVittixDBGridExporter;
+    procedure SetAggregation(AFieldName: string; AAgg: TVittixAggregationType);
+    procedure SetFooterText(AFieldName: string; AText: string);
+  public
+    [Setup]
+    procedure Setup;
+    [TearDown]
+    procedure TearDown;
+    [Test]
+    procedure IncludeFooterFalse_NoFooterRow_Csv;
+    [Test]
+    procedure IncludeFooterTrue_NoAggregation_EmptyFooterRow_Csv;
+    [Test]
+    procedure IncludeFooterTrue_WithAggregation_FooterRow_Csv;
+    [Test]
+    procedure IncludeFooterTrue_MultipleAggregatedColumns_FooterRow_Csv;
+    [Test]
+    procedure IncludeFooterTrue_FooterTextOverridesAggregation_Csv;
+    [Test]
+    procedure IncludeFooterFalse_NoFooterRow_Html;
+    [Test]
+    procedure IncludeFooterTrue_WithAggregation_FooterRow_Html;
+    [Test]
+    procedure IncludeFooterTrue_WithAggregation_FooterRow_Xlsx;
+    [Test]
+    procedure IncludeFooterTrue_EmptyDataset_EmptyFooterRow_Csv;
+    [Test]
+    procedure IncludeFooterRespectsExportVisibleOnly_Csv;
+    function ExtractSheetXml(Stream: TMemoryStream): string;
+  end;
+
 implementation
 
 uses
   System.IOUtils,
   Vittix.Tests.TestData;
+
+// Splits CSV text into logical records. Commas, quotes and line breaks
+// inside quoted fields (RFC 4180 style) must not start a new record.
+function SplitCsvRecords(const Text: string): TStringList;
+var
+  I: Integer;
+  InQuotes: Boolean;
+  Current: string;
+begin
+  Result := TStringList.Create;
+  InQuotes := False;
+  Current := '';
+  I := 1;
+  while I <= Length(Text) do
+  begin
+    case Text[I] of
+      #10:
+        begin
+          if InQuotes then
+            Current := Current + Text[I]
+          else
+          begin
+            Result.Add(Current);
+            Current := '';
+          end;
+        end;
+      #13:
+        begin
+          if InQuotes then
+            Current := Current + Text[I];
+        end;
+      '"':
+        begin
+          Current := Current + '"';
+          if (I < Length(Text)) and (Text[I + 1] = '"') then
+          begin
+            Current := Current + '"';
+            Inc(I);
+          end
+          else
+            InQuotes := not InQuotes;
+        end;
+    else
+      Current := Current + Text[I];
+    end;
+    Inc(I);
+  end;
+  if Current <> '' then
+    Result.Add(Current);
+end;
 
 procedure TVittixExportEngineTests.Setup;
 begin
@@ -585,6 +713,565 @@ begin
     Assert.IsTrue(Dlg.TextFormatChecked);
   finally
     Dlg.Free;
+  end;
+end;
+
+{ =============================================================================
+  B1: ExportFilteredOnly regression tests
+  ============================================================================= }
+
+{ TVittixExportFilteredOnlyTests }
+
+function TVittixExportFilteredOnlyTests.ExtractSheetXml(Stream: TMemoryStream): string;
+var
+  Zip: TZipFile;
+  TempDir: string;
+begin
+  Result := '';
+  TempDir := TPath.Combine(TPath.GetTempPath, TGuid.NewGuid.ToString);
+  ForceDirectories(TempDir);
+  Zip := TZipFile.Create;
+  try
+    Stream.Position := 0;
+    Zip.Open(Stream, zmRead);
+    Zip.ExtractAll(TempDir);
+    Result := TFile.ReadAllText(
+      TPath.Combine(TempDir, 'xl\worksheets\sheet1.xml'),
+      TEncoding.UTF8
+    );
+  finally
+    Zip.Free;
+    TDirectory.Delete(TempDir, True);
+  end;
+end;
+
+procedure TVittixExportFilteredOnlyTests.Setup;
+begin
+  FDataSet := CreateSampleDataSet;
+  FGrid := CreateHeadlessGrid(FDataSet, FOwnerForm);
+  FExporter := TVittixDBGridExporter.Create(FGrid);
+  // Access the filter engine through the controller for applying filters
+  FFilterEngine := FGrid.Controller.FilterEngine;
+end;
+
+procedure TVittixExportFilteredOnlyTests.TearDown;
+begin
+  FExporter.Free;
+  FOwnerForm.Free;
+  FDataSet.Free;
+end;
+
+procedure TVittixExportFilteredOnlyTests.NoFilter_ExportFilteredOnlyFalse_ExportAll;
+var
+  Output: string;
+  Lines: TStringList;
+begin
+  FExporter.Options.ExportFilteredOnly := False;
+  Output := FExporter.ExportToString(vefCSV);
+  Lines := SplitCsvRecords(Output);
+  try
+    // Header + 5 data rows
+    Assert.AreEqual(6, Lines.Count);
+  finally
+    Lines.Free;
+  end;
+end;
+
+procedure TVittixExportFilteredOnlyTests.NoFilter_ExportFilteredOnlyTrue_ExportAll;
+var
+  Output: string;
+  Lines: TStringList;
+begin
+  FExporter.Options.ExportFilteredOnly := True;
+  Output := FExporter.ExportToString(vefCSV);
+  Lines := SplitCsvRecords(Output);
+  try
+    // No filter active => all records exported
+    Assert.AreEqual(6, Lines.Count);
+  finally
+    Lines.Free;
+  end;
+end;
+
+procedure TVittixExportFilteredOnlyTests.ActiveFilter_ExportFilteredOnlyTrue_OnlyFiltered;
+var
+  Output: string;
+  Lines: TStringList;
+  Info: TVittixDBGridColumnInfo;
+begin
+  // Apply a filter: Name = 'Alpha' (2 matching rows)
+  Info := FGrid.ColumnInfo.FindByFieldName('Name');
+  Assert.IsNotNull(Info);
+  Info.FilterText := 'Alpha';
+  Info.HasFilter := True;
+  FFilterEngine.Active := True;
+
+  FExporter.Options.ExportFilteredOnly := True;
+  Output := FExporter.ExportToString(vefCSV);
+  Lines := SplitCsvRecords(Output);
+  try
+    // Header + 2 filtered rows
+    Assert.AreEqual(3, Lines.Count);
+    Assert.IsTrue(Lines[1].Contains('Alpha'));
+    Assert.IsTrue(Lines[2].Contains('Alpha'));
+  finally
+    Lines.Free;
+  end;
+end;
+
+procedure TVittixExportFilteredOnlyTests.ActiveFilter_ExportFilteredOnlyFalse_AllRecords;
+var
+  Output: string;
+  Lines: TStringList;
+  Info: TVittixDBGridColumnInfo;
+begin
+  Info := FGrid.ColumnInfo.FindByFieldName('Name');
+  Assert.IsNotNull(Info);
+  Info.FilterText := 'Alpha';
+  Info.HasFilter := True;
+  FFilterEngine.Active := True;
+
+  FExporter.Options.ExportFilteredOnly := False;
+  Output := FExporter.ExportToString(vefCSV);
+  Lines := SplitCsvRecords(Output);
+  try
+    // ExportFilteredOnly=False exports ALL 5 data rows despite active filter
+    Assert.AreEqual(6, Lines.Count);
+  finally
+    Lines.Free;
+  end;
+end;
+
+procedure TVittixExportFilteredOnlyTests.ActiveFilter_ExportFilteredOnlyTrue_EmptyFilteredResult;
+var
+  Output: string;
+  Lines: TStringList;
+  Info: TVittixDBGridColumnInfo;
+begin
+  Info := FGrid.ColumnInfo.FindByFieldName('Name');
+  Assert.IsNotNull(Info);
+  Info.FilterText := 'NonExistentValueXYZ';
+  Info.HasFilter := True;
+  FFilterEngine.Active := True;
+
+  FExporter.Options.ExportFilteredOnly := True;
+  Output := FExporter.ExportToString(vefCSV);
+  Lines := SplitCsvRecords(Output);
+  try
+    // Only header row when filtered result is empty
+    Assert.AreEqual(1, Lines.Count);
+  finally
+    Lines.Free;
+  end;
+end;
+
+procedure TVittixExportFilteredOnlyTests.PositionPreserved_AfterExport;
+var
+  Info: TVittixDBGridColumnInfo;
+begin
+  // Apply a filter first: Name = 'Alpha' (2 visible records: ID 1 and 4)
+  Info := FGrid.ColumnInfo.FindByFieldName('Name');
+  Assert.IsNotNull(Info);
+  Info.FilterText := 'Alpha';
+  Info.HasFilter := True;
+  FFilterEngine.Active := True;
+
+  // Move to ID 4 (second visible record)
+  Assert.IsTrue(FDataSet.Locate('ID', 4, []));
+
+  // ExportFilteredOnly=False temporarily unfilters the dataset for the
+  // export; the bookmark restore must bring the same record back.
+  FExporter.Options.ExportFilteredOnly := False;
+  FExporter.ExportToString(vefCSV);
+
+  Assert.AreEqual(4, FDataSet.FieldByName('ID').AsInteger,
+    'Dataset position should be preserved after export');
+  Assert.IsTrue(FDataSet.Filtered,
+    'Dataset filtering should be re-enabled after export');
+end;
+
+procedure TVittixExportFilteredOnlyTests.FilterStateUnchanged_AfterExport;
+var
+  Output: string;
+  Info: TVittixDBGridColumnInfo;
+  FilterWasActive: Boolean;
+begin
+  Info := FGrid.ColumnInfo.FindByFieldName('Name');
+  Assert.IsNotNull(Info);
+  Info.FilterText := 'Alpha';
+  Info.HasFilter := True;
+  FFilterEngine.Active := True;
+  FilterWasActive := FGrid.Controller.FilterEngine.Active;
+  Assert.IsTrue(FilterWasActive,
+    'Precondition: filter should be active before export');
+
+  FExporter.Options.ExportFilteredOnly := False;
+  Output := FExporter.ExportToString(vefCSV);
+
+  // Filter engine should still be active with the same filter
+  Assert.IsTrue(FGrid.Controller.FilterEngine.Active,
+    'Filter engine should remain active after export');
+  Assert.AreEqual('Alpha', Info.FilterText,
+    'Filter text should be unchanged');
+  Assert.IsTrue(Info.HasFilter,
+    'HasFilter flag should be unchanged');
+end;
+
+procedure TVittixExportFilteredOnlyTests.Csv_ExportFilteredOnlyTrue_WithActiveFilter;
+var
+  Output: string;
+  Lines: TStringList;
+  Info: TVittixDBGridColumnInfo;
+begin
+  Info := FGrid.ColumnInfo.FindByFieldName('Name');
+  Assert.IsNotNull(Info);
+  Info.FilterText := 'Alpha';
+  Info.HasFilter := True;
+  FFilterEngine.Active := True;
+
+  FExporter.Options.ExportFilteredOnly := True;
+  Output := FExporter.ExportToString(vefCSV);
+  Lines := SplitCsvRecords(Output);
+  try
+    Assert.AreEqual(3, Lines.Count); // header + 2 rows
+  finally
+    Lines.Free;
+  end;
+end;
+
+procedure TVittixExportFilteredOnlyTests.Html_ExportFilteredOnlyTrue_WithActiveFilter;
+var
+  Output: string;
+  Info: TVittixDBGridColumnInfo;
+begin
+  Info := FGrid.ColumnInfo.FindByFieldName('Name');
+  Assert.IsNotNull(Info);
+  Info.FilterText := 'Alpha';
+  Info.HasFilter := True;
+  FFilterEngine.Active := True;
+
+  FExporter.Options.ExportFilteredOnly := True;
+  Output := FExporter.ExportToString(vefHTML);
+  // Header row + 2 filtered data rows = 3 <tr> total
+  Assert.AreEqual(3, (Length(Output) - Length(StringReplace(Output, '<tr', '', [rfReplaceAll]))) div 3);
+end;
+
+procedure TVittixExportFilteredOnlyTests.Xlsx_ExportFilteredOnlyTrue_WithActiveFilter;
+var
+  Stream: TMemoryStream;
+  SheetXml: string;
+  Info: TVittixDBGridColumnInfo;
+begin
+  Info := FGrid.ColumnInfo.FindByFieldName('Name');
+  Assert.IsNotNull(Info);
+  Info.FilterText := 'Alpha';
+  Info.HasFilter := True;
+  FFilterEngine.Active := True;
+
+  FExporter.Options.ExportFilteredOnly := True;
+  Stream := TMemoryStream.Create;
+  try
+    FExporter.ExportToStream(Stream, vefExcelXLSX);
+    Stream.Position := 0;
+    SheetXml := ExtractSheetXml(Stream);
+    // Header row + 2 data rows = 3 rows in sheetData
+    Assert.IsTrue(SheetXml.Contains('r="A1"'));
+    Assert.IsTrue(SheetXml.Contains('r="A3"'));
+    Assert.IsFalse(SheetXml.Contains('r="A4"'));
+  finally
+    Stream.Free;
+  end;
+end;
+
+{ =============================================================================
+  B1: IncludeFooter regression tests
+  ============================================================================= }
+
+{ TVittixExportIncludeFooterTests }
+
+procedure TVittixExportIncludeFooterTests.Setup;
+begin
+  FDataSet := CreateSampleDataSet;
+  FGrid := CreateHeadlessGrid(FDataSet, FOwnerForm);
+  FExporter := TVittixDBGridExporter.Create(FGrid);
+end;
+
+procedure TVittixExportIncludeFooterTests.TearDown;
+begin
+  FExporter.Free;
+  FOwnerForm.Free;
+  FDataSet.Free;
+end;
+
+procedure TVittixExportIncludeFooterTests.SetAggregation(AFieldName: string; AAgg: TVittixAggregationType);
+var
+  Col: TColumn;
+  Info: TVittixDBGridColumnInfo;
+begin
+  Col := FGrid.Controller.FindColumnByFieldName(AFieldName);
+  Assert.IsNotNull(Col);
+  Info := FGrid.ColumnInfo.FindByFieldName(AFieldName);
+  Assert.IsNotNull(Info);
+  Info.AggregationType := AAgg;
+end;
+
+procedure TVittixExportIncludeFooterTests.SetFooterText(AFieldName: string; AText: string);
+var
+  Info: TVittixDBGridColumnInfo;
+begin
+  Info := FGrid.ColumnInfo.FindByFieldName(AFieldName);
+  Assert.IsNotNull(Info);
+  Info.FooterText := AText;
+end;
+
+procedure TVittixExportIncludeFooterTests.IncludeFooterFalse_NoFooterRow_Csv;
+var
+  Output: string;
+  Lines: TStringList;
+begin
+  SetAggregation('Amount', vatSum);
+  FExporter.Options.IncludeFooter := False;
+  Output := FExporter.ExportToString(vefCSV);
+  Lines := SplitCsvRecords(Output);
+  try
+    // 5 data rows + header = 6 lines, NO footer
+    Assert.AreEqual(6, Lines.Count);
+  finally
+    Lines.Free;
+  end;
+end;
+
+procedure TVittixExportIncludeFooterTests.IncludeFooterTrue_NoAggregation_EmptyFooterRow_Csv;
+var
+  Output: string;
+  Lines: TStringList;
+  DelimCount: Integer;
+begin
+  // No aggregation configured anywhere
+  FExporter.Options.IncludeFooter := True;
+  Output := FExporter.ExportToString(vefCSV);
+  Lines := SplitCsvRecords(Output);
+  try
+    // 5 data rows + header + footer = 7 lines
+    Assert.AreEqual(7, Lines.Count);
+    // Footer line should have 6 empty fields (ID,Name,Amount,Score,Notes,Created,IsActive = 7 columns)
+    // Actually CountVisibleColumns depends on visible columns - the test grid has all columns visible
+    DelimCount := 0;
+    for var Ch in Lines[6] do
+      if Ch = ',' then Inc(DelimCount);
+    Assert.AreEqual(6, DelimCount, 'Footer row should have 7 empty cells (6 delimiters)');
+  finally
+    Lines.Free;
+  end;
+end;
+
+procedure TVittixExportIncludeFooterTests.IncludeFooterTrue_WithAggregation_FooterRow_Csv;
+var
+  Output: string;
+  Lines: TStringList;
+  FooterLine: string;
+begin
+  SetAggregation('Amount', vatSum);
+  FExporter.Options.IncludeFooter := True;
+  Output := FExporter.ExportToString(vefCSV);
+  Lines := SplitCsvRecords(Output);
+  try
+    Assert.AreEqual(7, Lines.Count); // header + 5 data + footer
+    FooterLine := Lines[6];
+    // Amount column (index 2) should have the sum
+    Assert.IsTrue(FooterLine.Contains('750.75') or FooterLine.Contains('750,75'),
+      'Footer should contain Sum of Amount (750.75)');
+  finally
+    Lines.Free;
+  end;
+end;
+
+procedure TVittixExportIncludeFooterTests.IncludeFooterTrue_MultipleAggregatedColumns_FooterRow_Csv;
+var
+  Output: string;
+  Lines: TStringList;
+  FooterLine: string;
+begin
+  SetAggregation('Amount', vatSum);
+  SetAggregation('Score', vatAvg); // Score column for avg
+  SetAggregation('ID', vatCount);
+  FExporter.Options.IncludeFooter := True;
+  Output := FExporter.ExportToString(vefCSV);
+  Lines := SplitCsvRecords(Output);
+  try
+    Assert.AreEqual(7, Lines.Count);
+    FooterLine := Lines[6];
+    Assert.IsTrue(FooterLine.Contains('750.75') or FooterLine.Contains('750,75'), 'Amount sum');
+    Assert.IsTrue(FooterLine.Contains('5.21') or FooterLine.Contains('5,21') or FooterLine.Contains('5.2') or FooterLine.Contains('5,2'), 'Score avg');
+    Assert.IsTrue(FooterLine.Contains('5'), 'ID count');
+  finally
+    Lines.Free;
+  end;
+end;
+
+procedure TVittixExportIncludeFooterTests.IncludeFooterTrue_FooterTextOverridesAggregation_Csv;
+var
+  Output: string;
+  Lines: TStringList;
+  FooterLine: string;
+begin
+  SetAggregation('Amount', vatSum);
+  SetFooterText('Amount', 'CUSTOM TOTAL');
+  FExporter.Options.IncludeFooter := True;
+  Output := FExporter.ExportToString(vefCSV);
+  Lines := SplitCsvRecords(Output);
+  try
+    FooterLine := Lines[6];
+    Assert.IsTrue(FooterLine.Contains('CUSTOM TOTAL'),
+      'FooterText should override aggregation display');
+    Assert.IsFalse(FooterLine.Contains('750.75'),
+      'Aggregation value should not appear when FooterText is set');
+  finally
+    Lines.Free;
+  end;
+end;
+
+procedure TVittixExportIncludeFooterTests.IncludeFooterFalse_NoFooterRow_Html;
+var
+  Output: string;
+  TrCount: Integer;
+begin
+  SetAggregation('Amount', vatSum);
+  FExporter.Options.IncludeFooter := False;
+  Output := FExporter.ExportToString(vefHTML);
+  TrCount := (Length(Output) - Length(StringReplace(Output, '<tr', '', [rfReplaceAll]))) div 3;
+  // Header row + 5 data rows = 6 <tr> (no footer)
+  Assert.AreEqual(6, TrCount);
+end;
+
+procedure TVittixExportIncludeFooterTests.IncludeFooterTrue_WithAggregation_FooterRow_Html;
+var
+  Output: string;
+  TrCount: Integer;
+begin
+  SetAggregation('Amount', vatSum);
+  FExporter.Options.IncludeFooter := True;
+  Output := FExporter.ExportToString(vefHTML);
+  TrCount := (Length(Output) - Length(StringReplace(Output, '<tr', '', [rfReplaceAll]))) div 3;
+  // Header row + 5 data rows + footer row = 7 <tr>
+  Assert.AreEqual(7, TrCount);
+  Assert.IsTrue(Output.Contains('footer-row'),
+    'Footer row should have footer-row class');
+  Assert.IsTrue(Output.Contains('750.75') or Output.Contains('750,75'),
+    'Footer should contain aggregation value');
+end;
+
+procedure TVittixExportIncludeFooterTests.IncludeFooterTrue_WithAggregation_FooterRow_Xlsx;
+var
+  Stream: TMemoryStream;
+  SheetXml: string;
+begin
+  SetAggregation('Amount', vatSum);
+  FExporter.Options.IncludeFooter := True;
+  Stream := TMemoryStream.Create;
+  try
+    FExporter.ExportToStream(Stream, vefExcelXLSX);
+    Stream.Position := 0;
+    SheetXml := ExtractSheetXml(Stream);
+    // Header + 5 data + footer = 7 rows
+    Assert.IsTrue(SheetXml.Contains('r="A1"'));
+    Assert.IsTrue(SheetXml.Contains('r="A7"'));
+    Assert.IsFalse(SheetXml.Contains('r="A8"'));
+    Assert.IsTrue(SheetXml.Contains('750.75') or SheetXml.Contains('750,75'),
+      'Footer row should contain aggregation value');
+  finally
+    Stream.Free;
+  end;
+end;
+
+procedure TVittixExportIncludeFooterTests.IncludeFooterTrue_EmptyDataset_EmptyFooterRow_Csv;
+var
+  EmptyDataSet: TClientDataSet;
+  EmptyForm: TForm;
+  EmptyGrid: TVittixDBGrid;
+  EmptyExporter: TVittixDBGridExporter;
+  Output: string;
+  Lines: TStringList;
+begin
+  EmptyDataSet := CreateSampleDataSet;
+  try
+    EmptyDataSet.EmptyDataSet; // no records
+    EmptyGrid := CreateHeadlessGrid(EmptyDataSet, EmptyForm);
+    try
+      EmptyExporter := TVittixDBGridExporter.Create(EmptyGrid);
+      try
+        SetAggregation('Amount', vatSum);
+        EmptyExporter.Options.IncludeFooter := True;
+        Output := EmptyExporter.ExportToString(vefCSV);
+        Lines := TStringList.Create;
+        try
+          Lines.Text := Output;
+          // Header + footer = 2 lines (no data rows); 7 columns -> 6 commas
+          Assert.AreEqual(2, Lines.Count);
+          Assert.AreEqual(',,,,,,', Lines[1], 'Footer row should be empty cells');
+        finally
+          Lines.Free;
+        end;
+      finally
+        EmptyExporter.Free;
+      end;
+    finally
+      EmptyForm.Free;
+    end;
+  finally
+    EmptyDataSet.Free;
+  end;
+end;
+
+procedure TVittixExportIncludeFooterTests.IncludeFooterRespectsExportVisibleOnly_Csv;
+var
+  Output: string;
+  Lines: TStringList;
+  FooterLine: string;
+  DelimCount: Integer;
+begin
+  // Hide the Amount column
+  FGrid.Controller.FindColumnByFieldName('Amount').Visible := False;
+  SetAggregation('Amount', vatSum);
+  FExporter.Options.IncludeFooter := True;
+  FExporter.Options.ExportVisibleOnly := True;
+  Output := FExporter.ExportToString(vefCSV);
+  Lines := SplitCsvRecords(Output);
+  try
+    // Footer should only have cells for visible columns (6 columns, no Amount)
+    Assert.AreEqual(7, Lines.Count); // header + 5 data + footer
+    FooterLine := Lines[6];
+    DelimCount := 0;
+    for var Ch in FooterLine do
+      if Ch = ',' then Inc(DelimCount);
+    Assert.AreEqual(5, DelimCount, 'Footer should have 6 cells (visible columns only)');
+  finally
+    Lines.Free;
+  end;
+end;
+
+{ TVittixExportIncludeFooterTests }
+
+function TVittixExportIncludeFooterTests.ExtractSheetXml(Stream: TMemoryStream): string;
+var
+  Zip: TZipFile;
+  TempDir: string;
+begin
+  Result := '';
+  TempDir := TPath.Combine(TPath.GetTempPath, TGuid.NewGuid.ToString);
+  ForceDirectories(TempDir);
+  Zip := TZipFile.Create;
+  try
+    Stream.Position := 0;
+    Zip.Open(Stream, zmRead);
+    Zip.ExtractAll(TempDir);
+    Result := TFile.ReadAllText(
+      TPath.Combine(TempDir, 'xl\worksheets\sheet1.xml'),
+      TEncoding.UTF8
+    );
+  finally
+    Zip.Free;
+    TDirectory.Delete(TempDir, True);
   end;
 end;
 

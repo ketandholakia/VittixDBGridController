@@ -172,7 +172,7 @@ end;
 procedure TVittixLayoutTests.SetupGrid;
 begin
   FGrid := CreateHeadlessGrid(FDataSet, FOwnerForm);
-  FController := TVittixDBGridController(FGrid.Controller);
+  FController := FGrid.Controller;
 end;
 
 procedure TVittixLayoutTests.CaptureLayout_StoresColumnOrder;
@@ -426,7 +426,7 @@ begin
     Grid := TVittixDBGrid.Create(OwnerForm);
     try
       Grid.Parent := OwnerForm;
-      Controller := TVittixDBGridController(Grid.Controller);
+      Controller := Grid.Controller;
       Controller.CaptureLayout(State);
       Controller.ApplyLayout(State);
       Assert.IsNotNull(Controller);
@@ -630,9 +630,9 @@ begin
   Loaded := nil;
   try
     Grid.LayoutStorageFileName := TempFile;
-    TVittixDBGridController(Grid.Controller).CaptureLayout(State);
+    Grid.Controller.CaptureLayout(State);
     // Controller-level save falls back to the configured LayoutStorageFileName
-    TVittixDBGridController(Grid.Controller).SaveLayoutToFile;
+    Grid.Controller.SaveLayoutToFile;
     Assert.IsTrue(FileExists(TempFile));
 
     Loaded := TVittixDBGridLayoutJsonStorage.LoadFromFile(TempFile);
@@ -786,10 +786,10 @@ begin
       PopulateSampleColumns(Grid);
       Grid.LayoutStorageFileName := TempFile;
       Grid.Columns[0].Width := 180;
-      TVittixDBGridController(Grid.Controller).SaveLayoutToFile;
+      Grid.Controller.SaveLayoutToFile;
 
       Grid.Columns[0].Width := 50;
-      TVittixDBGridController(Grid.Controller).LoadLayoutFromFile;
+      Grid.Controller.LoadLayoutFromFile;
 
       Assert.AreEqual(180, Grid.Columns[0].Width);
       Assert.IsTrue(FileExists(TempFile));
@@ -823,12 +823,12 @@ begin
       Grid.PersistenceRootPath := RootPath;
       Grid.LayoutStorageFileName := ExplicitFile;
       Grid.Columns[0].Width := 190;
-      TVittixDBGridController(Grid.Controller).SaveLayoutToFile;
+      Grid.Controller.SaveLayoutToFile;
       Assert.IsTrue(FileExists(ExplicitFile));
       Assert.IsFalse(FileExists(RootFile));
 
       Grid.Columns[0].Width := 50;
-      TVittixDBGridController(Grid.Controller).LoadLayoutFromFile;
+      Grid.Controller.LoadLayoutFromFile;
       Assert.AreEqual(190, Grid.Columns[0].Width);
     finally
       Grid.Free;
@@ -861,11 +861,11 @@ begin
       PopulateSampleColumns(Grid);
       Grid.PersistenceRootPath := RootPath;
       Grid.Columns[0].Width := 210;
-      TVittixDBGridController(Grid.Controller).SaveLayoutToFile;
+      Grid.Controller.SaveLayoutToFile;
       Assert.IsTrue(FileExists(RootFile));
 
       Grid.Columns[0].Width := 60;
-      TVittixDBGridController(Grid.Controller).LoadLayoutFromFile;
+      Grid.Controller.LoadLayoutFromFile;
       Assert.AreEqual(210, Grid.Columns[0].Width);
     finally
       Grid.Free;

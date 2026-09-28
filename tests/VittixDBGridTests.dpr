@@ -14,6 +14,7 @@ uses
   Vittix.Tests.ColumnInfo in 'src\Vittix.Tests.ColumnInfo.pas',
   Vittix.Tests.SortEngine in 'src\Vittix.Tests.SortEngine.pas',
   Vittix.Tests.FilterEngine in 'src\Vittix.Tests.FilterEngine.pas',
+  Vittix.Tests.FilterOperators in 'src\Vittix.Tests.FilterOperators.pas',
   Vittix.Tests.AggregationEngine in 'src\Vittix.Tests.AggregationEngine.pas',
   Vittix.Tests.ExportEngine in 'src\Vittix.Tests.ExportEngine.pas',
   Vittix.Tests.Layout in 'src\Vittix.Tests.Layout.pas',

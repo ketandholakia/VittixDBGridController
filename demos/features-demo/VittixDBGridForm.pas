@@ -227,9 +227,8 @@ end;
 
 function TfrmVittixDemo.GetGridController: TVittixDBGridController;
 begin
-  Result := nil;
-  if Assigned(VittixGrid.Controller) and (VittixGrid.Controller is TVittixDBGridController) then
-    Result := TVittixDBGridController(VittixGrid.Controller);
+  // TVittixDBGrid.Controller is strongly typed; nil only during teardown.
+  Result := VittixGrid.Controller;
 end;
 
 procedure TfrmVittixDemo.ConfigurePersistence;
@@ -379,19 +378,19 @@ end;
 
 procedure TfrmVittixDemo.SetupAggregations;
 begin
-  if Assigned(VittixGrid.Controller) and (VittixGrid.Controller is TVittixDBGridController) then
+  if Assigned(VittixGrid.Controller) then
   begin
-    TVittixDBGridController(VittixGrid.Controller).SetColumnAggregation(
+    VittixGrid.Controller.SetColumnAggregation(
       VittixGrid.Columns.Items[8], // TotalAmount
       vatSum
     );
 
-    TVittixDBGridController(VittixGrid.Controller).SetColumnAggregation(
+    VittixGrid.Controller.SetColumnAggregation(
       VittixGrid.Columns.Items[9], // Quantity
       vatSum
     );
 
-    TVittixDBGridController(VittixGrid.Controller).SetColumnAggregation(
+    VittixGrid.Controller.SetColumnAggregation(
       VittixGrid.Columns.Items[0], // ID
       vatCount
     );
@@ -523,9 +522,9 @@ procedure TfrmVittixDemo.tmrSearchDelayTimer(Sender: TObject);
 begin
   tmrSearchDelay.Enabled := False;
 
-  if Assigned(VittixGrid.Controller) and (VittixGrid.Controller is TVittixDBGridController) then
+  if Assigned(VittixGrid.Controller) then
   begin
-    TVittixDBGridController(VittixGrid.Controller).SetGlobalFilter(edtGlobalSearch.Text);
+    VittixGrid.Controller.SetGlobalFilter(edtGlobalSearch.Text);
     UpdateStatusBar;
   end;
 end;
