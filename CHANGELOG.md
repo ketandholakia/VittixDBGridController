@@ -4,6 +4,10 @@
 
 ### Fixed
 
+- Date/time filters compare typed values for equality, inequality, ordered
+  comparisons and ranges using locale-aware parsing; null dates are excluded
+  from comparable values. Unparseable text keeps existing display matching.
+
 - Exports reject reentry on the same exporter and restore the grid's prior
   Enabled value after success, cancellation or an exception.
 

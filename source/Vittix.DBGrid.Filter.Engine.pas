@@ -653,6 +653,16 @@ var
   Parts: TArray<string>;
   HighVal: Extended;
   FieldIsNull: Boolean;
+  DateNeedle, DateHigh, DateValue: TDateTime;
+  ParsedDate: Boolean;
+
+  function TryParseDate(const Text: string; out Value: TDateTime): Boolean;
+  begin
+    Result := TryStrToDateTime(Trim(Text), Value, FormatSettings) or
+      TryStrToDate(Trim(Text), Value, FormatSettings);
+    if not Result and (AField.DataType = ftTime) then
+      Result := TryStrToTime(Trim(Text), Value, FormatSettings);
+  end;
 begin
   if Trim(FilterText) = '' then
     Exit(True);
@@ -663,6 +673,41 @@ begin
   // NULL and empty are distinct: NULL means no value at all, empty means a
   // blank (but present) value. Only the field itself can tell them apart.
   FieldIsNull := Assigned(AField) and AField.IsNull;
+
+  if Assigned(AField) and
+     (AField.DataType in [ftDate, ftTime, ftDateTime, ftTimeStamp]) and
+     (Mode in [vfmEquals, vfmNotEquals, vfmLessThan, vfmGreaterThan,
+       vfmLessOrEqual, vfmGreaterOrEqual, vfmBetween, vfmNotBetween]) then
+  begin
+    if Mode in [vfmBetween, vfmNotBetween] then
+    begin
+      Parts := Needle.Split(['|']);
+      ParsedDate := (Length(Parts) = 2) and
+        TryParseDate(Parts[0], DateNeedle) and TryParseDate(Parts[1], DateHigh);
+    end
+    else
+      ParsedDate := TryParseDate(Needle, DateNeedle);
+    if ParsedDate then
+    begin
+      // A missing date is not a comparable value, including for inequality.
+      if FieldIsNull then Exit(False);
+      DateValue := AField.AsDateTime;
+      case Mode of
+        vfmEquals: Result := DateValue = DateNeedle;
+        vfmNotEquals: Result := DateValue <> DateNeedle;
+        vfmLessThan: Result := DateValue < DateNeedle;
+        vfmGreaterThan: Result := DateValue > DateNeedle;
+        vfmLessOrEqual: Result := DateValue <= DateNeedle;
+        vfmGreaterOrEqual: Result := DateValue >= DateNeedle;
+        vfmBetween: Result := (DateValue >= DateNeedle) and (DateValue <= DateHigh);
+        vfmNotBetween: Result := (DateValue < DateNeedle) or (DateValue > DateHigh);
+      else
+        Result := False;
+      end;
+      Exit;
+    end;
+    // Unparseable date text retains the existing display-text operator behavior.
+  end;
 
   case Mode of
     vfmContains: Result := Pos(UpperCase(Needle), UpperCase(Hay)) > 0;

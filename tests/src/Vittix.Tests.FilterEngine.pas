@@ -30,6 +30,14 @@ type
   public
     [Test]
     procedure ClearFilterPreservesReplacementHandler;
+    [Test]
+    [TestCase('Date', 'date')]
+    [TestCase('Time', 'time')]
+    [TestCase('DateTime', 'datetime')]
+    [TestCase('Timestamp', 'timestamp')]
+    procedure DateFieldsCompareValuesIncludingNulls(const Kind: string);
+    [Test]
+    procedure InvalidDateFilterFallsBackToDisplayText;
     [Setup]
     procedure Setup;
     [TearDown]
@@ -128,6 +136,91 @@ begin
   Actual := FDataSet.OnFilterRecord;
   Assert.IsTrue((TMethod(Expected).Code = TMethod(Actual).Code) and
     (TMethod(Expected).Data = TMethod(Actual).Data));
+end;
+
+procedure TVittixFilterEngineTests.DateFieldsCompareValuesIncludingNulls(const Kind: string);
+const
+  Prefixes: array[0..8] of string = ('=', '<>', '<', '>', '<=', '>=', '..', '!..', 'null');
+  Counts: array[0..8] of Integer = (1, 2, 1, 1, 2, 2, 2, 1, 1);
+var
+  DataSet: TClientDataSet;
+  Columns: TVittixDBGridColumns;
+  Engine: TVittixDBGridFilterEngine;
+  FieldType: TFieldType;
+  Dates: array[0..2] of TDateTime;
+  SavedSettings: TFormatSettings;
+  Needle, UpperBound, Text: string;
+  I: Integer;
+begin
+  SavedSettings := FormatSettings;
+  DataSet := TClientDataSet.Create(nil);
+  Columns := nil;
+  Engine := nil;
+  try
+    FormatSettings.ShortDateFormat := 'dd/MM/yyyy';
+    FormatSettings.DateSeparator := '/';
+    FormatSettings.LongTimeFormat := 'hh:nn:ss';
+    FormatSettings.TimeSeparator := ':';
+    FieldType := ftDateTime;
+    if Kind = 'date' then FieldType := ftDate;
+    if Kind = 'time' then FieldType := ftTime;
+    if Kind = 'timestamp' then FieldType := ftTimeStamp;
+    Dates[0] := EncodeDate(2025, 12, 25);
+    Dates[1] := EncodeDate(2026, 1, 10);
+    Dates[2] := EncodeDate(2026, 2, 15);
+    if FieldType = ftTime then
+    begin
+      Dates[0] := EncodeTime(8, 0, 0, 0);
+      Dates[1] := EncodeTime(12, 0, 0, 0);
+      Dates[2] := EncodeTime(18, 0, 0, 0);
+      Needle := TimeToStr(Dates[1], FormatSettings);
+      UpperBound := TimeToStr(Dates[2], FormatSettings);
+    end
+    else
+    begin
+      Needle := DateToStr(Dates[1], FormatSettings);
+      UpperBound := DateToStr(Dates[2], FormatSettings);
+    end;
+    DataSet.FieldDefs.Add('When', FieldType);
+    DataSet.CreateDataSet;
+    for I := 0 to 2 do
+    begin
+      DataSet.Append;
+      DataSet.Fields[0].AsDateTime := Dates[I];
+      DataSet.Post;
+    end;
+    DataSet.Append;
+    DataSet.Post;
+    if DataSet.Fields[0] is TDateTimeField then
+      TDateTimeField(DataSet.Fields[0]).DisplayFormat := 'yyyy';
+    Columns := CreateMatchingColumns(DataSet);
+    Engine := TVittixDBGridFilterEngine.Create(DataSet, Columns);
+    for I := 0 to High(Prefixes) do
+    begin
+      Engine.Clear;
+      Text := Prefixes[I] + Needle;
+      if I in [6, 7] then Text := Text + '|' + UpperBound;
+      if I = 8 then Text := 'null';
+      Columns[0].FilterText := Text;
+      Columns[0].HasFilter := True;
+      Engine.Active := True;
+      Assert.AreEqual(Counts[I], CountVisibleRecords(DataSet), Kind + ': ' + Text);
+    end;
+  finally
+    Engine.Free;
+    Columns.Free;
+    DataSet.Free;
+    FormatSettings := SavedSettings;
+  end;
+end;
+
+procedure TVittixFilterEngineTests.InvalidDateFilterFallsBackToDisplayText;
+begin
+  TDateTimeField(FDataSet.FieldByName('Created')).DisplayFormat := '"unparseable"';
+  FColumns.FindByFieldName('Created').HasFilter := True;
+  FColumns.FindByFieldName('Created').FilterText := '=unparseable';
+  FEngine.Active := True;
+  Assert.AreEqual(5, CountVisibleRecords(FDataSet));
 end;
 
 procedure TVittixFilterEngineTests.Setup;
