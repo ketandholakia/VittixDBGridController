@@ -109,6 +109,7 @@
         <DCCReference Include="vclx.dcp"/>
         <DCCReference Include="dsnap.dcp"/>
         <DCCReference Include="..\source\Vittix.DBGrid.pas"/>
+        <DCCReference Include="..\source\Vittix.DBGrid.Clipboard.pas"/>
         <DCCReference Include="..\source\Vittix.DBGrid.Controller.pas"/>
         <DCCReference Include="..\source\Vittix.DBGrid.ColumnInfo.pas"/>
         <DCCReference Include="..\source\Vittix.DBGrid.Sort.Engine.pas"/>

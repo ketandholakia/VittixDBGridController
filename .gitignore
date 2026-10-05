@@ -72,6 +72,7 @@ tests/VittixDBGridFilterHistory.ini
 
 # --- Demo build output ---
 demos/features-demo/build/
+demos/features-demo/features-demo-state/
 
 # --- Local AI / agent tooling state (not project source) ---
 .agents/
