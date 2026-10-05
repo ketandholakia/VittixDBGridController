@@ -4,6 +4,7 @@ interface
 
 uses
   System.Types,
+  System.IOUtils,
   Datasnap.DBClient,
   Data.DB,
   System.Classes,
@@ -52,6 +53,8 @@ type
     procedure FooterAggregationChangeDoesNotPostEdit;
     [Test]
     procedure DrawingWithoutConditionsDoesNotReadMemo;
+    [Test]
+    procedure SaveLayoutCreatesPersistenceRoot;
     [Test]
     procedure ExistingAfterPostHandlerStillFiresAfterGridAttach;
     [Test]
@@ -265,6 +268,32 @@ end;
 procedure TVittixControllerRegressionTests.CountBeforePost(DataSet: TDataSet);
 begin
   Inc(FBeforePostCount);
+end;
+
+procedure TVittixControllerRegressionTests.SaveLayoutCreatesPersistenceRoot;
+var
+  DataSet: TClientDataSet;
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+  Root: string;
+begin
+  Root := TPath.Combine(TPath.GetTempPath, TPath.GetGUIDFileName(False));
+  DataSet := CreateSampleDataSet;
+  try
+    Grid := CreateHeadlessGrid(DataSet, OwnerForm);
+    try
+      Grid.Controller.PersistenceRootPath := TPath.Combine(Root, 'nested');
+      Assert.IsFalse(TDirectory.Exists(Root));
+      Grid.Controller.SaveLayoutToFile;
+      Assert.IsTrue(TFile.Exists(TPath.Combine(
+        Grid.Controller.PersistenceRootPath, 'layout.json')));
+    finally
+      OwnerForm.Free;
+    end;
+  finally
+    DataSet.Free;
+    if TDirectory.Exists(Root) then TDirectory.Delete(Root, True);
+  end;
 end;
 
 procedure TVittixControllerRegressionTests.FooterAggregationChangeDoesNotPostEdit;

@@ -1228,6 +1228,8 @@ begin
 
   // Stage next to the target so the final swap is an atomic same-volume
   // rename: a crash mid-write can then never leave a corrupt layout file.
+  if TPath.GetDirectoryName(TargetFile) <> '' then
+    ForceDirectories(TPath.GetDirectoryName(TargetFile));
   TempFile := TPath.Combine(TPath.GetDirectoryName(TargetFile),
     '~vittix-' + TPath.GetGUIDFileName(False) + '.tmp');
   BackupFile := TempFile + '.bak';

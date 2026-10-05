@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- Saving layouts creates missing persistence directories before staging files.
+
 - Clearing filters preserves an OnFilterRecord handler installed later by
   the application.
 
