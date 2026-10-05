@@ -167,6 +167,7 @@ type
 
   protected
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
+    function ExecuteFilterPopup(Column: TColumn): Boolean; virtual;
     procedure Loaded; override;
 
   public
@@ -823,6 +824,12 @@ begin
   end;
 end;
 
+function TVittixDBGridController.ExecuteFilterPopup(Column: TColumn): Boolean;
+begin
+  Result := TVittixDBGridFilterPopup.Execute(
+    FGrid, FindInfoByColumn(Column), FOnValidateFilter);
+end;
+
 function TVittixDBGridController.DoMouseDown(Button: TMouseButton;
   Shift: TShiftState; X, Y: Integer): Boolean;
 var
@@ -836,7 +843,7 @@ begin
   Coord := FGrid.MouseCoord(X, Y);
 
   // Right-click on the title row: filter popup / column chooser
-  if (Coord.Y = 0) and (Button = mbRight) then
+  if (dgTitles in FGrid.Options) and (Coord.Y = 0) and (Button = mbRight) then
   begin
     if ssCtrl in Shift then
     begin
@@ -851,8 +858,7 @@ begin
       // Live in-popup validation through the same handler the engine uses
       // at apply time, when one is assigned.
       if Assigned(Col) and
-         TVittixDBGridFilterPopup.Execute(
-           FGrid, FindInfoByColumn(Col), FOnValidateFilter) then
+         ExecuteFilterPopup(Col) then
       begin
         if Assigned(FFilterEngine) then
         begin

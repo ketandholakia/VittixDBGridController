@@ -4,6 +4,9 @@
 
 ### Fixed
 
+- Right-clicking the first data row with titles hidden no longer opens a
+  header filter popup or column chooser.
+
 - Layout loading now refreshes aggregate values and footer geometry after
   applying batched column changes.
 

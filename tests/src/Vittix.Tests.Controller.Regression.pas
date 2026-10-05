@@ -3,6 +3,7 @@ unit Vittix.Tests.Controller.Regression;
 interface
 
 uses
+  System.Types,
   Datasnap.DBClient,
   Data.DB,
   System.Classes,
@@ -40,6 +41,8 @@ type
     procedure AggregatesRefreshAfterDeleteAndPost;
     [Test]
     procedure LoadedLayoutRefreshesAggregatesAndFooter;
+    [Test]
+    procedure FirstDataRowWithoutTitlesDoesNotOpenPopup;
     [Test]
     procedure ExistingAfterPostHandlerStillFiresAfterGridAttach;
     [Test]
@@ -159,6 +162,53 @@ type
   TWinControlAccess = class(TWinControl);
   // Exposes the protected dispatchers we simulate input through
   TDBGridAccess = class(TDBGrid);
+  TPopupProbeController = class(TVittixDBGridController)
+  public
+    PopupCount: Integer;
+  protected
+    function ExecuteFilterPopup(Column: TColumn): Boolean; override;
+  end;
+
+function TPopupProbeController.ExecuteFilterPopup(Column: TColumn): Boolean;
+begin
+  Inc(PopupCount);
+  Result := False;
+end;
+
+procedure TVittixControllerRegressionTests.FirstDataRowWithoutTitlesDoesNotOpenPopup;
+var
+  DataSet: TClientDataSet;
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+  Probe: TPopupProbeController;
+  R: TRect;
+begin
+  DataSet := CreateSampleDataSet;
+  try
+    Grid := CreateHeadlessGrid(DataSet, OwnerForm);
+    try
+      Grid.Controller.Active := False;
+      Probe := TPopupProbeController.Create(nil);
+      try
+        Probe.Grid := Grid;
+        Grid.Options := Grid.Options - [dgTitles];
+        R := Grid.GetCellRect(Grid.GetIndicatorOffset, 0);
+        Assert.IsFalse(Probe.DoMouseDown(mbRight, [], R.Left + 2, R.Top + 2));
+        Assert.AreEqual(0, Probe.PopupCount);
+        Grid.Options := Grid.Options + [dgTitles];
+        R := Grid.GetCellRect(Grid.GetIndicatorOffset, 0);
+        Assert.IsTrue(Probe.DoMouseDown(mbRight, [], R.Left + 2, R.Top + 2));
+        Assert.AreEqual(1, Probe.PopupCount);
+      finally
+        Probe.Free;
+      end;
+    finally
+      OwnerForm.Free;
+    end;
+  finally
+    DataSet.Free;
+  end;
+end;
 
 procedure TVittixControllerRegressionTests.DatasetAfterPost(DataSet: TDataSet);
 begin
