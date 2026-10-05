@@ -1,9 +1,9 @@
 #define MyAppName "Vittix DBGrid Controller"
 #ifndef MyAppVersion
-#define MyAppVersion "1.1.0"
+#define MyAppVersion "1.1.1"
 #endif
 #define MyAppPublisher "Vittix"
-#define MyAppURL "https://github.com/ketan/VittixDBGridController"
+#define MyAppURL "https://github.com/ketandholakia/VittixDBGridController"
 #define MyAppExeName "VittixDBGridController"
 
 #ifndef DelphiVersion
