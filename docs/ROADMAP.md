@@ -466,6 +466,9 @@ phased plan. Each phase is independently shippable.
 7. E runs continuously; CI before the next public release.
 # October 2026 regression follow-up
 
+- Item 11: completed 2026-10-05; WindowProc restoration checks ownership.
+  Later chained hooks must detach before controller destruction.
+
 - Item 10: completed 2026-10-05; repository search found no fixed-row message
   sender; the dead constant and swallow branch were removed.
 

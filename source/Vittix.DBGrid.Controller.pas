@@ -527,6 +527,8 @@ begin
 end;
 
 procedure TVittixDBGridController.UnhookGrid;
+var
+  CurrentProc, OurProc: TWndMethod;
 begin
   UnhookDataSource;
 
@@ -540,7 +542,13 @@ begin
   // method pointer -> EAccessViolation at address 00000000.
   if Assigned(FOldWindowProc) then
   begin
-    FGrid.WindowProc := FOldWindowProc;
+    CurrentProc := FGrid.WindowProc;
+    OurProc := GridWindowProc;
+    // A later hook owns the chain; we cannot safely splice its saved method.
+    // Such hooks must detach before this controller is destroyed.
+    if (TMethod(CurrentProc).Code = TMethod(OurProc).Code) and
+       (TMethod(CurrentProc).Data = TMethod(OurProc).Data) then
+      FGrid.WindowProc := FOldWindowProc;
     FOldWindowProc := nil;
   end;
 end;

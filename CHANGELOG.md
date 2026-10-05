@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- Unhooking the controller preserves a subsequently installed WindowProc.
+
 - Removed the unused fixed-row message and its message-swallowing branch.
 
 - ResetLayout restores field order, measured widths, visibility, footer

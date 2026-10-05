@@ -63,6 +63,8 @@ type
     [Test]
     procedure UnusedFixedRowsMessageReachesApplication;
     [Test]
+    procedure UnhookPreservesReplacementWindowProc;
+    [Test]
     procedure ExistingAfterPostHandlerStillFiresAfterGridAttach;
     [Test]
     procedure ExistingAfterScrollHandlerStillFiresAfterGridAttach;
@@ -280,6 +282,40 @@ procedure TVittixControllerRegressionTests.ApplicationWindowProc(var Message: TM
 begin
   Inc(FWindowMessageCount);
   Message.Result := 123;
+end;
+
+procedure TVittixControllerRegressionTests.UnhookPreservesReplacementWindowProc;
+var
+  DataSet: TClientDataSet;
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+  Original, Expected, Actual: TWndMethod;
+begin
+  DataSet := CreateSampleDataSet;
+  try
+    Grid := CreateHeadlessGrid(DataSet, OwnerForm);
+    try
+      Grid.HandleNeeded;
+      Grid.Controller.Active := False;
+      Original := Grid.WindowProc;
+      Grid.Controller.Active := True;
+      try
+        Expected := ApplicationWindowProc;
+        Grid.WindowProc := Expected;
+        Grid.Controller.Active := False;
+        Actual := Grid.WindowProc;
+        Assert.IsTrue((TMethod(Expected).Code = TMethod(Actual).Code) and
+          (TMethod(Expected).Data = TMethod(Actual).Data));
+      finally
+        Grid.Controller.Active := False;
+        Grid.WindowProc := Original;
+      end;
+    finally
+      OwnerForm.Free;
+    end;
+  finally
+    DataSet.Free;
+  end;
 end;
 
 procedure TVittixControllerRegressionTests.UnusedFixedRowsMessageReachesApplication;
