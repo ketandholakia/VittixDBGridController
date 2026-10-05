@@ -183,6 +183,10 @@ signatures unchanged for DFM compatibility).
 ## Milestone 3 — Performance & scalability
 
 ### 3.1 [P] Incremental aggregation
+
+**Design reviewed 2026-10-05; implementation deferred (request item 14).**
+The item 1 TClientDataSet guard is green. Full recalculation remains the
+correctness baseline; see the design note below before implementing deltas.
 `DataLinkRecordChanged` marks aggregation dirty on every record change, and
 refresh triggers a full dataset scan. For Count/Sum/Min/Max it is cheap to
 update accumulators incrementally on `Field.NewValue`/post/delete when only one
@@ -464,7 +468,11 @@ phased plan. Each phase is independently shippable.
 5. A4 + D3 (column freezing) → tag **v2.0**.
 6. D6 (grouping) and D7 (server-side) as the flagship v2.x tracks.
 7. E runs continuously; CI before the next public release.
-# October 2026 regression follow-up
+
+## October 2026 regression follow-up
+
+- Item 14: design completed 2026-10-05; incremental code skipped because the
+  current notification contract does not supply reliable committed deltas.
 
 - Item 13: completed 2026-10-05; typed date/time/timestamp comparisons,
   locale parsing, null handling and display-text fallback regression tests.
@@ -500,3 +508,39 @@ phased plan. Each phase is independently shippable.
 
 - Item 1: investigated 2026-10-05; not reproduced with TClientDataSet.
   `AggregatesRefreshAfterDeleteAndPost` guards totals and engine identity.
+
+### Count/Sum incremental aggregation design - 2026-10-05
+
+The present TDataLink RecordChanged callback is a view-change notification,
+not a committed mutation log. Scrolling, filter/index changes and control
+re-enabling can produce overlapping callbacks. During edits Field.NewValue
+does not establish whether a later Post or Cancel commits that value; after
+Delete the removed row is no longer available. Applying deltas from these
+callbacks could silently double-count changes or retain canceled values.
+
+A future implementation needs a dataset adapter that reports committed
+insert/update/delete mutations with stable row identity, old/new typed values
+and a monotonic mutation token. It must preserve the virtual grid integration
+and application dataset handlers. Datasets without this contract retain the
+full-scan path. A generic adapter cannot assume bookmarks or OldValue have
+consistent meanings across TClientDataSet, FireDAC and custom datasets.
+
+For Count/Sum, cache committed contributions for supported numeric fields.
+Count must retain the existing non-null field-count semantics; currency and
+integer sums must keep their native accumulators rather than convert to
+Double. Apply a delta exactly once only after a successful commit, and only
+while the cached view generation still matches. Cancel and scroll contribute
+no delta. Unsupported fields, missing old values, invalid identities and
+uncertain filter membership invalidate the cache and trigger a full scan.
+
+Filter, global search, sort, layout, dataset replacement, close/reopen and
+aggregation-type changes invalidate the generation. Full scans remain guarded
+against recursion and defer during dsEdit/dsInsert. A full scan creates the
+baseline before incremental updates resume. No incremental state may survive
+dataset destruction.
+
+Before shipping, compare incremental results to independent full scans for
+Post/Delete/Insert/Cancel, null transitions, filter entry/exit, sort/layout
+changes, close/reopen, failed validation and duplicate notifications. Add
+scan-count instrumentation to prove updates avoid scans without weakening
+those correctness checks. This design adds no event hooks or runtime code.

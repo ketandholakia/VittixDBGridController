@@ -1,5 +1,9 @@
 # Changelog
 
+All notable changes to Vittix.DBGrid are documented here. Releases older than
+v1.0.3 were published before this file existed; their notes live in the GitHub
+releases only.
+
 ## [1.1.1] - 2026-10-05
 
 ### Fixed
@@ -36,6 +40,9 @@
 
 ### Changed
 
+- Documented the deferred Count/Sum incremental aggregation design and its
+  correctness prerequisites in the roadmap; full recalculation remains active.
+
 - Export message pumping is throttled to 50 ms intervals; the dialog no
   longer performs a duplicate pump.
 
@@ -44,10 +51,6 @@
 
 - Added a regression guard for aggregate refresh after Delete, Insert/Post,
   Edit/Post and Cancel; the reported stale totals did not reproduce.
-
-All notable changes to Vittix.DBGrid are documented here. Releases older than
-v1.0.3 were published before this file existed; their notes live in the GitHub
-releases only.
 
 ## [1.1.0] — 2026-09-29
 
