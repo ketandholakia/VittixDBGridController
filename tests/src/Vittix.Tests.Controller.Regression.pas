@@ -44,6 +44,8 @@ type
     [Test]
     procedure FirstDataRowWithoutTitlesDoesNotOpenPopup;
     [Test]
+    procedure FilteredDatasetOwnerCanBeFreedBeforeGrid;
+    [Test]
     procedure ExistingAfterPostHandlerStillFiresAfterGridAttach;
     [Test]
     procedure ExistingAfterScrollHandlerStillFiresAfterGridAttach;
@@ -213,6 +215,32 @@ end;
 procedure TVittixControllerRegressionTests.DatasetAfterPost(DataSet: TDataSet);
 begin
   FAfterPostCalled := True;
+end;
+
+procedure TVittixControllerRegressionTests.FilteredDatasetOwnerCanBeFreedBeforeGrid;
+var
+  DataSet: TClientDataSet;
+  DataOwner: TDataModule;
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+begin
+  DataOwner := TDataModule.CreateNew(nil);
+  try
+    DataSet := CreateSampleDataSet;
+    DataOwner.InsertComponent(DataSet);
+    Grid := CreateHeadlessGrid(DataSet, OwnerForm);
+    try
+      Grid.Controller.SetGlobalFilter('Alpha');
+      Assert.IsTrue(DataSet.Filtered);
+      FreeAndNil(DataOwner);
+      Assert.IsNull(Grid.Controller.FilterEngine);
+      FreeAndNil(OwnerForm);
+    finally
+      OwnerForm.Free;
+    end;
+  finally
+    DataOwner.Free;
+  end;
 end;
 
 procedure TVittixControllerRegressionTests.AggregatesRefreshAfterDeleteAndPost;

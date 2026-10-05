@@ -466,6 +466,10 @@ phased plan. Each phase is independently shippable.
 7. E runs continuously; CI before the next public release.
 # October 2026 regression follow-up
 
+- Item 4: investigated 2026-10-05; not reproduced. Closing the owned
+  TClientDataSet during destruction tears down the controller engines before
+  its memory is released. Active-filter owner-first teardown is guarded.
+
 - Item 3: completed 2026-10-05; header input requires visible titles.
 
 - Item 2: completed 2026-10-05; layout refresh and batched column updates.

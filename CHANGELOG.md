@@ -12,6 +12,9 @@
 
 ### Changed
 
+- Added a dataset-owner teardown guard with an active filter; freeing the
+  dataset before the grid did not reproduce a dangling-pointer crash.
+
 - Added a regression guard for aggregate refresh after Delete, Insert/Post,
   Edit/Post and Cancel; the reported stale totals did not reproduce.
 
