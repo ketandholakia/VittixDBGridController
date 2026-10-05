@@ -466,6 +466,10 @@ phased plan. Each phase is independently shippable.
 7. E runs continuously; CI before the next public release.
 # October 2026 regression follow-up
 
+- Item 5: completed 2026-10-05; edit-safe scans and controller-mediated footer
+  changes retain dirty state until the edit completes. Same-dataset refresh
+  now also processes those deferred changes without rebuilding engines.
+
 - Item 4: investigated 2026-10-05; not reproduced. Closing the owned
   TClientDataSet during destruction tears down the controller engines before
   its memory is released. Active-filter owner-first teardown is guarded.

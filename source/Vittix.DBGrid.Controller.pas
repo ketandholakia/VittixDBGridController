@@ -618,6 +618,7 @@ begin
      (FDataLink.DataSet = FDataset) and FDataset.Active then
   begin
     SetAggregationDirty;
+    Refresh;
     Exit;
   end;
 
@@ -936,7 +937,9 @@ begin
 
   FAggregationBusy := True;
   try
-    if FAggregationDirty and Assigned(FAggregationEngine) then
+    if FAggregationDirty and Assigned(FAggregationEngine) and
+       Assigned(FDataset) and FDataset.Active and
+       not (FDataset.State in dsEditModes) then
     begin
       FAggregationEngine.Recalculate;
       FAggregationDirty := False;

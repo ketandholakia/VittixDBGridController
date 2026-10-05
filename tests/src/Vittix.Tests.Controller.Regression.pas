@@ -18,6 +18,7 @@ uses
   Vittix.DBGrid.Layout,
   Vittix.DBGrid.ColumnChooser,
   Vittix.DBGrid.Aggregation.Engine,
+  Vittix.DBGrid.FooterPanel,
   Vittix.DBGrid.Controller;
 
 type
@@ -25,11 +26,13 @@ type
   TVittixControllerRegressionTests = class
   private
     FAfterPostCalled: Boolean;
+    FBeforePostCount: Integer;
     FAfterScrollCalled: Boolean;
     FAfterCloseCalled: Boolean;
     FTitleClickCalled: Boolean;
     FKeyDownCalled: Boolean;
     FDblClickCalled: Boolean;
+    procedure CountBeforePost(DataSet: TDataSet);
     procedure DatasetAfterPost(DataSet: TDataSet);
     procedure DatasetAfterScroll(DataSet: TDataSet);
     procedure DatasetAfterClose(DataSet: TDataSet);
@@ -45,6 +48,8 @@ type
     procedure FirstDataRowWithoutTitlesDoesNotOpenPopup;
     [Test]
     procedure FilteredDatasetOwnerCanBeFreedBeforeGrid;
+    [Test]
+    procedure FooterAggregationChangeDoesNotPostEdit;
     [Test]
     procedure ExistingAfterPostHandlerStillFiresAfterGridAttach;
     [Test]
@@ -215,6 +220,53 @@ end;
 procedure TVittixControllerRegressionTests.DatasetAfterPost(DataSet: TDataSet);
 begin
   FAfterPostCalled := True;
+end;
+
+procedure TVittixControllerRegressionTests.CountBeforePost(DataSet: TDataSet);
+begin
+  Inc(FBeforePostCount);
+end;
+
+procedure TVittixControllerRegressionTests.FooterAggregationChangeDoesNotPostEdit;
+var
+  DataSet: TClientDataSet;
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+  Footer: TVittixDBGridFooterPanel;
+begin
+  DataSet := CreateSampleDataSet;
+  try
+    Grid := CreateHeadlessGrid(DataSet, OwnerForm);
+    try
+      Grid.Controller.SetColumnAggregation(Grid.Columns[0], vatCount);
+      Grid.Controller.SetColumnAggregation(
+        Grid.Controller.FindColumnByFieldName('Amount'), vatSum);
+      Footer := TVittixDBGridFooterPanel.Create(nil);
+      try
+        Footer.Attach(Grid, Grid.Controller.AggregationEngine);
+        FBeforePostCount := 0;
+        DataSet.BeforePost := CountBeforePost;
+        DataSet.Edit;
+        DataSet.FieldByName('Amount').AsCurrency := 125;
+        Footer.ClearAggregationForColumn(Grid.Columns[0]);
+        Assert.AreEqual(0, FBeforePostCount);
+        Assert.AreEqual(dsEdit, DataSet.State);
+        Grid.Controller.AggregationEngine.Recalculate;
+        Assert.AreEqual(0, FBeforePostCount);
+        Assert.AreEqual(dsEdit, DataSet.State);
+        DataSet.Post;
+        Grid.Controller.Refresh;
+        Assert.AreEqual<Double>(775.25, Grid.Controller.AggregationEngine.GetAggregation(
+          Grid.ColumnInfo.FindByFieldName('Amount')));
+      finally
+        Footer.Free;
+      end;
+    finally
+      OwnerForm.Free;
+    end;
+  finally
+    DataSet.Free;
+  end;
 end;
 
 procedure TVittixControllerRegressionTests.FilteredDatasetOwnerCanBeFreedBeforeGrid;

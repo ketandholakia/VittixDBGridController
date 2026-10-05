@@ -4,6 +4,9 @@
 
 ### Fixed
 
+- Footer aggregation changes defer scans during edits/inserts, preserve the
+  pending refresh, and no longer implicitly post records.
+
 - Right-clicking the first data row with titles hidden no longer opens a
   header filter popup or column chooser.
 

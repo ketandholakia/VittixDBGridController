@@ -262,6 +262,8 @@ var
 {$ENDIF}
 begin
   if not Assigned(FDataSet) or not FDataSet.Active then Exit;
+  // Navigation would implicitly post an edit or insert before scanning.
+  if FDataSet.State in dsEditModes then Exit;
 
   // Full dataset scan by design. Profile before trying to optimize this path.
 {$IFDEF DEBUG}

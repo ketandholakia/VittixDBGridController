@@ -568,9 +568,7 @@ begin
 
   if Info.AggregationType <> vatNone then
   begin
-    Info.AggregationType := vatNone;
-    if Assigned(FAggregationEngine) then
-      FAggregationEngine.Recalculate;
+    VittixGrid(FGrid).Controller.SetColumnAggregation(AColumn, vatNone);
     Invalidate;
     FGrid.Invalidate;
   end;
@@ -669,10 +667,7 @@ begin
   begin
     if Info.AggregationType <> Agg then
     begin
-      Info.AggregationType := Agg;
-
-      if Assigned(FAggregationEngine) then
-        FAggregationEngine.Recalculate;
+      VittixGrid(FGrid).Controller.SetColumnAggregation(FContextColumn, Agg);
 
       Invalidate;
       FGrid.Invalidate;
