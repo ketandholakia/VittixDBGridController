@@ -464,3 +464,7 @@ phased plan. Each phase is independently shippable.
 5. A4 + D3 (column freezing) → tag **v2.0**.
 6. D6 (grouping) and D7 (server-side) as the flagship v2.x tracks.
 7. E runs continuously; CI before the next public release.
+# October 2026 regression follow-up
+
+- Item 1: investigated 2026-10-05; not reproduced with TClientDataSet.
+  `AggregatesRefreshAfterDeleteAndPost` guards totals and engine identity.

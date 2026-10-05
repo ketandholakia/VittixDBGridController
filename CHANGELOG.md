@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.1.1] - 2026-10-05
+
+### Fixed
+
+### Changed
+
+- Added a regression guard for aggregate refresh after Delete, Insert/Post,
+  Edit/Post and Cancel; the reported stale totals did not reproduce.
+
 All notable changes to Vittix.DBGrid are documented here. Releases older than
 v1.0.3 were published before this file existed; their notes live in the GitHub
 releases only.

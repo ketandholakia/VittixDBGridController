@@ -37,6 +37,8 @@ type
     procedure GridDblClick(Sender: TObject);
   public
     [Test]
+    procedure AggregatesRefreshAfterDeleteAndPost;
+    [Test]
     procedure ExistingAfterPostHandlerStillFiresAfterGridAttach;
     [Test]
     procedure ExistingAfterScrollHandlerStillFiresAfterGridAttach;
@@ -159,6 +161,48 @@ type
 procedure TVittixControllerRegressionTests.DatasetAfterPost(DataSet: TDataSet);
 begin
   FAfterPostCalled := True;
+end;
+
+procedure TVittixControllerRegressionTests.AggregatesRefreshAfterDeleteAndPost;
+var
+  DataSet: TClientDataSet;
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+  Info: TVittixDBGridColumnInfo;
+  Engine: TVittixDBGridAggregationEngine;
+begin
+  DataSet := CreateSampleDataSet;
+  try
+    Grid := CreateHeadlessGrid(DataSet, OwnerForm);
+    try
+      Info := Grid.ColumnInfo.FindByFieldName('Amount');
+      Grid.Controller.SetColumnAggregation(
+        Grid.Controller.FindColumnByFieldName('Amount'), vatSum);
+      Engine := Grid.Controller.AggregationEngine;
+      Assert.AreEqual<Double>(750.75, Engine.GetAggregation(Info));
+      DataSet.First;
+      DataSet.Delete;
+      Assert.AreSame(Engine, Grid.Controller.AggregationEngine);
+      Assert.AreEqual<Double>(650.25, Engine.GetAggregation(Info));
+      DataSet.Append;
+      DataSet.FieldByName('Amount').AsCurrency := 25;
+      DataSet.Post;
+      Assert.AreSame(Engine, Grid.Controller.AggregationEngine);
+      Assert.AreEqual<Double>(675.25, Engine.GetAggregation(Info));
+      DataSet.Edit;
+      DataSet.FieldByName('Amount').AsCurrency := 30;
+      DataSet.Post;
+      Assert.AreEqual<Double>(680.25, Engine.GetAggregation(Info));
+      DataSet.Append;
+      DataSet.FieldByName('Amount').AsCurrency := 99;
+      DataSet.Cancel;
+      Assert.AreEqual<Double>(680.25, Engine.GetAggregation(Info));
+    finally
+      OwnerForm.Free;
+    end;
+  finally
+    DataSet.Free;
+  end;
 end;
 
 procedure TVittixControllerRegressionTests.GridTitleClick(Column: TColumn);
