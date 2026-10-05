@@ -39,6 +39,8 @@ type
     [Test]
     procedure AggregatesRefreshAfterDeleteAndPost;
     [Test]
+    procedure LoadedLayoutRefreshesAggregatesAndFooter;
+    [Test]
     procedure ExistingAfterPostHandlerStillFiresAfterGridAttach;
     [Test]
     procedure ExistingAfterScrollHandlerStillFiresAfterGridAttach;
@@ -201,6 +203,38 @@ begin
       OwnerForm.Free;
     end;
   finally
+    DataSet.Free;
+  end;
+end;
+
+procedure TVittixControllerRegressionTests.LoadedLayoutRefreshesAggregatesAndFooter;
+var
+  DataSet: TClientDataSet;
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+  Stream: TMemoryStream;
+begin
+  DataSet := CreateSampleDataSet;
+  Stream := TMemoryStream.Create;
+  try
+    Grid := CreateHeadlessGrid(DataSet, OwnerForm);
+    try
+      Grid.Controller.SetColumnAggregation(
+        Grid.Controller.FindColumnByFieldName('Amount'), vatSum);
+      Grid.Controller.SaveLayoutToStream(Stream);
+      Grid.Controller.ResetLayout;
+      Grid.Controller.SetColumnAggregation(
+        Grid.Controller.FindColumnByFieldName('Amount'), vatNone);
+      Stream.Position := 0;
+      Grid.Controller.LoadLayoutFromStream(Stream);
+      Assert.AreEqual<Double>(750.75, Grid.Controller.AggregationEngine.GetAggregation(
+        Grid.ColumnInfo.FindByFieldName('Amount')));
+      Assert.IsTrue(Grid.Controller.FooterDisplayText('Amount') <> '');
+    finally
+      OwnerForm.Free;
+    end;
+  finally
+    Stream.Free;
     DataSet.Free;
   end;
 end;

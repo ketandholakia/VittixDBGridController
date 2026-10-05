@@ -4,6 +4,9 @@
 
 ### Fixed
 
+- Layout loading now refreshes aggregate values and footer geometry after
+  applying batched column changes.
+
 ### Changed
 
 - Added a regression guard for aggregate refresh after Delete, Insert/Post,

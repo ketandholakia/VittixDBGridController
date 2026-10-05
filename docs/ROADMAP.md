@@ -466,5 +466,7 @@ phased plan. Each phase is independently shippable.
 7. E runs continuously; CI before the next public release.
 # October 2026 regression follow-up
 
+- Item 2: completed 2026-10-05; layout refresh and batched column updates.
+
 - Item 1: investigated 2026-10-05; not reproduced with TClientDataSet.
   `AggregatesRefreshAfterDeleteAndPost` guards totals and engine identity.

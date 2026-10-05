@@ -1134,6 +1134,7 @@ var
 begin
   if (State = nil) or not Assigned(FGrid) then Exit;
   FUpdating := True;
+  FGrid.Columns.BeginUpdate;
   try
     for I := 0 to State.Columns.Count - 1 do
     begin
@@ -1165,8 +1166,15 @@ begin
     VittixGrid(FGrid).AlternateRowColor := State.AlternateRowColor;
     ApplyState;
   finally
-    FUpdating := False;
+    try
+      FGrid.Columns.EndUpdate;
+    finally
+      FUpdating := False;
+    end;
   end;
+  SetAggregationDirty;
+  Refresh;
+  GridLayoutChanged;
   // Fire only after the state is fully applied (and FUpdating released) so
   // handlers observe the final layout. ApplyState above already raised
   // OnAfterSort for the restored sort.
