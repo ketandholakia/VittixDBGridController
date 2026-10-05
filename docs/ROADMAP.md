@@ -466,6 +466,8 @@ phased plan. Each phase is independently shippable.
 7. E runs continuously; CI before the next public release.
 # October 2026 regression follow-up
 
+- Item 9: completed 2026-10-05; full layout reset and font-based widths.
+
 - Item 8: completed 2026-10-05; layout persistence creates parent directories.
 
 - Item 7: completed 2026-10-05; filter unhook checks handler identity.

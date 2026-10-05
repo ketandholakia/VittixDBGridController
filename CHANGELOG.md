@@ -4,6 +4,9 @@
 
 ### Fixed
 
+- ResetLayout restores field order, measured widths, visibility, footer
+  visibility, and clears aggregations, footer text and cell conditions.
+
 - Saving layouts creates missing persistence directories before staging files.
 
 - Clearing filters preserves an OnFilterRecord handler installed later by

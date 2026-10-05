@@ -1328,15 +1328,40 @@ end;
 procedure TVittixDBGridController.ResetLayout;
 var
   I: Integer;
+  Col: TColumn;
+  Info: TVittixDBGridColumnInfo;
 begin
   if not Assigned(FGrid) then Exit;
-  for I := 0 to FGrid.Columns.Count - 1 do
-  begin
-    FGrid.Columns[I].Visible := True;
-    if FGrid.Columns[I].Field <> nil then
-      FGrid.Columns[I].Width := FGrid.Columns[I].Field.DisplayWidth * 8;
+  FGrid.Columns.BeginUpdate;
+  try
+    if Assigned(FGrid.DataSource) and Assigned(FGrid.DataSource.DataSet) then
+      for I := 0 to FGrid.DataSource.DataSet.Fields.Count - 1 do
+      begin
+        Col := FindColumnByFieldName(FGrid.DataSource.DataSet.Fields[I].FieldName);
+        if Assigned(Col) then Col.Index := Min(I, FGrid.Columns.Count - 1);
+      end;
+    FGrid.Canvas.Font.Assign(FGrid.Font);
+    for I := 0 to FGrid.Columns.Count - 1 do
+    begin
+      Col := FGrid.Columns[I];
+      Col.Visible := True;
+      if Assigned(Col.Field) then
+        Col.Width := Col.Field.DisplayWidth * FGrid.Canvas.TextWidth('0');
+      Info := FindInfoByColumn(Col);
+      if Assigned(Info) then
+      begin
+        Info.AggregationType := vatNone;
+        Info.FooterText := '';
+        Info.CellConditions.Clear;
+      end;
+    end;
+  finally
+    FGrid.Columns.EndUpdate;
   end;
+  ShowFooter := True;
+  if Assigned(FAggregationEngine) then FAggregationEngine.Clear;
   Clear;
+  GridLayoutChanged;
 end;
 
 procedure TVittixDBGridController.ShowColumnChooser;

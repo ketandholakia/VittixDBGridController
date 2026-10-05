@@ -56,6 +56,8 @@ type
     [Test]
     procedure SaveLayoutCreatesPersistenceRoot;
     [Test]
+    procedure ResetLayoutRestoresFieldOrderAndMeasuredWidths;
+    [Test]
     procedure ExistingAfterPostHandlerStillFiresAfterGridAttach;
     [Test]
     procedure ExistingAfterScrollHandlerStillFiresAfterGridAttach;
@@ -74,7 +76,6 @@ type
     [Test]
     procedure ControllerCanToggleActiveAndFooterRepeatedly;
     [Test]
-    [Ignore('ResetLayout currently resets column layout only; restoring footer visibility is unimplemented (roadmap feature)')]
     procedure ControllerResetLayoutRestoresFooterVisibility;
     [Test]
     procedure ControllerCanBeFreedBeforeGridWithoutAV;
@@ -268,6 +269,43 @@ end;
 procedure TVittixControllerRegressionTests.CountBeforePost(DataSet: TDataSet);
 begin
   Inc(FBeforePostCount);
+end;
+
+procedure TVittixControllerRegressionTests.ResetLayoutRestoresFieldOrderAndMeasuredWidths;
+var
+  DataSet: TClientDataSet;
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+  I: Integer;
+  Info: TVittixDBGridColumnInfo;
+begin
+  DataSet := CreateSampleDataSet;
+  try
+    Grid := CreateHeadlessGrid(DataSet, OwnerForm);
+    try
+      Grid.Font.Size := 20;
+      Grid.Columns[2].Index := 0;
+      Grid.Columns[0].Visible := False;
+      Grid.Controller.SetColumnAggregation(Grid.Columns[0], vatSum);
+      Grid.ColumnInfo.FindByFieldName('Amount').FooterText := 'custom';
+      Grid.Controller.ResetLayout;
+      Grid.Canvas.Font.Assign(Grid.Font);
+      for I := 0 to Grid.Columns.Count - 1 do
+      begin
+        Assert.AreEqual(DataSet.Fields[I].FieldName, Grid.Columns[I].FieldName);
+        Assert.IsTrue(Grid.Columns[I].Visible);
+        Assert.AreEqual(DataSet.Fields[I].DisplayWidth * Grid.Canvas.TextWidth('0'),
+          Grid.Columns[I].Width);
+        Info := Grid.ColumnInfo.FindByFieldName(Grid.Columns[I].FieldName);
+        Assert.AreEqual(vatNone, Info.AggregationType);
+        Assert.AreEqual('', Grid.Controller.FooterDisplayText(Info.FieldName));
+      end;
+    finally
+      OwnerForm.Free;
+    end;
+  finally
+    DataSet.Free;
+  end;
 end;
 
 procedure TVittixControllerRegressionTests.SaveLayoutCreatesPersistenceRoot;
