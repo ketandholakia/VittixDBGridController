@@ -466,6 +466,9 @@ phased plan. Each phase is independently shippable.
 7. E runs continuously; CI before the next public release.
 # October 2026 regression follow-up
 
+- Item 12: completed 2026-10-05; TStopwatch-throttled message pumping,
+  disabled grid during export, reentry rejection and exception-safe restore.
+
 - Item 11: completed 2026-10-05; WindowProc restoration checks ownership.
   Later chained hooks must detach before controller destruction.
 

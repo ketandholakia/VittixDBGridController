@@ -611,7 +611,6 @@ begin
     lblProgress.Caption := Format('Exporting... %d of %d records', [Current, Total]);
   end;
   
-  Application.ProcessMessages;
 end;
 
 initialization

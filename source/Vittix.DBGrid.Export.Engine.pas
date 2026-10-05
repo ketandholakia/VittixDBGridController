@@ -43,6 +43,7 @@ interface
 
 uses
   System.Classes,
+  System.Diagnostics,
   System.SysUtils,
   System.Variants,
   System.Generics.Collections,
@@ -132,6 +133,14 @@ type
     FOptions: TVittixExportOptions;
     FOnProgress: TVittixExportProgressEvent;
     FCancelled: Boolean;
+    FExporting: Boolean;
+    FPumpWatch: TStopwatch;
+    procedure ExecuteExport(const Action: TProc);
+    procedure WriteCSVStream(Stream: TStream);
+    procedure WriteTSVStream(Stream: TStream);
+    procedure WriteHTMLStream(Stream: TStream);
+    procedure WriteXMLStream(Stream: TStream);
+    procedure WriteJSONStream(Stream: TStream);
 
     // function GetVisibleColumns: TList<TColumn>; // Removed, logic integrated into GetExportColumns
     function GetExportColumns: TList<TColumn>;
@@ -197,6 +206,7 @@ type
     FExporter: TVittixDBGridExporter;
     function BuildSheetXML: string;
     function ColumnLetter(Index: Integer): string;
+    procedure WriteXLSX(Stream: TStream);
   public
     constructor Create(AExporter: TVittixDBGridExporter);
     procedure ExportToXLSX(Stream: TStream);
@@ -567,7 +577,11 @@ begin
       FCancelled := True;
   end;
   
-  Application.ProcessMessages;
+  if FPumpWatch.ElapsedMilliseconds >= 50 then
+  begin
+    FPumpWatch := TStopwatch.StartNew;
+    Application.ProcessMessages;
+  end;
 end;
 
 procedure TVittixDBGridExporter.Cancel;
@@ -595,6 +609,8 @@ var
   BackupFileName: string;
   TempStream: TFileStream;
 begin
+  if FExporting then
+    raise EVittixExportError.Create('An export is already running on this exporter');
   // Every entry point must reset the cancel flag here: the file-format
   // methods (ExportToCSV, ExportToHTML, ...) come straight through this
   // helper, so a cancelled export must not poison the next one.
@@ -647,26 +663,49 @@ procedure TVittixDBGridExporter.ExportToStream(Stream: TStream;
 var
   ExcelExporter: TVittixExcelExporter;
 begin
-  FCancelled := False;
-  
+  ExecuteExport(procedure
+  begin
   case Format of
-    vefCSV:        ExportToCSVStream(Stream);
-    vefTSV:        ExportToTSVStream(Stream);
+    vefCSV:        WriteCSVStream(Stream);
+    vefTSV:        WriteTSVStream(Stream);
     vefText:       ExportToTextStream(Stream);
-    vefHTML:       ExportToHTMLStream(Stream);
-    vefXML:        ExportToXMLStream(Stream);
-    vefJSON:       ExportToJSONStream(Stream);
+    vefHTML:       WriteHTMLStream(Stream);
+    vefXML:        WriteXMLStream(Stream);
+    vefJSON:       WriteJSONStream(Stream);
 
     vefExcelXLSX:
     begin
       ExcelExporter := TVittixExcelExporter.Create(Self);
       try
-        ExcelExporter.ExportToXLSX(Stream);
+        ExcelExporter.WriteXLSX(Stream);
       finally ExcelExporter.Free; end;
     end;
     vefPDF:        raise EVittixExportError.Create('PDF export requires a reporting component and is not implemented in the core engine.');
   else
     raise EVittixExportError.Create('Unsupported export format');
+  end;
+  end);
+end;
+
+procedure TVittixDBGridExporter.ExecuteExport(const Action: TProc);
+var
+  WasEnabled: Boolean;
+begin
+  if FExporting then
+    raise EVittixExportError.Create('An export is already running on this exporter');
+  FExporting := True;
+  FCancelled := False;
+  WasEnabled := Assigned(FGrid) and FGrid.Enabled;
+  FPumpWatch := TStopwatch.StartNew;
+  try
+    if Assigned(FGrid) then FGrid.Enabled := False;
+    Action();
+  finally
+    try
+      if Assigned(FGrid) then FGrid.Enabled := WasEnabled;
+    finally
+      FExporting := False;
+    end;
   end;
 end;
 
@@ -759,6 +798,11 @@ end;
   TVittixDBGridExporter.ExportToCSVStream
 }
 procedure TVittixDBGridExporter.ExportToCSVStream(Stream: TStream);
+begin
+  ExecuteExport(procedure begin WriteCSVStream(Stream); end);
+end;
+
+procedure TVittixDBGridExporter.WriteCSVStream(Stream: TStream);
 var
   Writer: TStreamWriter;
   Columns: TList<TColumn>;
@@ -860,6 +904,8 @@ procedure TVittixDBGridExporter.ExportToTSV(const FileName: string);
 var
   OldDelimiter: Char;
 begin
+  if FExporting then
+    raise EVittixExportError.Create('An export is already running on this exporter');
   OldDelimiter := FOptions.Delimiter;
   try
     FOptions.Delimiter := #9; // Tab
@@ -989,13 +1035,18 @@ begin
 end;
 
 procedure TVittixDBGridExporter.ExportToTSVStream(Stream: TStream);
+begin
+  ExecuteExport(procedure begin WriteTSVStream(Stream); end);
+end;
+
+procedure TVittixDBGridExporter.WriteTSVStream(Stream: TStream);
 var
   OldDelimiter: Char;
 begin
   OldDelimiter := FOptions.Delimiter;
   try
     FOptions.Delimiter := #9; // Tab
-    ExportToCSVStream(Stream);
+    WriteCSVStream(Stream);
   finally
     FOptions.Delimiter := OldDelimiter;
   end;
@@ -1014,6 +1065,11 @@ begin
 end;
 
 procedure TVittixDBGridExporter.ExportToHTMLStream(Stream: TStream);
+begin
+  ExecuteExport(procedure begin WriteHTMLStream(Stream); end);
+end;
+
+procedure TVittixDBGridExporter.WriteHTMLStream(Stream: TStream);
 var
   Writer: TStreamWriter;
   Columns: TList<TColumn>;
@@ -1144,6 +1200,11 @@ begin
 end;
 
 procedure TVittixDBGridExporter.ExportToXMLStream(Stream: TStream);
+begin
+  ExecuteExport(procedure begin WriteXMLStream(Stream); end);
+end;
+
+procedure TVittixDBGridExporter.WriteXMLStream(Stream: TStream);
 var
   Writer: TStreamWriter;
   Columns: TList<TColumn>;
@@ -1282,6 +1343,11 @@ begin
 end;
 
 procedure TVittixDBGridExporter.ExportToJSONStream(Stream: TStream);
+begin
+  ExecuteExport(procedure begin WriteJSONStream(Stream); end);
+end;
+
+procedure TVittixDBGridExporter.WriteJSONStream(Stream: TStream);
 var
   Writer: TStreamWriter;
   Columns: TList<TColumn>;
@@ -1409,15 +1475,8 @@ begin
   ExportToFileAtomic(
     FileName,
     procedure(Stream: TStream)
-    var
-      ExcelExporter: TVittixExcelExporter;
     begin
-      ExcelExporter := TVittixExcelExporter.Create(Self);
-      try
-        ExcelExporter.ExportToXLSX(Stream);
-      finally
-        ExcelExporter.Free;
-      end;
+      ExportToStream(Stream, vefExcelXLSX);
     end);
 end;
 
@@ -1586,6 +1645,11 @@ function TVittixExcelExporter.BuildSheetXML: string;
   end;
 
 procedure TVittixExcelExporter.ExportToXLSX(Stream: TStream);
+begin
+  FExporter.ExecuteExport(procedure begin WriteXLSX(Stream); end);
+end;
+
+procedure TVittixExcelExporter.WriteXLSX(Stream: TStream);
 var
   Zip: TZipFile;
   TempStream: TMemoryStream;

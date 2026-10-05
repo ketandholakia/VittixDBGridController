@@ -4,6 +4,9 @@
 
 ### Fixed
 
+- Exports reject reentry on the same exporter and restore the grid's prior
+  Enabled value after success, cancellation or an exception.
+
 - Unhooking the controller preserves a subsequently installed WindowProc.
 
 - Removed the unused fixed-row message and its message-swallowing branch.
@@ -28,6 +31,9 @@
   applying batched column changes.
 
 ### Changed
+
+- Export message pumping is throttled to 50 ms intervals; the dialog no
+  longer performs a duplicate pump.
 
 - Added a dataset-owner teardown guard with an active filter; freeing the
   dataset before the grid did not reproduce a dangling-pointer crash.

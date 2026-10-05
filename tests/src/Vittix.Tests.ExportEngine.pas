@@ -32,12 +32,21 @@ type
     FProgressCount: Integer;
     FLastProgressCurrent: Integer;
     FLastProgressTotal: Integer;
+    FNestedRejected: Boolean;
+    procedure AttemptNestedExport(Sender: TObject; Current, Total: Integer;
+      var Cancel: Boolean);
+    procedure FailDuringExport(Sender: TObject; Current, Total: Integer;
+      var Cancel: Boolean);
     procedure CancelAtFirstProgress(Sender: TObject; Current, Total: Integer;
       var Cancel: Boolean);
     procedure RecordProgress(Sender: TObject; Current, Total: Integer;
       var Cancel: Boolean);
     function ExtractSheetXml(Stream: TMemoryStream): string;
   public
+    [Test]
+    procedure ExportDisablesGridAndRejectsReentry;
+    [Test]
+    procedure ExportRestoresGridAfterProgressException;
     [Setup]
     procedure Setup;
     [TearDown]
@@ -249,6 +258,65 @@ begin
   end;
   if Current <> '' then
     Result.Add(Current);
+end;
+
+procedure TVittixExportEngineTests.AttemptNestedExport(Sender: TObject;
+  Current, Total: Integer; var Cancel: Boolean);
+var
+  Stream: TMemoryStream;
+begin
+  Assert.IsFalse(FGrid.Enabled);
+  Stream := TMemoryStream.Create;
+  try
+    try
+      FExporter.ExportToTSVStream(Stream);
+      Assert.Fail('Nested export was accepted');
+    except
+      on E: EVittixExportError do
+      begin
+        Assert.IsTrue(Pos('already', E.Message) > 0);
+        FNestedRejected := True;
+      end;
+    end;
+  finally
+    Stream.Free;
+  end;
+  Cancel := True;
+end;
+
+procedure TVittixExportEngineTests.FailDuringExport(Sender: TObject;
+  Current, Total: Integer; var Cancel: Boolean);
+begin
+  Assert.IsFalse(FGrid.Enabled);
+  raise EAbort.Create('progress failed');
+end;
+
+procedure TVittixExportEngineTests.ExportDisablesGridAndRejectsReentry;
+var
+  I: Integer;
+begin
+  for I := 6 to 110 do FDataSet.AppendRecord([I]);
+  FNestedRejected := False;
+  FExporter.OnProgress := AttemptNestedExport;
+  FExporter.ExportToString(vefCSV);
+  Assert.IsTrue(FNestedRejected);
+  Assert.IsTrue(FGrid.Enabled);
+  FGrid.Enabled := False;
+  FExporter.OnProgress := nil;
+  FExporter.ExportToString(vefJSON);
+  Assert.IsFalse(FGrid.Enabled);
+end;
+
+procedure TVittixExportEngineTests.ExportRestoresGridAfterProgressException;
+var
+  I: Integer;
+begin
+  for I := 6 to 110 do FDataSet.AppendRecord([I]);
+  FExporter.OnProgress := FailDuringExport;
+  Assert.WillRaise(procedure begin FExporter.ExportToString(vefCSV); end, EAbort);
+  Assert.IsTrue(FGrid.Enabled);
+  FExporter.OnProgress := nil;
+  Assert.IsTrue(FExporter.ExportToString(vefCSV) <> '');
 end;
 
 procedure TVittixExportEngineTests.Setup;
