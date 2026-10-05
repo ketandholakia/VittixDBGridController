@@ -40,7 +40,6 @@ uses
 
 const
   DEFAULT_ALTERNATE_ROW_COLOR = $00F7F7F7;
-  WM_VITTIX_UPDATE_FIXEDROWS = WM_USER + 1001;
 
 type
   TVittixDBGridController = class;
@@ -704,18 +703,10 @@ end;
 
 procedure TVittixDBGridController.GridWindowProc(var Message: TMessage);
 begin
-  if Message.Msg = WM_VITTIX_UPDATE_FIXEDROWS then
-  begin
-    Exit;
-  end;
-
   // Call original window proc first
   if Assigned(FOldWindowProc) then
     FOldWindowProc(Message);
 
-  // FIX: CRITICAL ISSUE #1 - Enhanced footer sync to eliminate duplicate hook
-  // This replaces the separate TVittixGridHook that was causing hook collision
-  // Now handles all necessary messages for proper footer synchronization
   if (Message.Msg = WM_PAINT) or (Message.Msg = WM_SIZE) or
      (Message.Msg = WM_HSCROLL) or (Message.Msg = WM_VSCROLL) or
      (Message.Msg = WM_WINDOWPOSCHANGED) or

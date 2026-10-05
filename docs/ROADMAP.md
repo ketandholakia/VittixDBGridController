@@ -466,6 +466,9 @@ phased plan. Each phase is independently shippable.
 7. E runs continuously; CI before the next public release.
 # October 2026 regression follow-up
 
+- Item 10: completed 2026-10-05; repository search found no fixed-row message
+  sender; the dead constant and swallow branch were removed.
+
 - Item 9: completed 2026-10-05; full layout reset and font-based widths.
 
 - Item 8: completed 2026-10-05; layout persistence creates parent directories.

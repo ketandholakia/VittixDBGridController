@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- Removed the unused fixed-row message and its message-swallowing branch.
+
 - ResetLayout restores field order, measured widths, visibility, footer
   visibility, and clears aggregations, footer text and cell conditions.
 

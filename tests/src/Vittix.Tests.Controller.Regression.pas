@@ -5,6 +5,7 @@ interface
 uses
   System.Types,
   System.IOUtils,
+  Winapi.Messages,
   Datasnap.DBClient,
   Data.DB,
   System.Classes,
@@ -33,6 +34,8 @@ type
     FTitleClickCalled: Boolean;
     FKeyDownCalled: Boolean;
     FDblClickCalled: Boolean;
+    FWindowMessageCount: Integer;
+    procedure ApplicationWindowProc(var Message: TMessage);
     procedure CountBeforePost(DataSet: TDataSet);
     procedure DatasetAfterPost(DataSet: TDataSet);
     procedure DatasetAfterScroll(DataSet: TDataSet);
@@ -57,6 +60,8 @@ type
     procedure SaveLayoutCreatesPersistenceRoot;
     [Test]
     procedure ResetLayoutRestoresFieldOrderAndMeasuredWidths;
+    [Test]
+    procedure UnusedFixedRowsMessageReachesApplication;
     [Test]
     procedure ExistingAfterPostHandlerStillFiresAfterGridAttach;
     [Test]
@@ -269,6 +274,44 @@ end;
 procedure TVittixControllerRegressionTests.CountBeforePost(DataSet: TDataSet);
 begin
   Inc(FBeforePostCount);
+end;
+
+procedure TVittixControllerRegressionTests.ApplicationWindowProc(var Message: TMessage);
+begin
+  Inc(FWindowMessageCount);
+  Message.Result := 123;
+end;
+
+procedure TVittixControllerRegressionTests.UnusedFixedRowsMessageReachesApplication;
+var
+  DataSet: TClientDataSet;
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+  Original: TWndMethod;
+begin
+  DataSet := CreateSampleDataSet;
+  try
+    Grid := CreateHeadlessGrid(DataSet, OwnerForm);
+    try
+      Grid.HandleNeeded;
+      Grid.Controller.Active := False;
+      Original := Grid.WindowProc;
+      Grid.WindowProc := ApplicationWindowProc;
+      try
+        Grid.Controller.Active := True;
+        FWindowMessageCount := 0;
+        Assert.AreEqual<NativeInt>(123, Grid.Perform(WM_USER + 1001, 0, 0));
+        Assert.AreEqual(1, FWindowMessageCount);
+      finally
+        Grid.Controller.Active := False;
+        Grid.WindowProc := Original;
+      end;
+    finally
+      OwnerForm.Free;
+    end;
+  finally
+    DataSet.Free;
+  end;
 end;
 
 procedure TVittixControllerRegressionTests.ResetLayoutRestoresFieldOrderAndMeasuredWidths;
