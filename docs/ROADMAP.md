@@ -466,6 +466,8 @@ phased plan. Each phase is independently shippable.
 7. E runs continuously; CI before the next public release.
 # October 2026 regression follow-up
 
+- Item 6: completed 2026-10-05; unconditional memo reads removed from drawing.
+
 - Item 5: completed 2026-10-05; edit-safe scans and controller-mediated footer
   changes retain dirty state until the edit completes. Same-dataset refresh
   now also processes those deferred changes without rebuilding engines.

@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- Cell drawing skips field-to-string conversion when no cell conditions exist.
+
 - Footer aggregation changes defer scans during edits/inserts, preserve the
   pending refresh, and no longer implicitly post records.
 

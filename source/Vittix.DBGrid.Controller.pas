@@ -764,7 +764,8 @@ begin
   end;
 
   Info := VittixGrid(FGrid).ColumnInfoByColumn(Column);
-  if Assigned(Info) and Assigned(FGrid.DataSource) and Assigned(FGrid.DataSource.DataSet) and
+  if Assigned(Info) and (Info.CellConditions.Count > 0) and
+     Assigned(FGrid.DataSource) and Assigned(FGrid.DataSource.DataSet) and
      (not (gdSelected in State)) and (not (gdFixed in State)) then
   begin
     // FIX BUG (FieldByName): FieldByName does a linear search through fields

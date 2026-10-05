@@ -51,6 +51,8 @@ type
     [Test]
     procedure FooterAggregationChangeDoesNotPostEdit;
     [Test]
+    procedure DrawingWithoutConditionsDoesNotReadMemo;
+    [Test]
     procedure ExistingAfterPostHandlerStillFiresAfterGridAttach;
     [Test]
     procedure ExistingAfterScrollHandlerStillFiresAfterGridAttach;
@@ -169,6 +171,10 @@ type
   TWinControlAccess = class(TWinControl);
   // Exposes the protected dispatchers we simulate input through
   TDBGridAccess = class(TDBGrid);
+  TUnreadableMemoField = class(TMemoField)
+  protected
+    function GetAsString: string; override;
+  end;
   TPopupProbeController = class(TVittixDBGridController)
   public
     PopupCount: Integer;
@@ -180,6 +186,40 @@ function TPopupProbeController.ExecuteFilterPopup(Column: TColumn): Boolean;
 begin
   Inc(PopupCount);
   Result := False;
+end;
+
+function TUnreadableMemoField.GetAsString: string;
+begin
+  raise Exception.Create('Memo must not be read without cell conditions');
+end;
+
+procedure TVittixControllerRegressionTests.DrawingWithoutConditionsDoesNotReadMemo;
+var
+  DataSet: TClientDataSet;
+  Field: TUnreadableMemoField;
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+begin
+  DataSet := TClientDataSet.Create(nil);
+  try
+    Field := TUnreadableMemoField.Create(DataSet);
+    Field.FieldName := 'Notes';
+    Field.DataSet := DataSet;
+    DataSet.CreateDataSet;
+    DataSet.Append;
+    Field.AsString := 'memo';
+    DataSet.Post;
+    Grid := CreateHeadlessGrid(DataSet, OwnerForm);
+    try
+      Assert.AreEqual(0, Grid.ColumnInfo[0].CellConditions.Count);
+      Grid.Controller.DoDrawColumnCell(Rect(0, 0, 100, 20), 0, Grid.Columns[0], []);
+      Assert.IsTrue(DataSet.Active);
+    finally
+      OwnerForm.Free;
+    end;
+  finally
+    DataSet.Free;
+  end;
 end;
 
 procedure TVittixControllerRegressionTests.FirstDataRowWithoutTitlesDoesNotOpenPopup;
