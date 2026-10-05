@@ -440,6 +440,8 @@ begin
 end;
 
 procedure TVittixDBGridFilterEngine.ClearFilter;
+var
+  CurrentHandler, OurHandler: TFilterRecordEvent;
 begin
   if not Assigned(FDataSet) then Exit;
 
@@ -453,7 +455,12 @@ begin
       FDataSet.Filtered := False;
 
       // Restore the user's original event handler...
-      FDataSet.OnFilterRecord := FOldOnFilterRecord;
+        CurrentHandler := FDataSet.OnFilterRecord;
+        OurHandler := DoFilterRecord;
+        // A later application assignment owns the event from that point on.
+        if (TMethod(CurrentHandler).Code = TMethod(OurHandler).Code) and
+           (TMethod(CurrentHandler).Data = TMethod(OurHandler).Data) then
+          FDataSet.OnFilterRecord := FOldOnFilterRecord;
       FOldOnFilterRecord := nil;
       FFilterInstalled := False;
 

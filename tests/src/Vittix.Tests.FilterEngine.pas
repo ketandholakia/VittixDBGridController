@@ -28,6 +28,8 @@ type
     procedure RejectAllFilters(Sender: TObject; const FieldName, FilterText: string;
       var IsValid: Boolean; var ErrorMessage: string);
   public
+    [Test]
+    procedure ClearFilterPreservesReplacementHandler;
     [Setup]
     procedure Setup;
     [TearDown]
@@ -114,6 +116,19 @@ implementation
 
 uses
   Vittix.Tests.TestData;
+
+procedure TVittixFilterEngineTests.ClearFilterPreservesReplacementHandler;
+var
+  Expected, Actual: TFilterRecordEvent;
+begin
+  FEngine.Active := True;
+  FDataSet.OnFilterRecord := AcceptLowIds;
+  Expected := AcceptLowIds;
+  FEngine.ClearFilter;
+  Actual := FDataSet.OnFilterRecord;
+  Assert.IsTrue((TMethod(Expected).Code = TMethod(Actual).Code) and
+    (TMethod(Expected).Data = TMethod(Actual).Data));
+end;
 
 procedure TVittixFilterEngineTests.Setup;
 begin

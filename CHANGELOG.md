@@ -4,6 +4,9 @@
 
 ### Fixed
 
+- Clearing filters preserves an OnFilterRecord handler installed later by
+  the application.
+
 - Cell drawing skips field-to-string conversion when no cell conditions exist.
 
 - Footer aggregation changes defer scans during edits/inserts, preserve the
