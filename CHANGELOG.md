@@ -8,6 +8,17 @@ releases only.
 
 ### Changed
 
+- **Filter engine compiles per-column conditions.** The classic per-column
+  AND path is now compiled once into a condition group and evaluated with
+  the same matcher as saved filter sets, removing the per-row re-trim,
+  operator parse, Between split and date parse. Direct edits to
+  `ColumnInfo.FilterText`/`HasFilter` while active are detected through a
+  snapshot and recompiled. Every existing semantic is preserved (NULL vs
+  empty, date comparisons, formatted-number parsing, global-search OR).
+  Global search now examines visible columns only and skips memo/blob
+  fields; the new `GlobalSearchIncludeMemo` option (default False, on the
+  controller/engine) opts them back in.
+
 - **Aggregation correctness and scan performance.** Client SUM/AVG/MIN/MAX
   now cover `ftShortint`, `ftByte`, `ftLongWord`, `ftSingle` and
   `ftExtended`, matching the server-side aggregates. `ftBCD`/`ftFMTBcd`

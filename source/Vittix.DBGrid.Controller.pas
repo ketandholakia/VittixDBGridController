@@ -144,6 +144,7 @@ type
     FSortEngine: TVittixDBGridSortEngine;
     FFilterEngine: TVittixDBGridFilterEngine;
     FAggregationEngine: TVittixDBGridAggregationEngine;
+    FGlobalSearchIncludeMemo: Boolean;
     FAggregationDirty: Boolean;
     FEnginesCreated: Boolean;
     FFooterPanel: TVittixDBGridFooterPanel;
@@ -477,6 +478,7 @@ type
 
     // Called by TVittixDBGrid when its DataSource property changes
     procedure DataSourceChanged;
+    procedure SetGlobalSearchIncludeMemo(const Value: Boolean);
 
     /// <summary>Active client filter engine, or nil before runtime engine
     /// creation.</summary>
@@ -487,6 +489,12 @@ type
     /// <summary>Footer aggregation engine, or nil before runtime engine
     /// creation.</summary>
     property AggregationEngine: TVittixDBGridAggregationEngine read FAggregationEngine;
+
+    /// <summary>Include memo/blob columns in global search. Default False:
+    /// global search only examines visible non-memo columns. The value is
+    /// pushed to every newly created filter engine.</summary>
+    property GlobalSearchIncludeMemo: Boolean
+      read FGlobalSearchIncludeMemo write SetGlobalSearchIncludeMemo;
 
     /// <summary>Grid attached to this controller.</summary>
     property Grid: TDBGrid read FGrid write SetGrid;
@@ -1003,6 +1011,7 @@ begin
   // event handlers so assignments made earlier are not lost.
   FSortEngine.OnFieldValidation := FOnFieldValidation;
   FFilterEngine.OnValidateFilter := FOnValidateFilter;
+  FFilterEngine.GlobalSearchIncludeMemo := FGlobalSearchIncludeMemo;
   FAggregationEngine.OnFormatAggregation := FOnFormatAggregation;
 
   FAggregationEngine.OnAcceptRecord :=
@@ -1019,6 +1028,16 @@ begin
     begin
       Result := Assigned(FFilterEngine) and
                 FFilterEngine.FilterHookInstalled;
+    end;
+  // Global search should only consider columns the user can see. The engine
+  // stays UI-free; the controller answers the visibility question.
+  FFilterEngine.IsFieldVisible :=
+    function(AFieldName: string): Boolean
+    var
+      Col: TColumn;
+    begin
+      Col := FindColumnByFieldName(AFieldName);
+      Result := (not Assigned(Col)) or Col.Visible;
     end;
 
   // Create Footer Panel if requested
@@ -1735,6 +1754,15 @@ end;
 function TVittixDBGridController.IsUpdating: Boolean;
 begin
   Result := FUpdating;
+end;
+
+procedure TVittixDBGridController.SetGlobalSearchIncludeMemo(
+  const Value: Boolean);
+begin
+  if FGlobalSearchIncludeMemo = Value then Exit;
+  FGlobalSearchIncludeMemo := Value;
+  if Assigned(FFilterEngine) then
+    FFilterEngine.GlobalSearchIncludeMemo := Value;
 end;
 
 procedure TVittixDBGridController.SetGlobalFilter(const Text: string);

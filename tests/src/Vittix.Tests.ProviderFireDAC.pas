@@ -407,6 +407,9 @@ var
   ClientIDs, ServerIDs: string;
 begin
   // 'Émile' only matches the unicode rows; both modes must agree.
+  // SQLite TEXT columns surface as memo fields in FireDAC; global search
+  // skips memos by default, so opt in to keep client/server parity here.
+  FGrid.Controller.GlobalSearchIncludeMemo := True;
   FGrid.FilterMode := vcmClient;
   FGrid.Controller.SetGlobalFilter('Émile');
   ClientIDs := VisibleIDs;

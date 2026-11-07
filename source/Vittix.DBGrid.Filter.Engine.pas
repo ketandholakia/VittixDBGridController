@@ -17,8 +17,9 @@ type
   TFilterFieldMap = record
     Info: TVittixDBGridColumnInfo;
     Field: TField;
-    FilterTextSnapshot: string;
-    NeedleUpper: string;
+    // Memo/blob fields are excluded from global search unless the caller
+    // opts in.
+    IsMemo: Boolean;
   end;
 
   /// <summary>One filter condition in a group: the dataset field name and
@@ -117,19 +118,32 @@ type
     FFilterGroups: TVittixFilterConditionGroups;
     FCompiledGroups: TArray<TArray<TVittixCompiledFilterCondition>>;
 
+    // Classic per-column filters compiled into one AND group. The snapshot
+    // arrays detect direct edits to Info.FilterText/HasFilter while active
+    // so the group recompiles without an explicit ApplyFilter.
+    FCompiledColumns: TArray<TVittixCompiledFilterCondition>;
+    FColumnSnapshotHasFilter: TArray<Boolean>;
+    FColumnSnapshotText: TArray<string>;
+
+    // Global search options
+    FGlobalSearchIncludeMemo: Boolean;
+    FIsFieldVisible: TFunc<string, Boolean>;
+
     procedure SetActive(const Value: Boolean);
     procedure SetGlobalSearchText(const Value: string);
+    procedure SetGlobalSearchIncludeMemo(const Value: Boolean);
     procedure DoFilterRecord(DataSet: TDataSet; var Accept: Boolean);
 
     function InternalAcceptRecord(DataSet: TDataSet): Boolean;
     function MatchText(const SearchUpper, ValueUpper: string): Boolean;
-    function ParseFilterMode(const FilterText: string; out Mode: TVittixFilterMatchMode;
-      out Value: string): Boolean;
-    function MatchFilter(const FilterText, NeedleUpper, ValueText: string;
-      AField: TField): Boolean;
     function MatchCompiled(const ACond: TVittixCompiledFilterCondition;
       AField: TField; const ValueText: string): Boolean;
+    function CompileCondition(const ACond: TVittixFilterCondition;
+      out ACompiled: TVittixCompiledFilterCondition): Boolean;
     procedure RebuildCompiledGroups;
+    procedure CompileColumnConditions;
+    function ColumnsNeedRecompile: Boolean;
+    function FieldIsMemo(AField: TField): Boolean;
     function TryParseDateText(AField: TField; const Text: string;
       out Value: TDateTime): Boolean;
     function GetFieldDisplayText(AField: TField): string;
@@ -137,7 +151,6 @@ type
     function TryGetFieldNumeric(AField: TField; out V: Extended): Boolean;
 
     procedure RebuildFieldCache;
-    procedure UpdateFieldNeedle(var AMap: TFilterFieldMap);
 
     function ValidateFilterText(
       const FieldName: string;
@@ -194,6 +207,17 @@ type
 
     property Active: Boolean read FActive write SetActive;
     property GlobalSearchText: string read FGlobalSearchText write SetGlobalSearchText;
+
+    /// <summary>Include memo/blob fields in the global search. Default
+    /// False: global search matches visible non-memo columns only.</summary>
+    property GlobalSearchIncludeMemo: Boolean
+      read FGlobalSearchIncludeMemo write SetGlobalSearchIncludeMemo;
+
+    /// <summary>Optional callback telling the engine whether a field is
+    /// currently visible. Global search only examines visible columns when
+    /// it is assigned; nil treats every column as visible.</summary>
+    property IsFieldVisible: TFunc<string, Boolean>
+      read FIsFieldVisible write FIsFieldVisible;
 
     property OnValidateFilter: TFilterValidationEvent
       read FOnValidateFilter write FOnValidateFilter;
@@ -376,6 +400,8 @@ begin
   FOldOnFilterRecord := nil;
   FFilterInstalled := False;
   FUpdating := False;
+  FGlobalSearchIncludeMemo := False;
+  FIsFieldVisible := nil;
 end;
 
 destructor TVittixDBGridFilterEngine.Destroy;
@@ -418,15 +444,21 @@ begin
   FGlobalSearchUpper := UpperCase(Value);
 end;
 
-procedure TVittixDBGridFilterEngine.UpdateFieldNeedle(
-  var AMap: TFilterFieldMap);
-var
-  Mode: TVittixFilterMatchMode;
-  Needle: string;
+procedure TVittixDBGridFilterEngine.SetGlobalSearchIncludeMemo(const Value: Boolean);
 begin
-  AMap.FilterTextSnapshot := AMap.Info.FilterText;
-  ParseFilterMode(AMap.FilterTextSnapshot, Mode, Needle);
-  AMap.NeedleUpper := UpperCase(Needle);
+  if FGlobalSearchIncludeMemo = Value then Exit;
+  FGlobalSearchIncludeMemo := Value;
+  // Eligibility is snapshotted in RebuildFieldCache; refresh the view while
+  // active so toggling the option takes effect immediately.
+  if FActive and Assigned(FDataSet) and FDataSet.Active then
+    ApplyFilter;
+end;
+
+function TVittixDBGridFilterEngine.FieldIsMemo(AField: TField): Boolean;
+begin
+  Result := Assigned(AField) and
+    (AField.DataType in [ftMemo, ftWideMemo, ftFmtMemo, ftBlob, ftGraphic,
+      ftTypedBinary, ftOraBlob, ftOraClob]);
 end;
 
 procedure TVittixDBGridFilterEngine.RebuildFieldCache;
@@ -449,7 +481,7 @@ begin
       SetLength(FFieldCache, Length(FFieldCache) + 1);
       FFieldCache[High(FFieldCache)].Info := FColumns[I];
       FFieldCache[High(FFieldCache)].Field := Field;
-      UpdateFieldNeedle(FFieldCache[High(FFieldCache)]);
+      FFieldCache[High(FFieldCache)].IsMemo := FieldIsMemo(Field);
     end;
   end;
 
@@ -457,6 +489,11 @@ begin
   // with every cache rebuild (dataset churn invalidates both).
   if Length(FFilterGroups) > 0 then
     RebuildCompiledGroups;
+
+  // Compile the classic per-column filters once; the per-record path then
+  // only evaluates them. Direct metadata edits are detected by
+  // ColumnsNeedRecompile and recompiled lazily.
+  CompileColumnConditions;
 end;
 
 procedure TVittixDBGridFilterEngine.SetFilterGroups(
@@ -516,13 +553,72 @@ begin
     Result := TryStrToTime(Trim(Text), Value, FormatSettings);
 end;
 
-procedure TVittixDBGridFilterEngine.RebuildCompiledGroups;
+function TVittixDBGridFilterEngine.CompileCondition(
+  const ACond: TVittixFilterCondition;
+  out ACompiled: TVittixCompiledFilterCondition): Boolean;
 var
-  G, C, OperatorIndex: Integer;
-  Cond: TVittixFilterCondition;
-  Compiled: TVittixCompiledFilterCondition;
+  OperatorIndex: Integer;
   Field: TField;
   Parts: TArray<string>;
+begin
+  Result := False;
+  ACompiled := Default(TVittixCompiledFilterCondition);
+
+  // Empty condition texts are pass-through no-ops; skip them so the
+  // per-record evaluation keeps the same semantics.
+  if Trim(ACond.FilterText) = '' then Exit;
+  if not Assigned(FDataSet) then Exit;
+
+  Field := FDataSet.FindField(ACond.FieldName);
+  if not Assigned(Field) then Exit; // an unknown field can never match
+
+  ACompiled.Field := Field;
+  ACompiled.FieldName := ACond.FieldName;
+
+  if VittixFilterTryParseOperatorText(ACond.FilterText, OperatorIndex,
+    ACompiled.Needle) then
+    ACompiled.Mode := VittixFilterOperatorDefinition(OperatorIndex).Mode
+  else
+  begin
+    ACompiled.Mode := vfmContains;
+    ACompiled.Needle := Trim(ACond.FilterText);
+  end;
+
+  // Keep group and classic-column substring matching on the same
+  // case-folded needle representation.
+  ACompiled.NeedleUpper := UpperCase(ACompiled.Needle);
+  ACompiled.HasNumNeedle := TryParseNumericText(ACompiled.Needle,
+    ACompiled.NumNeedle);
+
+  Parts := ACompiled.Needle.Split(['|']);
+  if (Length(Parts) = 2) and
+     TryParseNumericText(Trim(Parts[0]), ACompiled.NumLow) and
+     TryParseNumericText(Trim(Parts[1]), ACompiled.NumHigh) then
+    ACompiled.HasNumRange := True;
+
+  if (Field.DataType in [ftDate, ftTime, ftDateTime, ftTimeStamp]) and
+     (ACompiled.Mode in [vfmEquals, vfmNotEquals, vfmLessThan, vfmGreaterThan,
+       vfmLessOrEqual, vfmGreaterOrEqual, vfmBetween, vfmNotBetween]) then
+  begin
+    if ACompiled.Mode in [vfmBetween, vfmNotBetween] then
+    begin
+      if (Length(Parts) = 2) and
+         TryParseDateText(Field, Parts[0], ACompiled.DateNeedle) and
+         TryParseDateText(Field, Parts[1], ACompiled.DateHigh) then
+        ACompiled.HasDateNeedle := True;
+    end
+    else if TryParseDateText(Field, ACompiled.Needle, ACompiled.DateNeedle) then
+      ACompiled.HasDateNeedle := True;
+  end;
+
+  Result := True;
+end;
+
+procedure TVittixDBGridFilterEngine.RebuildCompiledGroups;
+var
+  G, C: Integer;
+  Cond: TVittixFilterCondition;
+  Compiled: TVittixCompiledFilterCondition;
 
   procedure AddCompiled;
   begin
@@ -539,7 +635,6 @@ begin
   // and OR the whole filter away. Empty groups are dropped at compile time;
   // when every group ends up empty the array stays empty and the engine
   // falls back to the classic per-column path (no conditions -> pass all).
-  SetLength(FCompiledGroups, 0);
   for G := 0 to High(FFilterGroups) do
   begin
     SetLength(FCompiledGroups, Length(FCompiledGroups) + 1);
@@ -547,60 +642,61 @@ begin
     for C := 0 to High(FFilterGroups[G]) do
     begin
       Cond := FFilterGroups[G][C];
-      // Empty condition texts are pass-through no-ops in MatchFilter; skip
-      // them here so the per-record evaluation keeps the same semantics.
-      if Trim(Cond.FilterText) = '' then
-        Continue;
-
-      Field := FDataSet.FindField(Cond.FieldName);
-      if not Assigned(Field) then
-        Continue; // an unknown field can never match
-
-      Compiled := Default(TVittixCompiledFilterCondition);
-      Compiled.Field := Field;
-      Compiled.FieldName := Cond.FieldName;
-
-      if VittixFilterTryParseOperatorText(Cond.FilterText, OperatorIndex, Compiled.Needle) then
-        Compiled.Mode := VittixFilterOperatorDefinition(OperatorIndex).Mode
-      else
-      begin
-        Compiled.Mode := vfmContains;
-        Compiled.Needle := Trim(Cond.FilterText);
-      end;
-
-      // Keep group and classic-column substring matching on the same
-      // case-folded needle representation.
-      Compiled.NeedleUpper := UpperCase(Compiled.Needle);
-      Compiled.HasNumNeedle := TryParseNumericText(Compiled.Needle, Compiled.NumNeedle);
-
-      Parts := Compiled.Needle.Split(['|']);
-      if (Length(Parts) = 2) and
-         TryParseNumericText(Trim(Parts[0]), Compiled.NumLow) and
-         TryParseNumericText(Trim(Parts[1]), Compiled.NumHigh) then
-        Compiled.HasNumRange := True;
-
-      if (Field.DataType in [ftDate, ftTime, ftDateTime, ftTimeStamp]) and
-         (Compiled.Mode in [vfmEquals, vfmNotEquals, vfmLessThan, vfmGreaterThan,
-           vfmLessOrEqual, vfmGreaterOrEqual, vfmBetween, vfmNotBetween]) then
-      begin
-        if Compiled.Mode in [vfmBetween, vfmNotBetween] then
-        begin
-          if (Length(Parts) = 2) and
-             TryParseDateText(Field, Parts[0], Compiled.DateNeedle) and
-             TryParseDateText(Field, Parts[1], Compiled.DateHigh) then
-            Compiled.HasDateNeedle := True;
-        end
-        else if TryParseDateText(Field, Compiled.Needle, Compiled.DateNeedle) then
-          Compiled.HasDateNeedle := True;
-      end;
-
-      AddCompiled;
+      if CompileCondition(Cond, Compiled) then
+        AddCompiled;
     end;
 
     // Drop the group when none of its conditions compiled to anything.
     if Length(FCompiledGroups[High(FCompiledGroups)]) = 0 then
       SetLength(FCompiledGroups, Length(FCompiledGroups) - 1);
   end;
+end;
+
+procedure TVittixDBGridFilterEngine.CompileColumnConditions;
+var
+  I: Integer;
+  Cond: TVittixFilterCondition;
+  Compiled: TVittixCompiledFilterCondition;
+begin
+  SetLength(FCompiledColumns, 0);
+  SetLength(FColumnSnapshotHasFilter, 0);
+  SetLength(FColumnSnapshotText, 0);
+  if not Assigned(FColumns) then Exit;
+
+  SetLength(FColumnSnapshotHasFilter, FColumns.Count);
+  SetLength(FColumnSnapshotText, FColumns.Count);
+  for I := 0 to FColumns.Count - 1 do
+  begin
+    FColumnSnapshotHasFilter[I] := FColumns[I].HasFilter;
+    FColumnSnapshotText[I] := FColumns[I].FilterText;
+    if not (FColumns[I].HasFilter and
+            (Trim(FColumns[I].FilterText) <> '')) then
+      Continue;
+
+    Cond.FieldName := FColumns[I].FieldName;
+    Cond.FilterText := FColumns[I].FilterText;
+    if CompileCondition(Cond, Compiled) then
+    begin
+      SetLength(FCompiledColumns, Length(FCompiledColumns) + 1);
+      FCompiledColumns[High(FCompiledColumns)] := Compiled;
+    end;
+  end;
+end;
+
+function TVittixDBGridFilterEngine.ColumnsNeedRecompile: Boolean;
+var
+  I: Integer;
+begin
+  Result := False;
+  if not Assigned(FColumns) then Exit;
+  if Length(FColumnSnapshotHasFilter) <> FColumns.Count then Exit(True);
+
+  // Direct edits to FilterText/HasFilter while filtering is active must
+  // take effect without an explicit ApplyFilter; detect and recompile.
+  for I := 0 to FColumns.Count - 1 do
+    if (FColumnSnapshotHasFilter[I] <> FColumns[I].HasFilter) or
+       (FColumnSnapshotText[I] <> FColumns[I].FilterText) then
+      Exit(True);
 end;
 
 function TVittixDBGridFilterEngine.MatchCompiled(
@@ -888,7 +984,6 @@ function TVittixDBGridFilterEngine.InternalAcceptRecord(
 var
   I, G, C: Integer;
   ValueUpper: string;
-  ValueCache: TArray<string>;
   GlobalMatched: Boolean;
   GroupMatched: Boolean;
 begin
@@ -963,48 +1058,36 @@ begin
   end
   else
   begin
-    Result := True;
+    // ------------------------------------------------
+    // Per-column filters (AND), evaluated from the compiled group
+    // ------------------------------------------------
+    if ColumnsNeedRecompile then
+      CompileColumnConditions;
 
-    // ------------------------------------------------
-    // Per-column filters (AND)
-    // ------------------------------------------------
-    for I := 0 to High(FFieldCache) do
+    for I := 0 to High(FCompiledColumns) do
     begin
-      // Check if this cached column has a filter active
-      if FFieldCache[I].Info.HasFilter and (FFieldCache[I].Info.FilterText <> '') then
-      begin
-        // Direct metadata edits can happen while filtering is active. Fold
-        // their new needle once without requiring an explicit ApplyFilter.
-        if FFieldCache[I].FilterTextSnapshot <> FFieldCache[I].Info.FilterText then
-          UpdateFieldNeedle(FFieldCache[I]);
-        ValueUpper := UpperCase(GetFieldDisplayText(FFieldCache[I].Field));
-        if FGlobalSearchUpper <> '' then
-        begin
-          if Length(ValueCache) = 0 then
-            SetLength(ValueCache, Length(FFieldCache));
-          ValueCache[I] := ValueUpper;
-        end;
-
-        if not MatchFilter(FFieldCache[I].Info.FilterText,
-          FFieldCache[I].NeedleUpper, ValueUpper, FFieldCache[I].Field) then
-          Exit(False); // Failed an AND condition
-      end;
+      ValueUpper := UpperCase(GetFieldDisplayText(FCompiledColumns[I].Field));
+      if not MatchCompiled(FCompiledColumns[I], FCompiledColumns[I].Field,
+        ValueUpper) then
+        Exit(False); // Failed an AND condition
     end;
 
     if FGlobalSearchText = '' then
-      Exit(Result);
+      Exit(True);
   end;
 
   // ------------------------------------------------
-  // Global search (OR)
+  // Global search (OR) over visible, non-memo columns
   // ------------------------------------------------
   GlobalMatched := False;
   for I := 0 to High(FFieldCache) do
   begin
-    if (Length(ValueCache) > I) and (ValueCache[I] <> '') then
-      ValueUpper := ValueCache[I]
-    else
-      ValueUpper := UpperCase(GetFieldDisplayText(FFieldCache[I].Field));
+    if FFieldCache[I].IsMemo and not FGlobalSearchIncludeMemo then
+      Continue;
+    if Assigned(FIsFieldVisible) and
+       not FIsFieldVisible(FFieldCache[I].Info.FieldName) then
+      Continue;
+    ValueUpper := UpperCase(GetFieldDisplayText(FFieldCache[I].Field));
     if MatchText(FGlobalSearchUpper, ValueUpper) then
     begin
       GlobalMatched := True;
@@ -1019,21 +1102,6 @@ function TVittixDBGridFilterEngine.MatchText(
   const SearchUpper, ValueUpper: string): Boolean;
 begin
   Result := (SearchUpper = '') or (Pos(SearchUpper, ValueUpper) > 0);
-end;
-
-function TVittixDBGridFilterEngine.ParseFilterMode(const FilterText: string;
-  out Mode: TVittixFilterMatchMode; out Value: string): Boolean;
-var
-  OperatorIndex: Integer;
-begin
-  // The shared operator table owns prefix recognition; this method only maps
-  // the parsed operator to the engine's match mode. Unrecognized text is a
-  // plain Contains filter (Value = trimmed text), so parsing never fails.
-  if VittixFilterTryParseOperatorText(FilterText, OperatorIndex, Value) then
-    Mode := VittixFilterOperatorDefinition(OperatorIndex).Mode
-  else
-    Mode := vfmContains;
-  Result := True;
 end;
 
 function TVittixDBGridFilterEngine.TryParseNumericText(const S: string;
@@ -1074,152 +1142,6 @@ begin
   else
     // Textual fields: compare through their (possibly formatted) display text.
     Result := TryParseNumericText(GetFieldDisplayText(AField), V);
-  end;
-end;
-
-function TVittixDBGridFilterEngine.MatchFilter(
-  const FilterText, NeedleUpper, ValueText: string; AField: TField): Boolean;
-var
-  Mode: TVittixFilterMatchMode;
-  Needle, Hay, LowText, HighText: string;
-  FN, VN: Extended;
-  StartPos: Integer;
-  Parts: TArray<string>;
-  HighVal: Extended;
-  FieldIsNull: Boolean;
-  DateNeedle, DateHigh, DateValue: TDateTime;
-  ParsedDate: Boolean;
-begin
-  if Trim(FilterText) = '' then
-    Exit(True);
-
-  ParseFilterMode(FilterText, Mode, Needle);
-  Hay := Trim(ValueText);
-
-  // NULL and empty are distinct: NULL means no value at all, empty means a
-  // blank (but present) value. Only the field itself can tell them apart.
-  FieldIsNull := Assigned(AField) and AField.IsNull;
-
-  if Assigned(AField) and
-     (AField.DataType in [ftDate, ftTime, ftDateTime, ftTimeStamp]) and
-     (Mode in [vfmEquals, vfmNotEquals, vfmLessThan, vfmGreaterThan,
-       vfmLessOrEqual, vfmGreaterOrEqual, vfmBetween, vfmNotBetween]) then
-  begin
-    if Mode in [vfmBetween, vfmNotBetween] then
-    begin
-      Parts := Needle.Split(['|']);
-      ParsedDate := (Length(Parts) = 2) and
-        TryParseDateText(AField, Parts[0], DateNeedle) and TryParseDateText(AField, Parts[1], DateHigh);
-    end
-    else
-      ParsedDate := TryParseDateText(AField, Needle, DateNeedle);
-    if ParsedDate then
-    begin
-      // A missing date is not a comparable value, including for inequality.
-      if FieldIsNull then Exit(False);
-      DateValue := AField.AsDateTime;
-      case Mode of
-        vfmEquals: Result := DateValue = DateNeedle;
-        vfmNotEquals: Result := DateValue <> DateNeedle;
-        vfmLessThan: Result := DateValue < DateNeedle;
-        vfmGreaterThan: Result := DateValue > DateNeedle;
-        vfmLessOrEqual: Result := DateValue <= DateNeedle;
-        vfmGreaterOrEqual: Result := DateValue >= DateNeedle;
-        vfmBetween: Result := (DateValue >= DateNeedle) and (DateValue <= DateHigh);
-        vfmNotBetween: Result := (DateValue < DateNeedle) or (DateValue > DateHigh);
-      else
-        Result := False;
-      end;
-      Exit;
-    end;
-    // Unparseable date text retains the existing display-text operator behavior.
-  end;
-
-  case Mode of
-    vfmContains: Result := Pos(NeedleUpper, Hay) > 0;
-    vfmEquals: Result := SameText(Needle, Hay);
-    vfmStartsWith: Result := SameText(Copy(Hay, 1, Length(Needle)), Needle);
-    vfmEndsWith:
-      begin
-        StartPos := Length(Hay) - Length(Needle) + 1;
-        // A needle longer than the haystack can never be a suffix of it.
-        if StartPos < 1 then
-          Exit(False);
-        Result := SameText(Copy(Hay, StartPos, MaxInt), Needle);
-      end;
-    // Not Equals is an exact-value comparison: it matches records whose
-    // display text differs from the needle as a whole. Does Not Contain
-    // (vfmDoesNotContain, the '!' prefix) is the substring exclusion and
-    // keeps the historic Pos-based behaviour of the old vfmNotEquals.
-    vfmNotEquals: Result := not SameText(Needle, Hay);
-    vfmDoesNotContain: Result := Pos(NeedleUpper, Hay) = 0;
-    vfmGreaterThan,
-    vfmGreaterOrEqual,
-    vfmLessThan,
-    vfmLessOrEqual,
-    vfmBetween,
-    vfmNotBetween:
-      begin
-        if Mode = vfmBetween then
-        begin
-          if Pos('|', Needle) = 0 then
-            Exit(False);
-
-          Parts := Needle.Split(['|']);
-          if Length(Parts) <> 2 then
-            Exit(False);
-
-          LowText := Trim(Parts[0]);
-          HighText := Trim(Parts[1]);
-          if TryParseNumericText(LowText, FN) and TryGetFieldNumeric(AField, VN) and
-             TryParseNumericText(HighText, HighVal) then
-            Result := (VN >= FN) and (VN <= HighVal)
-          else
-            Result := False;
-          Exit;
-        end;
-
-        if Mode = vfmNotBetween then
-        begin
-          if Pos('|', Needle) = 0 then
-            Exit(False);
-
-          Parts := Needle.Split(['|']);
-          if Length(Parts) <> 2 then
-            Exit(False);
-
-          LowText := Trim(Parts[0]);
-          HighText := Trim(Parts[1]);
-          if TryParseNumericText(LowText, FN) and TryGetFieldNumeric(AField, VN) and
-             TryParseNumericText(HighText, HighVal) then
-            Result := (VN < FN) or (VN > HighVal)
-          else
-            Result := False;
-          Exit;
-        end;
-
-        if TryParseNumericText(Needle, FN) and TryGetFieldNumeric(AField, VN) then
-          case Mode of
-            vfmGreaterThan: Result := VN > FN;
-            vfmGreaterOrEqual: Result := VN >= FN;
-            vfmLessThan: Result := VN < FN;
-            vfmLessOrEqual: Result := VN <= FN;
-          else
-            Result := False;
-          end
-        else
-          Result := False;
-      end;
-    vfmIsNull:
-      Result := FieldIsNull;
-    vfmIsNotNull:
-      Result := not FieldIsNull;
-    vfmIsEmpty:
-      Result := (not FieldIsNull) and (Hay = '');
-    vfmIsNotEmpty:
-      Result := FieldIsNull or (Hay <> '');
-  else
-    Result := False;
   end;
 end;
 

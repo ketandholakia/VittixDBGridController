@@ -49,6 +49,14 @@ type
     [Test]
     procedure GlobalSearchMatchesAcrossColumns;
     [Test]
+    procedure GlobalSearchSkipsMemoByDefault;
+    [Test]
+    procedure GlobalSearchIgnoresHiddenColumns;
+    [Test]
+    procedure ColumnFilterDirectEditRecompiles;
+    [Test]
+    procedure CompiledColumnPathBenchmark;
+    [Test]
     procedure MemoFieldFilterUsesAsString;
     [Test]
     procedure InvalidFilterRaisesAndDoesNotEnableFiltering;
@@ -125,6 +133,7 @@ type
 implementation
 
 uses
+  System.Diagnostics,
   Vittix.Tests.TestData;
 
 procedure TVittixFilterEngineTests.ClearFilterPreservesReplacementHandler;
@@ -287,11 +296,163 @@ end;
 
 procedure TVittixFilterEngineTests.GlobalSearchMatchesAcrossColumns;
 begin
+  // The match lives in the Notes memo column; global search now skips memo
+  // fields by default, so opt in explicitly for this cross-column check.
+  FEngine.GlobalSearchIncludeMemo := True;
   FEngine.GlobalSearchText := 'GAMMA NOTES';
   FEngine.Active := True;
 
   Assert.AreEqual(1, CountVisibleRecords(FDataSet));
   Assert.AreEqual(3, FDataSet.FieldByName('ID').AsInteger);
+end;
+
+procedure TVittixFilterEngineTests.GlobalSearchSkipsMemoByDefault;
+begin
+  // 'gamma notes' exists only in the Notes memo column.
+  FEngine.GlobalSearchText := 'GAMMA NOTES';
+  FEngine.Active := True;
+  Assert.AreEqual(0, CountVisibleRecords(FDataSet),
+    'memo/blob columns are skipped by default');
+
+  FEngine.Active := False;
+  FEngine.GlobalSearchIncludeMemo := True;
+  FEngine.Active := True;
+  Assert.AreEqual(1, CountVisibleRecords(FDataSet),
+    'opting in restores memo matching');
+  Assert.AreEqual(3, FDataSet.FieldByName('ID').AsInteger);
+end;
+
+procedure TVittixFilterEngineTests.GlobalSearchIgnoresHiddenColumns;
+begin
+  // 'Gamma' lives in the Name column; hiding that column must hide the match.
+  FEngine.IsFieldVisible :=
+    function(AFieldName: string): Boolean
+    begin
+      Result := not SameText(AFieldName, 'Name');
+    end;
+  FEngine.GlobalSearchText := 'GAMMA';
+  FEngine.Active := True;
+  Assert.AreEqual(0, CountVisibleRecords(FDataSet),
+    'a hidden column is not searched');
+
+  FEngine.Active := False;
+  FEngine.IsFieldVisible := nil;
+  FEngine.Active := True;
+  Assert.AreEqual(1, CountVisibleRecords(FDataSet),
+    'the same search matches once the column is visible');
+  Assert.AreEqual(3, FDataSet.FieldByName('ID').AsInteger);
+end;
+
+procedure TVittixFilterEngineTests.ColumnFilterDirectEditRecompiles;
+var
+  Info: TVittixDBGridColumnInfo;
+begin
+  Info := FColumns.FindByFieldName('Name');
+  Info.FilterText := 'ALPHA';
+  Info.HasFilter := True;
+  FEngine.Active := True;
+
+  // Keep the engine (and its hook) active but switch the dataset view off so
+  // every record is navigable; AcceptCurrentRecord then exercises the
+  // compiled matcher directly.
+  FDataSet.Filtered := False;
+
+  FDataSet.Locate('ID', 1, []); // Alpha
+  Assert.IsTrue(FEngine.AcceptCurrentRecord);
+  FDataSet.Locate('ID', 2, []); // beta
+  Assert.IsFalse(FEngine.AcceptCurrentRecord);
+
+  // Direct edit while the filter is active: the snapshot detects the changed
+  // text and recompiles without an explicit ApplyFilter.
+  Info.FilterText := 'BETA';
+  FDataSet.Locate('ID', 1, []); // Alpha
+  Assert.IsFalse(FEngine.AcceptCurrentRecord,
+    'the edited condition replaced the old text');
+  FDataSet.Locate('ID', 2, []); // beta
+  Assert.IsTrue(FEngine.AcceptCurrentRecord);
+end;
+
+procedure TVittixFilterEngineTests.CompiledColumnPathBenchmark;
+const
+  RowCount = 100000;
+var
+  DataSet: TClientDataSet;
+  Cols: TVittixDBGridColumns;
+  Engine: TVittixDBGridFilterEngine;
+  Info: TVittixDBGridColumnInfo;
+  I, OperatorIndex: Integer;
+  Watch: TStopwatch;
+  NewMs, NaiveMs: Int64;
+  Needle, Hay: string;
+begin
+  DataSet := TClientDataSet.Create(nil);
+  Cols := nil;
+  Engine := nil;
+  try
+    DataSet.FieldDefs.Add('ID', ftInteger);
+    DataSet.FieldDefs.Add('Name', ftString, 50);
+    DataSet.CreateDataSet;
+    DataSet.DisableControls;
+    try
+      for I := 1 to RowCount do
+        DataSet.AppendRecord([I, 'Row ' + IntToStr(I)]);
+    finally
+      DataSet.EnableControls;
+    end;
+
+    Cols := CreateMatchingColumns(DataSet);
+    Engine := TVittixDBGridFilterEngine.Create(DataSet, Cols);
+    Info := Cols.FindByFieldName('Name');
+    Info.FilterText := 'Row 9999';
+    Info.HasFilter := True;
+    Engine.Active := True;
+    // Navigate every record and ask the engine to decide it, so the compiled
+    // matcher actually runs per row (a Filtered view would skip re-evaluation
+    // after the initial pass).
+    DataSet.Filtered := False;
+
+    // Warm-up pass, then measure one full traversal.
+    DataSet.First;
+    while not DataSet.Eof do
+    begin
+      Engine.AcceptCurrentRecord;
+      DataSet.Next;
+    end;
+    Watch := TStopwatch.StartNew;
+    DataSet.First;
+    while not DataSet.Eof do
+    begin
+      Engine.AcceptCurrentRecord;
+      DataSet.Next;
+    end;
+    NewMs := Watch.ElapsedMilliseconds;
+    Engine.Active := False;
+
+    // Naive baseline approximating the old per-row path: parse the operator
+    // and fold the needle for every record.
+    Watch := TStopwatch.StartNew;
+    DataSet.First;
+    while not DataSet.Eof do
+    begin
+      Hay := UpperCase(DataSet.FieldByName('Name').DisplayText);
+      VittixFilterTryParseOperatorText('Row 9999', OperatorIndex, Needle);
+      if Pos(UpperCase(Needle), Hay) = 0 then
+        ;
+      DataSet.Next;
+    end;
+    NaiveMs := Watch.ElapsedMilliseconds;
+
+    Writeln(Format('100k compiled column filter: %d ms (naive per-row parse: %d ms)',
+      [NewMs, NaiveMs]));
+    Assert.IsTrue(NewMs <= NaiveMs * 2 + 250,
+      Format('compiled path (%d ms) must not exceed the per-row baseline (%d ms)',
+        [NewMs, NaiveMs]));
+    Assert.IsTrue(NewMs < 20000, Format('scan took %d ms', [NewMs]));
+  finally
+    Engine.Free;
+    Cols.Free;
+    DataSet.Free;
+  end;
 end;
 
 procedure TVittixFilterEngineTests.MemoFieldFilterUsesAsString;

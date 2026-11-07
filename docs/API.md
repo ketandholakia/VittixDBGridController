@@ -33,6 +33,7 @@ Use `Grid.Controller` for these operations:
 | Recalculate footer values and repaint | `Refresh` |
 | Apply current sort state | `ApplyState` or `RefreshSorting` |
 | Set global filter text | `SetGlobalFilter(Text)` |
+| Include memo/blob columns in global search | `GlobalSearchIncludeMemo` (default False; global search otherwise covers visible non-memo columns) |
 | Re-route modified filter metadata | `RefreshFiltering` |
 | Remove active filters | `ClearFilters` |
 | Remove filters and sorting | `Clear` |
