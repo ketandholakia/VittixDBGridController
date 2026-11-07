@@ -238,14 +238,111 @@ begin
   end;
 end;
 
+function SanitizeSQLForKeywordScan(const ASQL: string): string;
+var
+  I, Len: Integer;
+  InString, InLineComment, InBlockComment: Boolean;
+begin
+  // Strip string literals and comments and normalize all whitespace so the
+  // keyword scan below sees only real SQL tokens. Without this, a keyword
+  // inside '...' or a comment caused a false rejection, and a keyword
+  // separated by CR/LF/TAB was missed entirely. Sanitizing also prevents a
+  // semicolon inside a literal from looking like a multi-statement command.
+  Result := '';
+  Len := Length(ASQL);
+  InString := False;
+  InLineComment := False;
+  InBlockComment := False;
+  I := 1;
+  while I <= Len do
+  begin
+    if InLineComment then
+    begin
+      if (ASQL[I] = #13) or (ASQL[I] = #10) then
+      begin
+        InLineComment := False;
+        Result := Result + ' ';
+      end;
+      Inc(I);
+      Continue;
+    end;
+
+    if InBlockComment then
+    begin
+      if (ASQL[I] = '*') and (I < Len) and (ASQL[I + 1] = '/') then
+      begin
+        InBlockComment := False;
+        Result := Result + ' ';
+        Inc(I, 2);
+      end
+      else
+        Inc(I);
+      Continue;
+    end;
+
+    if InString then
+    begin
+      if ASQL[I] = '''' then
+      begin
+        if (I < Len) and (ASQL[I + 1] = '''') then
+          Inc(I, 2) // escaped quote inside the literal
+        else
+        begin
+          InString := False;
+          Result := Result + ' ';
+          Inc(I);
+        end;
+      end
+      else
+        Inc(I);
+      Continue;
+    end;
+
+    case ASQL[I] of
+      '''':
+        begin
+          InString := True;
+          Inc(I);
+        end;
+      '-':
+        if (I < Len) and (ASQL[I + 1] = '-') then
+        begin
+          InLineComment := True;
+          Inc(I, 2);
+        end
+        else
+        begin
+          Result := Result + ASQL[I];
+          Inc(I);
+        end;
+      '/':
+        if (I < Len) and (ASQL[I + 1] = '*') then
+        begin
+          InBlockComment := True;
+          Inc(I, 2);
+        end
+        else
+        begin
+          Result := Result + ASQL[I];
+          Inc(I);
+        end;
+      #9, #10, #13, ' ':
+        begin
+          Result := Result + ' ';
+          Inc(I);
+        end;
+    else
+      Result := Result + ASQL[I];
+      Inc(I);
+    end;
+  end;
+end;
+
 function TVittixFireDACProvider.CheckWrappable(const ASQL: string;
   out AReason: string): Boolean;
 var
   UpperSQL: string;
 begin
-  // Safety over cleverness: any of these shapes would change meaning
-  // inside "SELECT * FROM ( ... )", so they fall back to the client.
-  UpperSQL := ' ' + UpperCase(Trim(ASQL)) + ' ';
   Result := False;
 
   if Trim(ASQL) = '' then
@@ -253,6 +350,17 @@ begin
     AReason := 'the query has no SQL text';
     Exit;
   end;
+
+  // Safety over cleverness: any of these shapes would change meaning
+  // inside "SELECT * FROM ( ... )", so they fall back to the client.
+  // Whitespace is normalized and literals/comments are stripped first, so
+  // "FROM t<CRLF>ORDER BY x" and "ORDER<TAB>BY" are still detected, while a
+  // keyword inside a string or comment no longer causes a false reject.
+  // Collapse runs after the scan so leading/trailing/multiple spaces match
+  // the " KEYWORD " shape exactly.
+  UpperSQL := ' ' + UpperCase(Trim(SanitizeSQLForKeywordScan(ASQL))) + ' ';
+  while UpperSQL.Contains('  ') do
+    UpperSQL := UpperSQL.Replace('  ', ' ');
 
   if UpperSQL.Contains(' UNION ') then
   begin

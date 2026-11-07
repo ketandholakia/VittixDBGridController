@@ -4,6 +4,19 @@ All notable changes to Vittix.DBGrid are documented here. Releases older than
 v1.0.3 were published before this file existed; their notes live in the GitHub
 releases only.
 
+## [2.1.0] - 2026-11-07
+
+### Fixed
+
+- **FireDAC provider keyword scan.** `CheckWrappable` now normalizes
+  CR/LF/TAB whitespace and strips string literals, `--` line comments and
+  `/* */` block comments before checking for `UNION`, `ORDER BY`, `EXEC`,
+  `EXECUTE` and `CALL`. Queries with a multi-line or tab-separated
+  `ORDER BY`/`UNION` are now correctly declined instead of being wrapped,
+  while keywords that only appear inside literals or comments no longer
+  trigger a false fallback. The intentionally over-rejective handling of
+  `ORDER BY` (including subqueries) is unchanged.
+
 ## [2.0.0] - 2026-10-28
 
 ### Added

@@ -106,6 +106,25 @@ type
     procedure PagerRestoresClosedQueryAndHandlesQueryDestruction;
     [Test]
     procedure PagerBarNavigatesAndDetaches;
+
+    // Phase 1: keyword detection must survive CR/LF/TAB and ignore
+    // keywords inside literals and comments.
+    [Test]
+    procedure OrderByAcrossNewlineIsRejected;
+    [Test]
+    procedure OrderByTabSeparatedIsRejected;
+    [Test]
+    procedure UnionOnOwnLineIsRejected;
+    [Test]
+    procedure ExecAtStartAfterNewlineIsRejected;
+    [Test]
+    procedure KeywordInsideStringLiteralIsWrappable;
+    [Test]
+    procedure KeywordInsideLineCommentIsWrappable;
+    [Test]
+    procedure KeywordInsideBlockCommentIsWrappable;
+    [Test]
+    procedure PlainSelectRemainsWrappable;
   end;
 
 implementation
@@ -118,6 +137,26 @@ uses
   Vittix.DBGrid.Export.Engine;
 
 { helpers }
+
+function IsWrappableSQL(const ASQL: string): Boolean;
+var
+  Q: TFDQuery;
+  P: TVittixFireDACProvider;
+  PI: IVittixDataProvider;
+begin
+  // CanHandle funnels through the private CheckWrappable, so this exercises
+  // the real keyword scan without a live connection.
+  Q := TFDQuery.Create(nil);
+  try
+    Q.SQL.Text := ASQL;
+    P := TVittixFireDACProvider.Create(Q);
+    PI := P;
+    Result := P.CanHandle(Q);
+    PI := nil; // release the provider before the query
+  finally
+    Q.Free;
+  end;
+end;
 
 function FieldsOf(AQuery: TFDQuery): TArray<TVittixSQLFieldInfo>;
 var
@@ -1138,6 +1177,63 @@ begin
     Bar.Free;
     Pager.Free;
   end;
+end;
+
+{ Phase 1: keyword scan normalization }
+
+procedure TVittixProviderFireDACTests.OrderByAcrossNewlineIsRejected;
+begin
+  Assert.IsFalse(IsWrappableSQL('SELECT * FROM t' + sLineBreak + 'ORDER BY x'),
+    'ORDER BY after a CR/LF must be detected');
+end;
+
+procedure TVittixProviderFireDACTests.OrderByTabSeparatedIsRejected;
+begin
+  Assert.IsFalse(IsWrappableSQL('SELECT * FROM t ORDER'#9'BY x'),
+    'ORDER<TAB>BY must be detected');
+end;
+
+procedure TVittixProviderFireDACTests.UnionOnOwnLineIsRejected;
+begin
+  Assert.IsFalse(
+    IsWrappableSQL('SELECT id FROM t1' + sLineBreak + 'UNION' + sLineBreak +
+      'SELECT id FROM t2'),
+    'UNION on its own line must be detected');
+end;
+
+procedure TVittixProviderFireDACTests.ExecAtStartAfterNewlineIsRejected;
+begin
+  Assert.IsFalse(IsWrappableSQL(sLineBreak + 'EXEC my_proc'),
+    'EXEC at the start after a newline must be detected');
+end;
+
+procedure TVittixProviderFireDACTests.KeywordInsideStringLiteralIsWrappable;
+begin
+  Assert.IsTrue(
+    IsWrappableSQL('SELECT ''ORDER BY x UNION EXEC'' AS label FROM t'),
+    'a keyword inside a string literal must not reject the query');
+  Assert.IsTrue(IsWrappableSQL('SELECT ''it''''s ORDER BY'' FROM t'),
+    'an escaped quote must not end the literal early');
+end;
+
+procedure TVittixProviderFireDACTests.KeywordInsideLineCommentIsWrappable;
+begin
+  Assert.IsTrue(
+    IsWrappableSQL('SELECT * FROM t -- ORDER BY x' + sLineBreak + 'WHERE id > 0'),
+    'a keyword inside a line comment must not reject the query');
+end;
+
+procedure TVittixProviderFireDACTests.KeywordInsideBlockCommentIsWrappable;
+begin
+  Assert.IsTrue(
+    IsWrappableSQL('SELECT * FROM t /* UNION EXEC ORDER BY */ WHERE id > 0'),
+    'a keyword inside a block comment must not reject the query');
+end;
+
+procedure TVittixProviderFireDACTests.PlainSelectRemainsWrappable;
+begin
+  Assert.IsTrue(IsWrappableSQL('SELECT id, name FROM customers WHERE id > 1'),
+    'a plain SELECT is wrappable');
 end;
 
 end.
