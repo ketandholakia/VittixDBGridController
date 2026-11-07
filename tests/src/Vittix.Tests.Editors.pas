@@ -108,7 +108,7 @@ var
 begin
   Items := TVittixDBGridEditors.ParsePickItems(
     'Active' + sLineBreak + '2=Pending' + sLineBreak + '' + sLineBreak + 'Done');
-  Assert.AreEqual(3, Length(Items), 'blank lines are skipped');
+  Assert.AreEqual<NativeInt>(3, Length(Items), 'blank lines are skipped');
 
   Assert.AreEqual('Active', Items[0].Caption);
   Assert.IsFalse(Items[0].HasValue, 'plain lines have no value');

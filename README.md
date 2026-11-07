@@ -33,7 +33,7 @@
 - Copy cell or selected rows to the clipboard (Ctrl+C / Ctrl+Shift+C)
 - Export to CSV, TSV, XLSX, HTML, XML, JSON, Text and clipboard
 - VCL Styles aware footer, filter popup and export dialog
-- DUnitX regression suite (484 tests)
+- DUnitX regression suite (490 tests)
 - Controller-based architecture
 - Pure Object Pascal (Delphi VCL)
 
@@ -104,8 +104,11 @@ Provides IDE integration and component registration:
 
 ## Requirements
 
-- Delphi 12 Athens, Win32 (the supported build target for the packages, tests,
-  demo, and installer payload)
+- Delphi 12 Athens; Win32 is the supported package/demo/installer target and
+  the CI also builds and runs the suite on Win64. `ColumnInfo` is published
+  and streamed for design-time editing; transient runtime state is not
+  stored. DPI scaling uses `CurrentPPI`/`ScaleForPPI` for the header glyphs
+  and footer.
 - VCL framework
 - `Vcl.DBGrids`
 - `TDataSet` descendants such as FireDAC, ClientDataSet, BDE, ADO, and third-party datasets

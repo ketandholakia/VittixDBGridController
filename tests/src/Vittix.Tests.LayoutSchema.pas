@@ -39,6 +39,8 @@ type
     [Test]
     procedure ColumnInfoAssignCopiesV2Settings;
     [Test]
+    procedure RuntimeOnlyColumnStateIsNotStored;
+    [Test]
     procedure ApplyLayoutPushesTitleCaptionAndDisplayFormat;
     [Test]
     procedure ExportHonorsExportIncludeAndExportCaption;
@@ -48,6 +50,7 @@ implementation
 
 uses
   System.IOUtils,
+  System.TypInfo,
   Vittix.Tests.TestData;
 
 { TVittixLayoutSchemaTests }
@@ -125,7 +128,7 @@ begin
     Json := SaveStateToJson(State);
     Loaded := LoadStateFromJson(Json);
     try
-      Assert.AreEqual(1, Loaded.Columns.Count);
+      Assert.AreEqual<Integer>(1, Loaded.Columns.Count);
       Assert.IsTrue(Loaded.Columns[0].Pinned, 'pinned round-trips');
       Assert.AreEqual('Order Total', Loaded.Columns[0].TitleCaption);
       Assert.AreEqual('#,##0.00', Loaded.Columns[0].DisplayFormat);
@@ -153,7 +156,7 @@ begin
   Loaded := LoadStateFromJson(V1_JSON);
   try
     Assert.AreEqual(1, Loaded.Version, 'missing version loads as v1');
-    Assert.AreEqual(1, Loaded.Columns.Count);
+    Assert.AreEqual<Integer>(1, Loaded.Columns.Count);
     Assert.IsFalse(Loaded.Columns[0].Pinned, 'v1 loads with 0 frozen columns');
     Assert.AreEqual('', Loaded.Columns[0].TitleCaption);
     Assert.AreEqual('', Loaded.Columns[0].DisplayFormat);
@@ -175,7 +178,7 @@ begin
   Loaded := LoadStateFromJson(V2_PARTIAL);
   try
     Assert.AreEqual(2, Loaded.Version);
-    Assert.AreEqual(1, Loaded.Columns.Count);
+    Assert.AreEqual<Integer>(1, Loaded.Columns.Count);
     Assert.IsFalse(Loaded.Columns[0].Pinned);
     Assert.IsTrue(Loaded.Columns[0].ExportInclude,
       'missing exportInclude defaults to True');
@@ -197,7 +200,8 @@ const
 begin
   Loaded := LoadStateFromJson(FUTURE_JSON);
   try
-    Assert.AreEqual(1, Loaded.Columns.Count, 'unknown fields are skipped');
+    Assert.AreEqual<Integer>(1, Loaded.Columns.Count,
+      'unknown fields are skipped');
     Assert.AreEqual('ID', Loaded.Columns[0].FieldName);
   finally
     Loaded.Free;
@@ -207,17 +211,11 @@ end;
 procedure TVittixLayoutSchemaTests.CorruptInputRaisesLayoutError;
 begin
   Assert.WillRaise(
-    procedure
-    begin
-      LoadStateFromJson('this is not json');
-    end,
+    TTestLocalMethod(procedure begin LoadStateFromJson('this is not json'); end),
     EVittixLayoutError);
 
   Assert.WillRaise(
-    procedure
-    begin
-      LoadStateFromJson('[1,2,3]');
-    end,
+    TTestLocalMethod(procedure begin LoadStateFromJson('[1,2,3]'); end),
     EVittixLayoutError, 'a non-object root raises');
 end;
 
@@ -243,6 +241,37 @@ begin
   finally
     Source.Free;
     Target.Free;
+  end;
+end;
+
+procedure TVittixLayoutSchemaTests.RuntimeOnlyColumnStateIsNotStored;
+var
+  Prop: PPropInfo;
+  Item: TVittixDBGridColumnInfo;
+begin
+  Item := TVittixDBGridColumnInfo.Create(nil);
+  try
+    // The DFM must not persist transient runtime state.
+    Prop := GetPropInfo(TypeInfo(TVittixDBGridColumnInfo), 'FilterText');
+    Assert.IsNotNull(Prop);
+    Assert.IsFalse(IsStoredProp(Item, Prop), 'FilterText is not stored');
+
+    Prop := GetPropInfo(TypeInfo(TVittixDBGridColumnInfo), 'HasFilter');
+    Assert.IsFalse(IsStoredProp(Item, Prop), 'HasFilter is not stored');
+
+    Prop := GetPropInfo(TypeInfo(TVittixDBGridColumnInfo), 'SortOrder');
+    Assert.IsFalse(IsStoredProp(Item, Prop), 'SortOrder is not stored');
+
+    Prop := GetPropInfo(TypeInfo(TVittixDBGridColumnInfo), 'SortIndex');
+    Assert.IsFalse(IsStoredProp(Item, Prop), 'SortIndex is not stored');
+
+    // Design-time metadata stays streamed.
+    Prop := GetPropInfo(TypeInfo(TVittixDBGridColumnInfo), 'FieldName');
+    Assert.IsTrue(IsStoredProp(Item, Prop), 'FieldName is stored');
+    Prop := GetPropInfo(TypeInfo(TVittixDBGridColumnInfo), 'DisplayFormat');
+    Assert.IsTrue(IsStoredProp(Item, Prop), 'DisplayFormat is stored');
+  finally
+    Item.Free;
   end;
 end;
 

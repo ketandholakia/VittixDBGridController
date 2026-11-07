@@ -569,7 +569,7 @@ begin
   finally
     Exporter.Free;
   end;
-  Assert.AreEqual(3, Length(SheetXml.Split(['<row '])) - 1,
+  Assert.AreEqual<NativeInt>(3, Length(SheetXml.Split(['<row '])) - 1,
     'the sheet stops at the configured row limit');
   Assert.IsTrue(SheetXml.Contains('r="3"'), 'the last allowed row is present');
   Assert.IsFalse(SheetXml.Contains('r="4"'), 'rows past the limit are omitted');

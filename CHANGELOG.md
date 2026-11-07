@@ -8,6 +8,17 @@ releases only.
 
 ### Added
 
+- **Design-time `ColumnInfo` and DPI awareness.** `ColumnInfo` is now
+  published, streams into the DFM and opens with the collection editor;
+  assigning a collection copies its entries. Runtime-only state
+  (`FilterText`, `HasFilter`, `SortOrder`, `SortIndex`) is marked
+  `stored False`, so new DFMs stay clean while old DFMs still load.
+  `Loaded`/`SyncColumnInfo` continues to add missing entries without
+  duplicating streamed ones. New `CurrentPPI`/`ScaleForPPI` helpers in
+  `Vittix.DBGrid.Styles` drive DPI-scaled header glyphs and footer height;
+  the grid overrides `ChangeScale` and handles `WM_DPICHANGED`. The CI
+  workflow now builds and tests both Win32 and Win64.
+
 - **Header sort arrows, filter indicators and context menu.** Title cells
   now draw an up/down sort arrow and, for multi-column sorts, the sort
   index. Columns with an active filter show a funnel; hovering a title

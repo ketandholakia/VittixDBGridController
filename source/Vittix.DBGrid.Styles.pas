@@ -3,10 +3,19 @@ unit Vittix.DBGrid.Styles;
 interface
 
 uses
+  Winapi.Windows,
   System.UITypes,
   Vcl.Controls,
+  Vcl.Forms,
   Vcl.Graphics,
   Vcl.Themes;
+
+/// <summary>Effective pixels-per-inch for AControl (its font) or the screen
+/// when nil. Never returns a non-positive value.</summary>
+function CurrentPPI(AControl: TWinControl = nil): Integer;
+
+/// <summary>Scales a 96-DPI pixel value to AControl's current PPI.</summary>
+function ScaleForPPI(APixels: Integer; AControl: TWinControl = nil): Integer;
 
 type
   /// <summary>
@@ -52,6 +61,31 @@ type
   end;
 
 implementation
+
+function CurrentPPI(AControl: TWinControl): Integer;
+var
+  DC: HDC;
+begin
+  Result := 0;
+  if Assigned(AControl) and AControl.HandleAllocated then
+  begin
+    DC := GetDC(AControl.Handle);
+    try
+      Result := GetDeviceCaps(DC, LOGPIXELSY);
+    finally
+      ReleaseDC(AControl.Handle, DC);
+    end;
+  end;
+  if Result <= 0 then
+    Result := Screen.PixelsPerInch;
+  if Result <= 0 then
+    Result := 96;
+end;
+
+function ScaleForPPI(APixels: Integer; AControl: TWinControl): Integer;
+begin
+  Result := MulDiv(APixels, CurrentPPI(AControl), 96);
+end;
 
 class function TVittixStylePalette.ServicesFor(
   AControl: TWinControl): TCustomStyleServices;

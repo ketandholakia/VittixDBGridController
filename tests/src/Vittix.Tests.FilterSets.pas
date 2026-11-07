@@ -446,14 +446,16 @@ begin
       GridB.Controller.FilterSetsFileName := FileB;
 
       FGrid.Controller.SaveCurrentFilterAs('OnlyOnA');
-      Assert.AreEqual(1, Length(FGrid.Controller.FilterSetNames));
-      Assert.AreEqual(0, Length(GridB.Controller.FilterSetNames),
+      Assert.AreEqual<NativeInt>(1, Length(FGrid.Controller.FilterSetNames));
+      Assert.AreEqual<NativeInt>(0,
+        Length(GridB.Controller.FilterSetNames),
         'the second grid must not see the first grid''s sets');
 
       // And per-instance settings survive: saving on B does not touch A.
       GridB.Controller.SaveCurrentFilterAs('OnlyOnB');
-      Assert.AreEqual(1, Length(FGrid.Controller.FilterSetNames));
-      Assert.AreEqual(1, Length(GridB.Controller.FilterSetNames));
+      Assert.AreEqual<NativeInt>(1, Length(FGrid.Controller.FilterSetNames));
+      Assert.AreEqual<NativeInt>(1,
+        Length(GridB.Controller.FilterSetNames));
     finally
       OwnerB.Free;
     end;
@@ -698,7 +700,7 @@ begin
     List := TVittixFilterSetList.Create;
     try
       Assert.WillRaise(
-        procedure begin List.LoadFromFile(TempFile); end,
+        TTestLocalMethod(procedure begin List.LoadFromFile(TempFile); end),
         EVittixFilterSetError);
       Assert.AreEqual(0, List.Count, 'nothing was swapped in on failure');
     finally
@@ -726,7 +728,7 @@ begin
     List := TVittixFilterSetList.Create;
     try
       Assert.WillRaise(
-        procedure begin List.LoadFromFile(TempFile); end,
+        TTestLocalMethod(procedure begin List.LoadFromFile(TempFile); end),
         EVittixFilterSetError,
         'lookup is case-insensitive, so are duplicates');
     finally
@@ -753,7 +755,7 @@ begin
     List := TVittixFilterSetList.Create;
     try
       Assert.WillRaise(
-        procedure begin List.LoadFromFile(TempFile); end,
+        TTestLocalMethod(procedure begin List.LoadFromFile(TempFile); end),
         EVittixFilterSetError);
       Assert.AreEqual(0, List.Count);
     finally
@@ -778,7 +780,7 @@ begin
     List := TVittixFilterSetList.Create;
     try
       Assert.WillRaise(
-        procedure begin List.LoadFromFile(TempFile); end,
+        TTestLocalMethod(procedure begin List.LoadFromFile(TempFile); end),
         EVittixFilterSetError,
         'a wrong-typed key raises the documented exception type');
     finally
@@ -809,7 +811,7 @@ begin
         '{"name":"Broken' + '}},', TEncoding.UTF8); // truncated JSON
 
       Assert.WillRaise(
-        procedure begin List.LoadFromFile(TempFile); end,
+        TTestLocalMethod(procedure begin List.LoadFromFile(TempFile); end),
         EVittixFilterSetError);
 
       Assert.AreEqual(1, List.Count, 'in-memory state survives the failure');

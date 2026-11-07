@@ -63,6 +63,7 @@ type
     procedure UpdateHeaderMenuState;
     procedure HeaderMenuItemClick(Sender: TObject);
     procedure SyncColumnInfo;
+    procedure SetColumnInfo(const Value: TVittixDBGridColumns);
     function GetFooterVisible: Boolean;
     procedure SetFooterVisible(const Value: Boolean);
     function GetDataSource: TDataSource;
@@ -132,7 +133,9 @@ type
     procedure DblClick; override;
     procedure KeyDown(var Key: Word; Shift: TShiftState); override;
     procedure KeyPress(var Key: Char); override;
+    procedure ChangeScale(M, D: Integer); override;
     procedure WMVScroll(var Message: TWMVScroll); message WM_VSCROLL;
+    procedure WMDpiChanged(var Message: TMessage); message WM_DPICHANGED;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -209,10 +212,14 @@ type
     /// <summary>Controller that owns the grid's engines and operational
     /// methods. The grid owns its lifetime.</summary>
     property Controller: TVittixDBGridController read FController;
-    /// <summary>Per-field sorting, filtering, aggregation, display, and
-    /// export settings. Entries are matched by FieldName.</summary>
-    property ColumnInfo: TVittixDBGridColumns read FColumnsInfo;
   published
+    /// <summary>Per-field sorting, filtering, aggregation, display, and
+    /// export settings. Entries are matched by FieldName. Streamed into the
+    /// DFM and editable with the collection editor; assigning a collection
+    /// copies its entries rather than taking ownership.</summary>
+    property ColumnInfo: TVittixDBGridColumns
+      read FColumnsInfo write SetColumnInfo;
+
     /// <summary>Shows the aggregation footer at runtime and its static
     /// preview in the form designer. Default True.</summary>
     property FooterVisible: Boolean read GetFooterVisible write SetFooterVisible default True;
@@ -394,7 +401,8 @@ implementation
 
 uses
   Vcl.Forms,
-  System.Math;
+  System.Math,
+  Vittix.DBGrid.Styles;
 
 { TVittixDBGrid }
 
@@ -582,13 +590,8 @@ begin
 end;
 
 function TVittixDBGrid.ScalePx(AValue: Integer): Integer;
-var
-  PPI: Integer;
 begin
-  PPI := Screen.PixelsPerInch;
-  if PPI <= 0 then
-    PPI := 96;
-  Result := MulDiv(AValue, PPI, 96);
+  Result := Vittix.DBGrid.Styles.ScaleForPPI(AValue, Self);
 end;
 
 function TVittixDBGrid.ResolveHeaderColumn(ACol: Integer): TColumn;
@@ -1040,6 +1043,21 @@ begin
   inherited KeyDown(Key, Shift);
 end;
 
+procedure TVittixDBGrid.ChangeScale(M, D: Integer);
+begin
+  inherited ChangeScale(M, D);
+  // Header glyphs and the design-time footer preview are drawn with
+  // DPI-scaled sizes; repaint them at the new scale.
+  Invalidate;
+end;
+
+procedure TVittixDBGrid.WMDpiChanged(var Message: TMessage);
+begin
+  Invalidate;
+  if Assigned(FController) then
+    FController.GridLayoutChanged;
+end;
+
 procedure TVittixDBGrid.WMVScroll(var Message: TWMVScroll);
 var
   Paged: IVittixGlobalPageScroll;
@@ -1378,6 +1396,15 @@ begin
   finally
     InfoIndex.Free;
   end;
+end;
+
+procedure TVittixDBGrid.SetColumnInfo(const Value: TVittixDBGridColumns);
+begin
+  if (Value = nil) or (Value = FColumnsInfo) then Exit;
+  // Copy the entries; the grid keeps ownership of its own collection so a
+  // streamed DFM instance and an application-assigned instance never share
+  // lifetime.
+  FColumnsInfo.Assign(Value);
 end;
 
 function TVittixDBGrid.ColumnInfoByColumn(Column: TColumn): TVittixDBGridColumnInfo;

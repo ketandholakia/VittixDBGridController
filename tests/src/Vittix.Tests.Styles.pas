@@ -26,6 +26,8 @@ type
     procedure ControlScopedResolutionMatchesGlobalResolution;
     [Test]
     procedure PaletteCoversFooterAndDialogSurfaces;
+    [Test]
+    procedure ScaleForPPIResolvesCurrentPPI;
   end;
 
 implementation
@@ -128,6 +130,30 @@ begin
   Assert.AreNotEqual(Integer(clNone), Integer(TVittixStylePalette.TextColor));
   Assert.AreNotEqual(Integer(clNone), Integer(TVittixStylePalette.WindowColor));
   Assert.AreNotEqual(Integer(clNone), Integer(TVittixStylePalette.ErrorColor));
+end;
+
+procedure TVittixStylesTests.ScaleForPPIResolvesCurrentPPI;
+var
+  Form: TForm;
+begin
+  Assert.IsTrue(Vittix.DBGrid.Styles.CurrentPPI(nil) > 0,
+    'screen PPI is positive');
+  Assert.AreEqual<Integer>(Vittix.DBGrid.Styles.CurrentPPI(nil),
+    Vittix.DBGrid.Styles.ScaleForPPI(96, nil),
+    '96 logical pixels map to the current PPI');
+
+  Form := TForm.CreateNew(nil);
+  try
+    Assert.IsTrue(Vittix.DBGrid.Styles.CurrentPPI(Form) > 0,
+      'control PPI is positive');
+    Assert.AreEqual<Integer>(Vittix.DBGrid.Styles.CurrentPPI(Form),
+      Vittix.DBGrid.Styles.ScaleForPPI(96, Form),
+      'control-relative scaling uses the control font PPI');
+    Assert.AreEqual<Integer>(0,
+      Vittix.DBGrid.Styles.ScaleForPPI(0, Form), 'zero stays zero');
+  finally
+    Form.Free;
+  end;
 end;
 
 end.

@@ -1,0 +1,79 @@
+name: Delphi 12
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Delphi 12 ${{ matrix.platform }}
+    runs-on: [self-hosted, Windows, delphi12]
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [Win32, Win64]
+    env:
+      VITTIX_DELPHI_ROOT: 'C:\Program Files (x86)\Embarcadero\Studio\23.0'
+      VITTIX_PLATFORM: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Verify Delphi installation
+        shell: pwsh
+        run: |
+          if (-not (Test-Path (Join-Path $env:VITTIX_DELPHI_ROOT 'bin\rsvars.bat'))) {
+            throw "Delphi 12 rsvars.bat was not found under $env:VITTIX_DELPHI_ROOT"
+          }
+
+      - name: Build packages
+        shell: cmd
+        run: |
+          call "%VITTIX_DELPHI_ROOT%\bin\rsvars.bat" >nul || exit /b 1
+          msbuild packages\VittixDBGridControllerR.dproj /p:Config=Release /p:Platform=%VITTIX_PLATFORM% /v:minimal /nologo || exit /b 1
+          msbuild packages\VittixDBGridControllerFD.dproj /p:Config=Release /p:Platform=%VITTIX_PLATFORM% /v:minimal /nologo || exit /b 1
+          msbuild packages\VittixDBGridControllerD.dproj /p:Config=Release /p:Platform=%VITTIX_PLATFORM% /v:minimal /nologo || exit /b 1
+
+      - name: Build tests
+        shell: cmd
+        run: |
+          call "%VITTIX_DELPHI_ROOT%\bin\rsvars.bat" >nul || exit /b 1
+          msbuild tests\VittixDBGridTests.dproj /p:Config=Release /p:Platform=%VITTIX_PLATFORM% /v:minimal /nologo || exit /b 1
+
+      - name: Stage SQLite vendor library (Win64)
+        if: matrix.platform == 'Win64'
+        shell: pwsh
+        run: |
+          # FireDAC's provider tests need the x64 SQLite client next to the
+          # test executable. Copy it when the runner's Delphi has it.
+          $candidates = @(
+            (Join-Path $env:VITTIX_DELPHI_ROOT 'bin64\sqlite3.dll'),
+            (Join-Path $env:VITTIX_DELPHI_ROOT 'bin64\libdb_sql51.dll')
+          )
+          foreach ($candidate in $candidates) {
+            if (Test-Path $candidate) {
+              Copy-Item $candidate tests\ -Force
+              break
+            }
+          }
+
+      - name: Run tests
+        shell: pwsh
+        run: |
+          & .\tests\VittixDBGridTests.exe --hidebanner --xmlfile:tests\dunitx-results.xml --consolemode:Quiet
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: delphi12-${{ matrix.platform }}-tests
+          path: tests/dunitx-results.xml
+          if-no-files-found: ignore

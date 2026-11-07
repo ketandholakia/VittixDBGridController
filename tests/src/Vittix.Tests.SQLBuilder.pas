@@ -167,7 +167,7 @@ begin
 
   // One LIKE with UPPER on both sides and an ESCAPE clause
   Assert.IsTrue(Where.Contains('UPPER("Name") LIKE UPPER(:vx'), Where);
-  Assert.AreEqual(1, Length(Params), 'one needle parameter');
+  Assert.AreEqual<NativeInt>(1, Length(Params), 'one needle parameter');
   Assert.AreEqual(ftString, Params[0].DataType);
   Assert.AreEqual('%alpha%', string(Params[0].Value));
   Assert.IsTrue(Where.Contains('ESCAPE'), Where);
@@ -189,7 +189,7 @@ begin
   // StartsWith anchors to the front, EndsWith to the back ($ prefix)
   Assert.AreEqual('Al%', string(Params[0].Value));
   Assert.AreEqual('%pha', string(Params[1].Value));
-  Assert.AreEqual(2, Length(Params));
+  Assert.AreEqual<NativeInt>(2, Length(Params));
 end;
 
 procedure TVittixSQLBuilderTests.EqualsTextIsCaseFolded;
@@ -251,7 +251,7 @@ begin
 
   Assert.IsTrue(Build(sdANSI, Groups, Where, Params, Reason));
   Assert.AreEqual('"Name" IS NULL AND "Amount" IS NOT NULL', Where, Where);
-  Assert.AreEqual(0, Length(Params), 'word operators carry no parameters');
+  Assert.AreEqual<NativeInt>(0, Length(Params), 'word operators carry no parameters');
 end;
 
 procedure TVittixSQLBuilderTests.EmptyOperatorTextOnly;

@@ -686,7 +686,7 @@ begin
   Exporter := TVittixDBGridExporter.Create(FGrid);
   try
     Output := Exporter.ExportToString(vefCSV);
-    Assert.AreEqual(VisibleRowCount + 1,
+    Assert.AreEqual<NativeInt>(VisibleRowCount + 1,
       Length(Trim(Output).Split([sLineBreak])),
       'header + the server-filtered rows');
   finally

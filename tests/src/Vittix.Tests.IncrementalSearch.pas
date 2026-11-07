@@ -287,7 +287,7 @@ begin
         'non-ASCII buffer on an ANSI field must bypass Locate');
       Assert.AreEqual('beta', DataSet.FieldByName('Name').AsString,
         'the scan runs instead and finds nothing, keeping the position');
-      Assert.AreEqual(1, Length(Grid.Controller.IncrementalSearchBuffer),
+      Assert.AreEqual<NativeInt>(1, Length(Grid.Controller.IncrementalSearchBuffer),
         'the buffer survives the failed search');
     finally
       FOwnerForm.Free;
@@ -812,13 +812,13 @@ begin
   Low := Char($DE00);
 
   SendKey(High);
-  Assert.AreEqual(1, Length(FGrid.Controller.IncrementalSearchBuffer),
+  Assert.AreEqual<NativeInt>(1, Length(FGrid.Controller.IncrementalSearchBuffer),
     'the high surrogate enters the buffer');
   Assert.AreEqual(0, FEventCount,
     'a lone high surrogate must not trigger a (guaranteed-miss) search');
 
   SendKey(Low);
-  Assert.AreEqual(2, Length(FGrid.Controller.IncrementalSearchBuffer),
+  Assert.AreEqual<NativeInt>(2, Length(FGrid.Controller.IncrementalSearchBuffer),
     'the low surrogate completes the pair in the buffer');
   Assert.AreEqual(1, FEventCount,
     'the completed pair triggers exactly one search');
@@ -834,7 +834,7 @@ begin
   SendKey(High);
   SendKey(Low);
   SendKey(#8);
-  Assert.AreEqual(0, Length(FGrid.Controller.IncrementalSearchBuffer),
+  Assert.AreEqual<NativeInt>(0, Length(FGrid.Controller.IncrementalSearchBuffer),
     'backspace removes both halves of the pair, never a lone surrogate');
 
   SendKey('a');
@@ -857,10 +857,10 @@ begin
   // backspace, matching the Windows EDIT control's deletion granularity.
   SendKey(Chr($0928));
   SendKey(Chr($093E));
-  Assert.AreEqual(2, Length(FGrid.Controller.IncrementalSearchBuffer));
+  Assert.AreEqual<NativeInt>(2, Length(FGrid.Controller.IncrementalSearchBuffer));
 
   SendKey(#8);
-  Assert.AreEqual(1, Length(FGrid.Controller.IncrementalSearchBuffer),
+  Assert.AreEqual<NativeInt>(1, Length(FGrid.Controller.IncrementalSearchBuffer),
     'backspace removes the combining mark only');
   Assert.AreEqual(Chr($0928), FGrid.Controller.IncrementalSearchBuffer,
     'the base character remains');

@@ -10,7 +10,7 @@ grid-owned `Controller`.
 
 | Member | Purpose |
 | --- | --- |
-| `ColumnInfo` | Per-field sort, filter, aggregation, display, editor, and export metadata; match entries by `FieldName`. |
+| `ColumnInfo` | Per-field sort, filter, aggregation, display, editor, and export metadata; match entries by `FieldName`. Published and streamed into the DFM (collection editor); `FilterText`, `HasFilter`, `SortOrder` and `SortIndex` are runtime-only and not stored. Assigning a collection copies its entries. |
 | `FooterVisible`, `AlternatingRowColors`, `AlternateRowColor` | Footer and row appearance. |
 | `FrozenColumns`, `FreezeUpToColumn`, `UnfreezeAll`, `RefreshFrozenColumns` | Keep a leading run of visible columns fixed. |
 | `ShowSortArrows`, `ShowFilterIndicators`, `HeaderMenu` | Header decoration and right-click menu (all default True). `AutoFitColumn`/`AutoFitAllColumns` size columns to content. |

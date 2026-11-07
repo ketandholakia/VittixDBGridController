@@ -217,7 +217,8 @@ begin
       try
         SelectObject(DC, FGrid.Font.Handle);
         GetTextMetrics(DC, TM);
-        FCachedHeight := TM.tmHeight + TM.tmExternalLeading + 8;
+        FCachedHeight := TM.tmHeight + TM.tmExternalLeading +
+          Vittix.DBGrid.Styles.ScaleForPPI(8, FGrid);
         FCachedFontHandle := FGrid.Font.Handle;
       finally
         ReleaseDC(0, DC);

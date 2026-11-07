@@ -157,17 +157,19 @@ type
     property FieldName: string
       read FFieldName write FFieldName;
 
+    // Runtime-only state: not streamed into the DFM (old DFMs that already
+    // contain these properties still load them).
     property SortOrder: TVittixSortOrder
-      read FSortOrder write FSortOrder default vsoNone;
+      read FSortOrder write FSortOrder stored False default vsoNone;
 
     property SortIndex: Integer
-      read FSortIndex write FSortIndex default -1;
+      read FSortIndex write FSortIndex stored False default -1;
 
     property FilterText: string
-      read FFilterText write FFilterText;
+      read FFilterText write FFilterText stored False;
 
     property HasFilter: Boolean
-      read FHasFilter write FHasFilter default False;
+      read FHasFilter write FHasFilter stored False default False;
 
     property AggregationType: TVittixAggregationType
       read FAggregationType write FAggregationType default vatNone;

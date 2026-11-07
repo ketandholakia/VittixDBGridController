@@ -34,6 +34,8 @@ type
     procedure AutoFitAllColumnsResizesVisibleColumns;
     [Test]
     procedure TogglingHeaderOptionsDoesNotRaise;
+    [Test]
+    procedure ColumnInfoSetterCopiesEntries;
   end;
 
 implementation
@@ -106,6 +108,34 @@ begin
       FGrid.HeaderMenu := True;
       FGrid.Invalidate;
     end);
+end;
+
+procedure TVittixHeaderTests.ColumnInfoSetterCopiesEntries;
+var
+  Source: TVittixDBGridColumns;
+  Item: TVittixDBGridColumnInfo;
+begin
+  Source := TVittixDBGridColumns.Create(nil);
+  try
+    Item := Source.Add;
+    Item.FieldName := 'Name';
+    Item.DisplayFormat := '0.0';
+    Item.Pinned := True;
+    Item := Source.Add;
+    Item.FieldName := 'Amount';
+
+    FGrid.ColumnInfo := Source;
+    Assert.AreEqual<Integer>(2, FGrid.ColumnInfo.Count,
+      'entries were copied into the grid-owned collection');
+    Assert.AreEqual('Name', FGrid.ColumnInfo[0].FieldName);
+    Assert.AreEqual('0.0', FGrid.ColumnInfo[0].DisplayFormat);
+    Assert.IsTrue(FGrid.ColumnInfo[0].Pinned);
+  finally
+    Source.Free;
+  end;
+
+  // The grid still owns a valid collection after the source is freed.
+  Assert.AreEqual<Integer>(2, FGrid.ColumnInfo.Count);
 end;
 
 end.

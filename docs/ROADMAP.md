@@ -249,6 +249,19 @@ The design package links a 24-bit `TVITTIXDBGRID` bitmap resource from
 The grid paints a static footer band while in design mode and invalidates it
 when `FooterVisible` changes. Visual inspection inside the IDE remains open.
 
+### 5.6 [F] Published `ColumnInfo` collection — ✅ IMPLEMENTED 2026-11-07
+`TVittixDBGrid.ColumnInfo` is published and streams into the DFM with the
+collection editor; the setter copies entries. `FilterText`, `HasFilter`,
+`SortOrder` and `SortIndex` are `stored False`; old DFMs still load and
+`SyncColumnInfo` adds missing streamed entries without duplicating them.
+
+### 5.7 [D] DPI awareness — ✅ IMPLEMENTED 2026-11-07
+`CurrentPPI`/`ScaleForPPI` in `Vittix.DBGrid.Styles` scale the header
+glyphs and footer height; the grid overrides `ChangeScale` and handles
+`WM_DPICHANGED`. The standard VCL forms (filter popup, chooser, export
+dialog) keep their normal VCL auto-scaling. Per-monitor visual checks
+remain manual in the IDE.
+
 ---
 
 ## Milestone 6 — Docs, hygiene & distribution
@@ -549,9 +562,10 @@ phased plan. Each phase is independently shippable.
 
 ## Phase E — Ecosystem & distribution
 
-- **Delphi 12 Athens/Win32 CI — configured 2026-11-04.** A GitHub Actions
-  workflow builds the runtime, FireDAC, and design packages and runs DUnitX on
-  a labeled Windows self-hosted runner. Package builds and the test command
+- **Delphi 12 Athens/Win32 CI — configured 2026-11-04; Win64 added
+  2026-11-07.** The workflow is now `delphi12.yml` and builds/tests a
+  Win32 + Win64 matrix on a labeled Windows self-hosted runner (the Win64
+  job stages the x64 SQLite client for the provider tests when available). Package builds and the test command
   were verified locally; an actual hosted run awaits runner registration and
   a push. Verify other compiler and platform combinations before expanding
   the supported target.
