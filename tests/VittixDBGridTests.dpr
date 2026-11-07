@@ -32,6 +32,7 @@ uses
   Vittix.Tests.LayoutSchema in 'src\Vittix.Tests.LayoutSchema.pas',
   Vittix.Tests.FreezeColumns in 'src\Vittix.Tests.FreezeColumns.pas',
   Vittix.Tests.Header in 'src\Vittix.Tests.Header.pas',
+  Vittix.Tests.FooterGeometry in 'src\Vittix.Tests.FooterGeometry.pas',
   Vittix.Tests.Layout in 'src\Vittix.Tests.Layout.pas',
   Vittix.Tests.Controller.Regression in 'src\Vittix.Tests.Controller.Regression.pas';
 

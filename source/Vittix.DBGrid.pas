@@ -52,6 +52,9 @@ type
     // underlying TCustomGrid.FixedCols is derived, not stored.
     FFrozenColumns: Integer;
     FOnFrozenColumnsChanged: TNotifyEvent;
+    // Bottom strip reserved for the sibling footer panel inside this grid's
+    // client area (0 when the footer is hidden or absent).
+    FFooterReserve: Integer;
     // Data routing mode: vcmClient (default) keeps the classic behavior.
     FFilterMode: TVittixFilterMode;
     procedure DrawHeaderOverlay(ACol: Longint; const ARect: TRect);
@@ -136,6 +139,7 @@ type
     procedure ChangeScale(M, D: Integer); override;
     procedure WMVScroll(var Message: TWMVScroll); message WM_VSCROLL;
     procedure WMDpiChanged(var Message: TMessage); message WM_DPICHANGED;
+    procedure WMNCCalcSize(var Message: TWMNCCalcSize); message WM_NCCALCSIZE;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -197,6 +201,13 @@ type
     /// controller after a layout restore or a column-chooser visibility
     /// change; applications hiding columns directly can call it too.</summary>
     procedure RefreshFrozenColumns;
+
+    /// <summary>Reserves AHeight pixels at the bottom of the grid's client
+    /// area for the sibling footer panel. The reservation is applied in
+    /// WM_NCCALCSIZE, so the grid's outer bounds, Align and Anchors are
+    /// untouched; 0 restores the full client area. Called by the footer
+    /// panel; not a published property.</summary>
+    procedure SetFooterReserve(AHeight: Integer);
 
     /// <summary>Resizes AColumn to fit its title and the widest visible
     /// display text seen in the first rows of the current view.</summary>
@@ -425,6 +436,7 @@ begin
   FHoverColumn := -1;
   FHeaderMenuColumn := nil;
   FFrozenColumns := 0;
+  FFooterReserve := 0;
   FFilterMode := vcmClient;
 
   // Create controller with Self as owner so it is freed automatically.
@@ -1056,6 +1068,34 @@ begin
   Invalidate;
   if Assigned(FController) then
     FController.GridLayoutChanged;
+end;
+
+procedure TVittixDBGrid.SetFooterReserve(AHeight: Integer);
+begin
+  if AHeight < 0 then
+    AHeight := 0;
+  if FFooterReserve = AHeight then Exit;
+  FFooterReserve := AHeight;
+  if HandleAllocated then
+  begin
+    // Recalculate the non-client area synchronously so ClientHeight (and the
+    // footer's placement) reflect the new reservation immediately.
+    SetWindowPos(Handle, 0, 0, 0, 0, 0,
+      SWP_NOMOVE or SWP_NOSIZE or SWP_NOZORDER or SWP_NOACTIVATE or
+      SWP_FRAMECHANGED);
+    Invalidate;
+  end;
+end;
+
+procedure TVittixDBGrid.WMNCCalcSize(var Message: TWMNCCalcSize);
+begin
+  // VCL computes the border/bevel client rect; DefWindowProc (called by the
+  // inherited handler) accounts for the native scrollbars. The footer's
+  // strip is taken from the bottom of that client rect, which places it
+  // between the data area and the horizontal scrollbar.
+  inherited;
+  if (FFooterReserve > 0) and (Message.CalcSize_Params <> nil) then
+    Dec(Message.CalcSize_Params^.rgrc[0].Bottom, FFooterReserve);
 end;
 
 procedure TVittixDBGrid.WMVScroll(var Message: TWMVScroll);

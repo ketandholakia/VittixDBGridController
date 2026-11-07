@@ -78,6 +78,17 @@ releases only.
 
 ### Fixed
 
+- **Footer no longer covers the last data row or the horizontal
+  scrollbar.** The sibling footer panel used to be positioned over the
+  bottom of the grid (`Grid.Top + Grid.Height - FooterHeight`), hiding the
+  bottom of the last row and the native scrollbar. The grid now reserves
+  the footer height at the bottom of its client rect in `WM_NCCALCSIZE`
+  (`SetFooterReserve`); the panel is placed in the freed strip below the
+  scrollbar. The grid's outer bounds, `Align` and anchors are untouched, no
+  published/DFM state changed, and `FooterVisible = False` (or panel
+  destruction) restores the full client area. Footer column alignment,
+  hit-testing, frozen columns, styles, BiDi and DPI scaling are unchanged.
+
 - **FireDAC provider keyword scan.** `CheckWrappable` now normalizes
   CR/LF/TAB whitespace and strips string literals, `--` line comments and
   `/* */` block comments before checking for `UNION`, `ORDER BY`, `EXEC`,

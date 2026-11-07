@@ -165,7 +165,17 @@ begin
 end;
 
 destructor TVittixDBGridFooterPanel.Destroy;
+var
+  Grid: TVittixDBGrid;
 begin
+  // Give the reserved strip back to the grid. Guard against a grid that is
+  // already being torn down (the controller may outlive its visual state).
+  if Assigned(FGrid) and not (csDestroying in FGrid.ComponentState) then
+  begin
+    Grid := VittixGrid(FGrid);
+    if Assigned(Grid) then
+      Grid.SetFooterReserve(0);
+  end;
   // The popup is rebuilt on every open; free the previous one first
   FreeAndNil(FPopup);
   inherited;
@@ -200,6 +210,9 @@ var
   NewWidth: Integer;
   NewHeight: Integer;
   Changed: Boolean;
+  Grid: TVittixDBGrid;
+  P: TPoint;
+  SBI: TScrollBarInfo;
 begin
   if not Assigned(FGrid) then Exit;
   if FSyncingLayout then Exit;
@@ -226,9 +239,37 @@ begin
     end;
     NewHeight := FCachedHeight;
 
+    // Reserve the footer's strip inside the grid's client area. The grid's
+    // WM_NCCALCSIZE takes it from the bottom, between the data rows and the
+    // native horizontal scrollbar, so the outer bounds/Align/Anchors never
+    // change. ClientHeight is updated synchronously by SetFooterReserve.
+    Grid := VittixGrid(FGrid);
+    if Assigned(Grid) then
+      Grid.SetFooterReserve(NewHeight);
+
     NewLeft := FGrid.Left;
-    NewTop := FGrid.Top + FGrid.Height - NewHeight;
     NewWidth := FGrid.Width;
+    if Assigned(Grid) and Assigned(Parent) and Grid.HandleAllocated then
+    begin
+      // WM_NCCALCSIZE moved the native horizontal scrollbar up with the
+      // shrunken client bottom; the freed strip is BELOW the scrollbar.
+      // Start the footer at the scrollbar's bottom so it neither covers the
+      // scrollbar nor the data rows. With no horizontal scrollbar the strip
+      // starts at the client bottom.
+      ZeroMemory(@SBI, SizeOf(SBI));
+      SBI.cbSize := SizeOf(SBI);
+      if GetScrollBarInfo(FGrid.Handle, OBJID_HSCROLL, SBI) and
+         ((SBI.rgstate[0] and STATE_SYSTEM_INVISIBLE) = 0) then
+        P := Point(0, SBI.rcScrollBar.Bottom)
+      else
+        P := Grid.ClientToScreen(Point(0, Grid.ClientHeight));
+      P := Parent.ScreenToClient(P);
+      NewTop := P.Y;
+    end
+    else
+      // Unparented/not-yet-shown fallback keeps the historical overlay so
+      // the first sync cannot leave the footer at (0,0).
+      NewTop := FGrid.Top + FGrid.Height - NewHeight;
 
     Changed := (Left <> NewLeft) or (Top <> NewTop) or
                (Width <> NewWidth) or (Height <> NewHeight);
