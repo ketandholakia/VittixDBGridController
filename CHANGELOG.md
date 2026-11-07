@@ -6,6 +6,20 @@ releases only.
 
 ## [2.1.0] - 2026-11-07
 
+### Added
+
+- **Header sort arrows, filter indicators and context menu.** Title cells
+  now draw an up/down sort arrow and, for multi-column sorts, the sort
+  index. Columns with an active filter show a funnel; hovering a title
+  shows a filter button that opens the existing filter popup. Right-clicking
+  a title opens a header menu with Sort Ascending/Descending, Clear Sort,
+  Filter..., Clear Filter, Freeze up to here/Unfreeze, Choose Columns...,
+  Auto-fit Column and Auto-fit All. Double-clicking a title border auto-fits
+  the column. New published `ShowSortArrows`, `ShowFilterIndicators` and
+  `HeaderMenu` (all default True); with `HeaderMenu = False` the legacy
+  right-click filter popup remains. Shift+click adds a multi-sort column
+  (Ctrl stays as an alias). Glyphs are DPI-scaled.
+
 ### Changed
 
 - **Filter engine compiles per-column conditions.** The classic per-column

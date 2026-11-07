@@ -72,10 +72,12 @@ begin
   RegisterPropertiesInCategory(sLayoutCategoryName, TVittixDBGrid,
     ['FrozenColumns']);
   RegisterPropertiesInCategory(sAppearanceCategoryName, TVittixDBGrid,
-    ['FooterVisible', 'AlternatingRowColors', 'AlternateRowColor']);
+    ['FooterVisible', 'AlternatingRowColors', 'AlternateRowColor',
+     'ShowSortArrows', 'ShowFilterIndicators']);
   RegisterPropertiesInCategory(sBehaviorCategoryName, TVittixDBGrid,
     ['IncrementalSearch', 'IncrementalSearchMode',
-     'IncrementalSearchTimeout', 'CopyIncludeHeaders', 'FilterMode']);
+     'IncrementalSearchTimeout', 'CopyIncludeHeaders', 'FilterMode',
+     'HeaderMenu']);
   RegisterPropertiesInCategory('Persistence', TVittixDBGrid,
     ['LayoutStorageFileName', 'ChooserStateFileName',
      'FilterHistoryFileName', 'FilterSetsFileName', 'PersistenceRootPath']);

@@ -12,6 +12,7 @@ uses
   Vcl.DBGrids,
   Vcl.Graphics, // Needed for TColor
   Vcl.Controls,
+  Vcl.Menus,
   Data.DB,
   Vittix.DBGrid.ColumnInfo,
   Vittix.DBGrid.Paging.GlobalScroll,
@@ -40,12 +41,27 @@ type
     FIncrementalSearchMode: TVittixIncrementalSearchMode;
     FIncrementalSearchTimeout: Integer;
     FCopyIncludeHeaders: Boolean;
+    // Header decoration (sort arrows, filter funnels/buttons, context menu)
+    FShowSortArrows: Boolean;
+    FShowFilterIndicators: Boolean;
+    FHeaderMenu: Boolean;
+    FHoverColumn: Integer;
+    FHeaderMenuColumn: TColumn;
+    FHeaderMenuPopup: TPopupMenu;
     // Frozen (fixed left) column count over the visible columns; the
     // underlying TCustomGrid.FixedCols is derived, not stored.
     FFrozenColumns: Integer;
     FOnFrozenColumnsChanged: TNotifyEvent;
     // Data routing mode: vcmClient (default) keeps the classic behavior.
     FFilterMode: TVittixFilterMode;
+    procedure DrawHeaderOverlay(ACol: Longint; const ARect: TRect);
+    function ResolveHeaderColumn(ACol: Integer): TColumn;
+    function HeaderButtonRect(const ACellRect: TRect): TRect;
+    function ScalePx(AValue: Integer): Integer;
+    procedure EnsureHeaderMenu;
+    procedure ShowHeaderMenu(X, Y: Integer; Column: TColumn);
+    procedure UpdateHeaderMenuState;
+    procedure HeaderMenuItemClick(Sender: TObject);
     procedure SyncColumnInfo;
     function GetFooterVisible: Boolean;
     procedure SetFooterVisible(const Value: Boolean);
@@ -108,8 +124,11 @@ type
     procedure TitleClick(Column: TColumn); override;
     procedure DrawColumnCell(const Rect: TRect; DataCol: Integer;
       Column: TColumn; State: TGridDrawState); override;
+    procedure DrawCell(ACol, ARow: Longint; ARect: TRect;
+      AState: TGridDrawState); override;
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState;
       X, Y: Integer); override;
+    procedure MouseMove(Shift: TShiftState; X, Y: Integer); override;
     procedure DblClick; override;
     procedure KeyDown(var Key: Word; Shift: TShiftState); override;
     procedure KeyPress(var Key: Char); override;
@@ -176,6 +195,17 @@ type
     /// change; applications hiding columns directly can call it too.</summary>
     procedure RefreshFrozenColumns;
 
+    /// <summary>Resizes AColumn to fit its title and the widest visible
+    /// display text seen in the first rows of the current view.</summary>
+    procedure AutoFitColumn(Column: TColumn);
+
+    /// <summary>Auto-fits every visible column.</summary>
+    procedure AutoFitAllColumns;
+
+    /// <summary>Opens the existing filter popup for AColumn and applies its
+    /// result through the controller.</summary>
+    procedure ShowColumnFilterPopup(Column: TColumn);
+
     /// <summary>Controller that owns the grid's engines and operational
     /// methods. The grid owns its lifetime.</summary>
     property Controller: TVittixDBGridController read FController;
@@ -231,6 +261,24 @@ type
     /// ColumnInfo so the layout schema persists them.</summary>
     property FrozenColumns: Integer
       read FFrozenColumns write SetFrozenColumns default 0;
+
+    /// <summary>Draws sort-direction arrows (and the sort index for
+    /// multi-column sorts) in the title row. Default True.</summary>
+    property ShowSortArrows: Boolean
+      read FShowSortArrows write FShowSortArrows default True;
+
+    /// <summary>Draws a funnel glyph on title cells whose column has an
+    /// active filter, plus a filter button while the header cell is hovered.
+    /// Default True.</summary>
+    property ShowFilterIndicators: Boolean
+      read FShowFilterIndicators write FShowFilterIndicators default True;
+
+    /// <summary>Right-clicking the title row opens the header context menu
+    /// (sort, filter, freeze, chooser, auto-fit). When False the legacy
+    /// right-click behavior (filter popup / Ctrl+right-click chooser) is
+    /// used. Default True.</summary>
+    property HeaderMenu: Boolean
+      read FHeaderMenu write FHeaderMenu default True;
 
     // Notification events (storage owned by the controller; see private
     // getters/setters above). Sender in the handlers is the controller.
@@ -344,6 +392,10 @@ type
 
 implementation
 
+uses
+  Vcl.Forms,
+  System.Math;
+
 { TVittixDBGrid }
 
 constructor TVittixDBGrid.Create(AOwner: TComponent);
@@ -359,6 +411,11 @@ begin
   FIncrementalSearchMode := ismAuto;
   FIncrementalSearchTimeout := 1000;
   FCopyIncludeHeaders := False;
+  FShowSortArrows := True;
+  FShowFilterIndicators := True;
+  FHeaderMenu := True;
+  FHoverColumn := -1;
+  FHeaderMenuColumn := nil;
   FFrozenColumns := 0;
   FFilterMode := vcmClient;
 
@@ -513,9 +570,360 @@ begin
     DefaultDrawColumnCell(Rect, DataCol, Column, State);
 end;
 
+procedure TVittixDBGrid.DrawCell(ACol, ARow: Longint; ARect: TRect;
+  AState: TGridDrawState);
+begin
+  inherited DrawCell(ACol, ARow, ARect, AState);
+  // Row 0 is the title row while dgTitles is set. The overlay is painted
+  // over the VCL's title cell so captions, styles and BiDi stay intact.
+  if (ARow = 0) and (dgTitles in Options) and
+     (ShowSortArrows or ShowFilterIndicators) then
+    DrawHeaderOverlay(ACol, ARect);
+end;
+
+function TVittixDBGrid.ScalePx(AValue: Integer): Integer;
+var
+  PPI: Integer;
+begin
+  PPI := Screen.PixelsPerInch;
+  if PPI <= 0 then
+    PPI := 96;
+  Result := MulDiv(AValue, PPI, 96);
+end;
+
+function TVittixDBGrid.ResolveHeaderColumn(ACol: Integer): TColumn;
+var
+  DataCol, Ind: Integer;
+begin
+  Result := nil;
+  Ind := GetIndicatorOffset;
+  if ACol < Ind then
+    Exit;
+  if ACol < FixedCols then
+    DataCol := ACol - Ind
+  else
+    DataCol := GetLeftCol + (ACol - FixedCols);
+  if (DataCol >= 0) and (DataCol < Columns.Count) then
+    Result := Columns[DataCol];
+end;
+
+function TVittixDBGrid.HeaderButtonRect(const ACellRect: TRect): TRect;
+var
+  W: Integer;
+begin
+  W := ScalePx(18);
+  Result := Rect(ACellRect.Right - W, ACellRect.Top + ScalePx(2),
+    ACellRect.Right - ScalePx(2), ACellRect.Bottom - ScalePx(2));
+  if Result.Right <= Result.Left then
+    Result := Rect(ACellRect.Right, ACellRect.Top, ACellRect.Right, ACellRect.Bottom);
+end;
+
+procedure TVittixDBGrid.DrawHeaderOverlay(ACol: Longint;
+  const ARect: TRect);
+var
+  Column: TColumn;
+  Info: TVittixDBGridColumnInfo;
+  Tri: array[0..2] of TPoint;
+  Funnel: array[0..3] of TPoint;
+  Btn: TRect;
+  GlyphSize, X, ArrowX, Count, I, SortIndex: Integer;
+  Up, Hovered, HasFilter, MultiSort: Boolean;
+begin
+  Column := ResolveHeaderColumn(ACol);
+  if not Assigned(Column) then Exit;
+  Info := ColumnInfoByColumn(Column);
+  if not Assigned(Info) then Exit;
+
+  Canvas.Font.Assign(TitleFont);
+  Canvas.Brush.Style := bsSolid;
+  Canvas.Brush.Color := Canvas.Font.Color;
+  Canvas.Pen.Color := Canvas.Font.Color;
+
+  GlyphSize := ScalePx(7);
+  Btn := HeaderButtonRect(ARect);
+  Hovered := FHoverColumn = Column.Index;
+  HasFilter := Info.HasFilter and (Trim(Info.FilterText) <> '');
+
+  // Count sorted columns to decide whether the SortIndex is meaningful.
+  Count := 0;
+  for I := 0 to FColumnsInfo.Count - 1 do
+    if FColumnsInfo[I].SortOrder <> vsoNone then
+      Inc(Count);
+  MultiSort := Count > 1;
+
+  // Filter area: the button frame appears on hover; the funnel marks an
+  // active filter even when the cell is not hovered.
+  if ShowFilterIndicators then
+  begin
+    if Hovered then
+      Canvas.FrameRect(Btn);
+    if HasFilter or Hovered then
+    begin
+      X := (Btn.Left + Btn.Right - GlyphSize) div 2;
+      Funnel[0] := Point(Btn.Left + ScalePx(3), Btn.Top + ScalePx(3));
+      Funnel[1] := Point(Btn.Right - ScalePx(3), Btn.Top + ScalePx(3));
+      Funnel[2] := Point((Btn.Left + Btn.Right) div 2 + ScalePx(1),
+        (Btn.Top + Btn.Bottom) div 2);
+      Funnel[3] := Point((Btn.Left + Btn.Right) div 2 - ScalePx(1),
+        (Btn.Top + Btn.Bottom) div 2);
+      Canvas.Polygon(Funnel);
+    end;
+  end;
+
+  if not ShowSortArrows then Exit;
+  if Info.SortOrder = vsoNone then Exit;
+
+  // Sort arrow to the left of the filter button area.
+  ArrowX := Btn.Left - GlyphSize - ScalePx(4);
+  if ArrowX < ARect.Left + ScalePx(2) then
+    ArrowX := ARect.Left + ScalePx(2);
+  Up := Info.SortOrder = vsoAsc;
+  X := (ARect.Top + ARect.Bottom - GlyphSize) div 2;
+  if Up then
+  begin
+    Tri[0] := Point(ArrowX + GlyphSize div 2, X);
+    Tri[1] := Point(ArrowX, X + GlyphSize);
+    Tri[2] := Point(ArrowX + GlyphSize, X + GlyphSize);
+  end
+  else
+  begin
+    Tri[0] := Point(ArrowX, X);
+    Tri[1] := Point(ArrowX + GlyphSize, X);
+    Tri[2] := Point(ArrowX + GlyphSize div 2, X + GlyphSize);
+  end;
+  Canvas.Polygon(Tri);
+
+  if MultiSort and (Info.SortIndex >= 0) then
+  begin
+    SortIndex := Info.SortIndex + 1;
+    Canvas.TextOut(ArrowX - Canvas.TextWidth(IntToStr(SortIndex)) - ScalePx(1),
+      ARect.Top, IntToStr(SortIndex));
+  end;
+end;
+
+procedure TVittixDBGrid.EnsureHeaderMenu;
+const
+  Captions: array[0..12] of string = (
+    'Sort Ascending', 'Sort Descending', 'Clear Sort', '-',
+    'Filter...', 'Clear Filter', '-',
+    'Freeze up to here', 'Unfreeze', '-',
+    'Choose Columns...', 'Auto-fit Column', 'Auto-fit All');
+  Tags: array[0..12] of Integer = (1, 2, 3, 0, 4, 5, 0, 6, 7, 0, 8, 9, 10);
+var
+  I: Integer;
+  Item: TMenuItem;
+begin
+  if Assigned(FHeaderMenuPopup) then Exit;
+  FHeaderMenuPopup := TPopupMenu.Create(Self);
+  for I := Low(Captions) to High(Captions) do
+  begin
+    Item := TMenuItem.Create(FHeaderMenuPopup);
+    Item.Caption := Captions[I];
+    Item.Tag := Tags[I];
+    if Item.Tag <> 0 then
+      Item.OnClick := HeaderMenuItemClick;
+    FHeaderMenuPopup.Items.Add(Item);
+  end;
+end;
+
+procedure TVittixDBGrid.UpdateHeaderMenuState;
+var
+  Info: TVittixDBGridColumnInfo;
+  I: Integer;
+begin
+  Info := nil;
+  if Assigned(FHeaderMenuColumn) then
+    Info := ColumnInfoByColumn(FHeaderMenuColumn);
+  for I := 0 to FHeaderMenuPopup.Items.Count - 1 do
+    case FHeaderMenuPopup.Items[I].Tag of
+      5: FHeaderMenuPopup.Items[I].Enabled :=
+           Assigned(Info) and Info.HasFilter;
+      6: FHeaderMenuPopup.Items[I].Enabled := Assigned(FHeaderMenuColumn);
+      7: FHeaderMenuPopup.Items[I].Enabled := FrozenColumns > 0;
+    end;
+end;
+
+procedure TVittixDBGrid.HeaderMenuItemClick(Sender: TObject);
+var
+  Info, Other: TVittixDBGridColumnInfo;
+  I: Integer;
+begin
+  case (Sender as TMenuItem).Tag of
+    1, 2:
+      begin
+        for I := 0 to FColumnsInfo.Count - 1 do
+        begin
+          Other := FColumnsInfo[I];
+          Other.SortOrder := vsoNone;
+          Other.SortIndex := -1;
+        end;
+        Info := nil;
+        if Assigned(FHeaderMenuColumn) then
+          Info := ColumnInfoByColumn(FHeaderMenuColumn);
+        if Assigned(Info) then
+        begin
+          if (Sender as TMenuItem).Tag = 1 then
+            Info.SortOrder := vsoAsc
+          else
+            Info.SortOrder := vsoDesc;
+          Info.SortIndex := 0;
+          if Assigned(FController) then
+            FController.ApplyState;
+        end;
+      end;
+    3:
+      begin
+        for I := 0 to FColumnsInfo.Count - 1 do
+        begin
+          Other := FColumnsInfo[I];
+          Other.SortOrder := vsoNone;
+          Other.SortIndex := -1;
+        end;
+        if Assigned(FController) then
+          FController.ApplyState;
+      end;
+    4: ShowColumnFilterPopup(FHeaderMenuColumn);
+    5:
+      begin
+        if Assigned(FHeaderMenuColumn) then
+        begin
+          Info := ColumnInfoByColumn(FHeaderMenuColumn);
+          if Assigned(Info) then
+          begin
+            Info.FilterText := '';
+            Info.HasFilter := False;
+          end;
+        end;
+        if Assigned(FController) then
+        begin
+          FController.RefreshFiltering;
+          FController.Refresh;
+        end;
+      end;
+    6: FreezeUpToColumn(FHeaderMenuColumn);
+    7: UnfreezeAll;
+    8: if Assigned(FController) then FController.ShowColumnChooser;
+    9: AutoFitColumn(FHeaderMenuColumn);
+    10: AutoFitAllColumns;
+  end;
+end;
+
+procedure TVittixDBGrid.ShowHeaderMenu(X, Y: Integer; Column: TColumn);
+begin
+  if not Assigned(Column) then Exit;
+  EnsureHeaderMenu;
+  FHeaderMenuColumn := Column;
+  UpdateHeaderMenuState;
+  FHeaderMenuPopup.Popup(X, Y);
+end;
+
+procedure TVittixDBGrid.ShowColumnFilterPopup(Column: TColumn);
+begin
+  if not Assigned(Column) or not Assigned(FController) then Exit;
+  FController.ShowFilterPopup(Column);
+end;
+
+procedure TVittixDBGrid.AutoFitColumn(Column: TColumn);
+var
+  W, TestW, Row: Integer;
+  Bookmark: TBookmark;
+  DataSet: TDataSet;
+begin
+  if not Assigned(Column) then Exit;
+  W := Canvas.TextWidth(Column.Title.Caption) + ScalePx(28);
+
+  DataSet := nil;
+  if Assigned(DataSource) then
+    DataSet := DataSource.DataSet;
+  if Assigned(DataSet) and DataSet.Active and Assigned(Column.Field) then
+  begin
+    Bookmark := nil;
+    DataSet.DisableControls;
+    try
+      if not DataSet.IsEmpty then
+        Bookmark := DataSet.GetBookmark;
+      try
+        DataSet.First;
+        Row := 0;
+        // Cap the scan: auto-fit is a convenience, not a full pass over
+        // hundreds of thousands of rows.
+        while not DataSet.Eof and (Row < 500) do
+        begin
+          TestW := Canvas.TextWidth(Column.Field.DisplayText) + ScalePx(18);
+          if TestW > W then
+            W := TestW;
+          DataSet.Next;
+          Inc(Row);
+        end;
+      finally
+        if Assigned(Bookmark) then
+        begin
+          if DataSet.BookmarkValid(Bookmark) then
+            DataSet.GotoBookmark(Bookmark);
+          DataSet.FreeBookmark(Bookmark);
+        end;
+      end;
+    finally
+      DataSet.EnableControls;
+    end;
+  end;
+
+  if W < ScalePx(24) then
+    W := ScalePx(24);
+  Column.Width := W;
+end;
+
+procedure TVittixDBGrid.AutoFitAllColumns;
+var
+  I: Integer;
+begin
+  for I := 0 to Columns.Count - 1 do
+    if Columns[I].Visible then
+      AutoFitColumn(Columns[I]);
+end;
+
 procedure TVittixDBGrid.MouseDown(Button: TMouseButton; Shift: TShiftState;
   X, Y: Integer);
+var
+  Coord: TGridCoord;
+  Column: TColumn;
+  CellRect, ButtonRect: TRect;
+  P: TPoint;
 begin
+  // Header decorations intercept the title row: a right-click opens the
+  // header menu (HeaderMenu) and a left-click on the hover filter button
+  // opens the filter popup. inherited MouseDown runs first so the
+  // application's OnMouseDown still fires.
+  if (dgTitles in Options) and (Button in [mbLeft, mbRight]) then
+  begin
+    Coord := MouseCoord(X, Y);
+    if Coord.Y = 0 then
+    begin
+      Column := ResolveHeaderColumn(Coord.X);
+      if Assigned(Column) then
+      begin
+        if (Button = mbRight) and FHeaderMenu then
+        begin
+          inherited MouseDown(Button, Shift, X, Y);
+          ShowHeaderMenu(X, Y, Column);
+          Exit;
+        end;
+        if (Button = mbLeft) and ShowFilterIndicators then
+        begin
+          CellRect := GetCellRect(Coord.X, Coord.Y);
+          ButtonRect := HeaderButtonRect(CellRect);
+          P := Point(X, Y);
+          if PtInRect(ButtonRect, P) then
+          begin
+            inherited MouseDown(Button, Shift, X, Y);
+            ShowColumnFilterPopup(Column);
+            Exit;
+          end;
+        end;
+      end;
+    end;
+  end;
+
   // Controller intercepts right-clicks on the title row (filter popup,
   // column chooser). Everything else goes through normal VCL processing.
   if Assigned(FController) and
@@ -524,8 +932,58 @@ begin
   inherited MouseDown(Button, Shift, X, Y);
 end;
 
-procedure TVittixDBGrid.DblClick;
+procedure TVittixDBGrid.MouseMove(Shift: TShiftState; X, Y: Integer);
+var
+  Coord: TGridCoord;
+  Column: TColumn;
+  NewHover: Integer;
 begin
+  inherited MouseMove(Shift, X, Y);
+  NewHover := -1;
+  if dgTitles in Options then
+  begin
+    Coord := MouseCoord(X, Y);
+    if Coord.Y = 0 then
+    begin
+      Column := ResolveHeaderColumn(Coord.X);
+      if Assigned(Column) then
+        NewHover := Column.Index;
+    end;
+  end;
+  if NewHover <> FHoverColumn then
+  begin
+    FHoverColumn := NewHover;
+    Invalidate;
+  end;
+end;
+
+procedure TVittixDBGrid.DblClick;
+var
+  P: TPoint;
+  Coord: TGridCoord;
+  CellRect: TRect;
+  Column: TColumn;
+begin
+  // Double-clicking a column border in the title row auto-fits that column.
+  if dgTitles in Options then
+  begin
+    P := ScreenToClient(Mouse.CursorPos);
+    Coord := MouseCoord(P.X, P.Y);
+    if Coord.Y = 0 then
+    begin
+      CellRect := GetCellRect(Coord.X, Coord.Y);
+      if Abs(P.X - CellRect.Right) <= ScalePx(4) then
+      begin
+        Column := ResolveHeaderColumn(Coord.X);
+        if Assigned(Column) then
+        begin
+          AutoFitColumn(Column);
+          Exit;
+        end;
+      end;
+    end;
+  end;
+
   // Controller consumes double-clicks on memo/date fields (opens the
   // field editor); anything else fires the application's OnDblClick.
   if Assigned(FController) and

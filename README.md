@@ -25,18 +25,21 @@
 - Footer panel with live calculations and selection aggregates
 - Runtime column chooser
 - Column freezing (fixed left columns) with layout persistence
+- Header sort arrows, multi-sort index, filter funnels, hover filter button and a
+  right-click header menu (sort/filter/freeze/chooser/auto-fit), with double-click
+  column-border auto-fit
 - Per-column popup editors: pick list, searchable lookup, masked numeric with validation
 - Incremental search (type-ahead locate) with a footer hint
 - Copy cell or selected rows to the clipboard (Ctrl+C / Ctrl+Shift+C)
 - Export to CSV, TSV, XLSX, HTML, XML, JSON, Text and clipboard
 - VCL Styles aware footer, filter popup and export dialog
-- DUnitX regression suite (382 tests)
+- DUnitX regression suite (484 tests)
 - Controller-based architecture
 - Pure Object Pascal (Delphi VCL)
 
-Aggregation performs a full dataset scan per recalculation and filters are
-re-evaluated per row — correct for tens of thousands of rows; incremental
-aggregation for very large datasets is on the
+Aggregation performs a full dataset scan per recalculation. Per-column
+filters are compiled once and evaluated per row, so large client-side views
+stay fast; incremental aggregation for very large datasets is on the
 [roadmap](docs/ROADMAP.md) (item 3.1).
 
 ---
@@ -224,6 +227,10 @@ Behavior worth knowing:
 | `Backspace` | Remove the last buffer character and re-locate (surrogate pairs go together) |
 | `Ctrl+C` | Copy the current cell (or the selected rows under `dgMultiSelect`) as TSV, with headers when `CopyIncludeHeaders` is True |
 | `Ctrl+Shift+C` | Same, always with a header row |
+| `Shift`+click a title | Add/remove that column from the multi-column sort (Ctrl is a legacy alias) |
+| Right-click a title | Open the header menu (sort, filter, freeze, chooser, auto-fit) |
+| Double-click a title border | Auto-fit the column to its content |
+| Hover a title, click the filter button | Open that column's filter popup |
 
 Incremental search is controlled by `IncrementalSearch` (default True),
 `IncrementalSearchMode` (default `ismAuto`) and

@@ -304,6 +304,9 @@ type
     // DoMouseDown/DoDblClick/DoKeyDown/DoKeyPress return True when the event
     // was consumed and must not reach inherited VCL processing.
     procedure DoTitleClick(Column: TColumn);
+    /// <summary>Opens the filter popup for Column and applies its result
+    /// through the normal client/server filter path.</summary>
+    procedure ShowFilterPopup(Column: TColumn);
     procedure DoDrawColumnCell(const Rect: TRect; DataCol: Integer;
       Column: TColumn; State: TGridDrawState);
     function DoMouseDown(Button: TMouseButton; Shift: TShiftState;
@@ -1171,9 +1174,12 @@ begin
     // still maintains the column state for the UI arrows and fallbacks.
     FSortEngine.ClientApplyEnabled := FilterMode = vcmClient;
     try
+      // Shift+click adds/removes a sort column (multi-sort). Ctrl is kept
+      // as a backward-compatible alias for the old behavior.
       FSortEngine.ToggleSort(
         Column,
-        (GetKeyState(VK_CONTROL) and $8000) <> 0
+        ((GetKeyState(VK_SHIFT) and $8000) <> 0) or
+        ((GetKeyState(VK_CONTROL) and $8000) <> 0)
       );
     except
       on E: EVittixSortError do
@@ -1196,6 +1202,20 @@ begin
     Refresh;
     // Reached only when ToggleSort applied without raising.
     DoAfterSort(Column);
+  end;
+end;
+
+procedure TVittixDBGridController.ShowFilterPopup(Column: TColumn);
+begin
+  if not Assigned(Column) then Exit;
+  if ExecuteFilterPopup(Column) then
+  begin
+    RefreshFiltering;
+    if not FServerFilterActive and Assigned(FFilterEngine) then
+      FFilterEngine.Active := True;
+    SetAggregationDirty;
+    Refresh;
+    DoFilterApplied(Column.FieldName);
   end;
 end;
 
