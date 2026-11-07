@@ -60,6 +60,9 @@ column filter. These dialogs are also reached through the grid and controller
 UI. For direct export without a dialog, use `TVittixDBGridExporter` in
 [`source/Vittix.DBGrid.Export.Engine.pas`](../source/Vittix.DBGrid.Export.Engine.pas).
 Its `Options.MaxRows` caps exported rows when positive; zero means unlimited.
+For XLSX, `Options.XlsxRowLimit` (default 1,048,576, header/footer included)
+and `Options.XlsxRowLimitAction` (`xraRaise` or `xraTruncate`) control what
+happens past Excel's worksheet limit; the sheet XML is streamed.
 `OpenHTMLPrintPreview(FileName)` writes print-friendly HTML to the chosen path
 and opens it in the system browser. Browser printing (for example, Ctrl+P)
 uses the HTML page's repeated table headers and page-break rules.

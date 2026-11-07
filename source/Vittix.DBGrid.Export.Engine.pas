@@ -76,6 +76,11 @@ type
     vefText           // Fixed-width text
   );
 
+  /// <summary>What an XLSX export does when the worksheet would exceed
+  /// Excel's row limit. xraRaise aborts with EVittixExportError; xraTruncate
+  /// writes the first rows up to the limit (header/footer included).</summary>
+  TVittixXlsxRowLimitAction = (xraTruncate, xraRaise);
+
   // Export options
   TVittixExportOptions = class(TPersistent)
   private
@@ -91,6 +96,8 @@ type
     FFloatFormat: string;
     FBooleanAsText: Boolean;
     FExportLocaleFormat: Boolean;
+    FXlsxRowLimit: Integer;
+    FXlsxRowLimitAction: TVittixXlsxRowLimitAction;
     FTrueText: string;
     FFalseText: string;
     FNullText: string;
@@ -122,6 +129,15 @@ type
     /// pre-1.1.0 machine-format output.</summary>
     property ExportLocaleFormat: Boolean
       read FExportLocaleFormat write FExportLocaleFormat default False;
+    /// <summary>Maximum worksheet rows an XLSX export may write, including
+    /// the header and footer rows. Defaults to Excel's hard limit
+    /// (1,048,576). Exposed so callers/tests can lower it.</summary>
+    property XlsxRowLimit: Integer
+      read FXlsxRowLimit write FXlsxRowLimit default 1048576;
+    /// <summary>When the worksheet reaches XlsxRowLimit: raise
+    /// EVittixExportError (default) or stop and write a truncated sheet.</summary>
+    property XlsxRowLimitAction: TVittixXlsxRowLimitAction
+      read FXlsxRowLimitAction write FXlsxRowLimitAction default xraRaise;
     property TrueText: string read FTrueText write FTrueText;
     property FalseText: string read FFalseText write FFalseText;
     property NullText: string read FNullText write FNullText;
@@ -239,13 +255,12 @@ type
     // heuristic length in FHeuristicMax is used instead (in characters).
     FTextWidths: TArray<Double>;
     FHeuristicMax: TArray<Integer>;
-    function BuildSheetXML: string;
+    procedure WriteSheetXML(AStream: TStream);
     function BuildStylesXML: string;
     function BuildColsXML(ColumnCount: Integer): string;
     function ColumnLetter(Index: Integer): string;
     function CellStyleForField(AField: TField): Integer;
     procedure ResolveColumnWidths(Columns: TList<TColumn>);
-    procedure TrackHeuristicLength(AColumnIndex, ATextLength: Integer);
     procedure AddInlineTextCell(Rows: TStrings; AColumnIndex, ARow: Integer;
       const Text: string);
     procedure EmitDataCell(Rows: TStrings; AColumnIndex, ARow: Integer;
@@ -285,6 +300,8 @@ begin
   FIncludeHeaders := True;
   FIncludeFooter := False;
   FMaxRows := 0;
+  FXlsxRowLimit := 1048576;
+  FXlsxRowLimitAction := xraRaise;
   FDateFormat := 'yyyy-mm-dd';
   FTimeFormat := 'hh:nn:ss';
   FDateTimeFormat := 'yyyy-mm-dd hh:nn:ss';
@@ -312,6 +329,8 @@ begin
     FIncludeHeaders := Src.IncludeHeaders;
     FIncludeFooter := Src.IncludeFooter;
     FMaxRows := Src.MaxRows;
+    FXlsxRowLimit := Src.XlsxRowLimit;
+    FXlsxRowLimitAction := Src.XlsxRowLimitAction;
     FDateFormat := Src.DateFormat;
     FTimeFormat := Src.TimeFormat;
     FDateTimeFormat := Src.DateTimeFormat;
@@ -1781,8 +1800,9 @@ begin
   SetLength(FHeuristicMax, Columns.Count);
   for I := 0 to Columns.Count - 1 do
   begin
-    // Heuristic seed: header caption plus breathing room; data cells can
-    // only grow it while the grid width is unavailable.
+    // Heuristic width: header caption plus breathing room. It is fixed
+    // before any row is written so <cols> can precede <sheetData> without
+    // buffering the sheet.
     FHeuristicMax[I] := Length(FExporter.HeaderCaptionFor(Columns[I])) + 2;
 
     Pixels := Columns[I].Width;
@@ -1794,16 +1814,6 @@ begin
     else
       FTextWidths[I] := -1;
   end;
-end;
-
-procedure TVittixExcelExporter.TrackHeuristicLength(
-  AColumnIndex, ATextLength: Integer);
-begin
-  if (AColumnIndex < 0) or (AColumnIndex > High(FHeuristicMax)) then
-    Exit;
-  if (FTextWidths[AColumnIndex] < 0) and
-     (ATextLength > FHeuristicMax[AColumnIndex]) then
-    FHeuristicMax[AColumnIndex] := ATextLength;
 end;
 
 function TVittixExcelExporter.BuildColsXML(ColumnCount: Integer): string;
@@ -1891,7 +1901,6 @@ begin
   Rows.Add(Format('<c r="%s%d" t="inlineStr">', [ColumnLetter(AColumnIndex), ARow]));
   Rows.Add('<is><t xml:space="preserve">' + FExporter.EscapeXML(Text) + '</t></is>');
   Rows.Add('</c>');
-  TrackHeuristicLength(AColumnIndex, Length(Text));
 end;
 
 procedure TVittixExcelExporter.EmitDataCell(Rows: TStrings;
@@ -1928,7 +1937,6 @@ begin
       CellRef,
       CellStyleForField(AField),
       FExporter.FormatNumberInvariant(ExcelSerialFromDateTime(AField.AsDateTime))]));
-    TrackHeuristicLength(AColumnIndex, 10);
     Exit;
   end;
 
@@ -1941,7 +1949,6 @@ begin
     // t="n" stated explicitly: the OOXML default happens to be numeric, but
     // the tests and consumers should not have to rely on a default.
     Rows.Add(Format('<c r="%s" t="n"><v>%s</v></c>', [CellRef, Value]));
-    TrackHeuristicLength(AColumnIndex, Length(Value));
     Exit;
   end;
 
@@ -1949,7 +1956,6 @@ begin
   begin
     Rows.Add(Format('<c r="%s" t="b"><v>%d</v></c>',
       [CellRef, Ord(AField.AsBoolean)]));
-    TrackHeuristicLength(AColumnIndex, 1);
     Exit;
   end;
 
@@ -1958,111 +1964,135 @@ begin
     FExporter.FormatFieldValue(AField, True));
 end;
 
-function TVittixExcelExporter.BuildSheetXML: string;
+procedure WriteUTF8Text(AStream: TStream; const S: string);
 var
-  Rows: TStringList;
+  Bytes: TBytes;
+begin
+  if S = '' then Exit;
+  Bytes := TEncoding.UTF8.GetBytes(S);
+  AStream.WriteBuffer(Bytes[0], Length(Bytes));
+end;
+
+procedure TVittixExcelExporter.WriteSheetXML(AStream: TStream);
+const
+  XLSX_HARD_ROW_LIMIT = 1048576;
+var
   Columns: TList<TColumn>;
+  Rows: TStringList;
   I, Row, RowCount, ColumnCount: Integer;
   Col: TColumn;
   FooterRow: TArray<string>;
   Bookmark: TBookmark;
   FilteredToggledOff: Boolean;
-  SB: TStringBuilder;
+  RowLimit, DataLimit, HeaderRows, FooterRows: Integer;
 begin
   if not Assigned(FExporter.Dataset) or not FExporter.Dataset.Active then
     raise EVittixExportError.Create('Dataset is not active');
 
+  RowLimit := FExporter.Options.XlsxRowLimit;
+  if (RowLimit <= 0) or (RowLimit > XLSX_HARD_ROW_LIMIT) then
+    RowLimit := XLSX_HARD_ROW_LIMIT;
+  HeaderRows := Ord(FExporter.Options.IncludeHeaders);
+  FooterRows := Ord(FExporter.Options.IncludeFooter);
+  DataLimit := RowLimit - HeaderRows - FooterRows;
+  if DataLimit < 0 then
+    DataLimit := 0;
+
+  // Write the worksheet incrementally: the XML is never accumulated in a
+  // string, which is what exhausted memory on Win32 for large exports.
   Rows := TStringList.Create;
+  Columns := nil;
   try
     Columns := FExporter.GetExportColumns;
+    // <cols> comes first (schema order) and now depends only on the grid
+    // width / caption heuristic, never on data scanned later.
+    ResolveColumnWidths(Columns);
+    ColumnCount := Columns.Count;
+
+    WriteUTF8Text(AStream,
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>');
+    WriteUTF8Text(AStream,
+      '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">');
+    WriteUTF8Text(AStream, BuildColsXML(ColumnCount));
+    WriteUTF8Text(AStream, '<sheetData>');
+
+    Row := 1;
+    if FExporter.Options.IncludeHeaders then
+    begin
+      Rows.Clear;
+      Rows.Add(Format('<row r="%d">', [Row]));
+      for I := 0 to Columns.Count - 1 do
+        AddInlineTextCell(Rows, I, Row, FExporter.HeaderCaptionFor(Columns[I]));
+      Rows.Add('</row>');
+      WriteUTF8Text(AStream, Rows.Text);
+      Inc(Row);
+    end;
+
+    // Prepare iteration: preserve position; when ExportFilteredOnly is False
+    // and the dataset is filtered, export all records.
+    Bookmark := FExporter.BeginExportIteration(FilteredToggledOff);
+    FExporter.Dataset.DisableControls;
     try
-      ResolveColumnWidths(Columns);
-      ColumnCount := Columns.Count;
-      Row := 1;
+      FExporter.FProgressTotal := FExporter.CaptureProgressTotal;
+      FExporter.Dataset.First;
+      RowCount := 0;
 
-      if FExporter.Options.IncludeHeaders then
+      while not FExporter.Dataset.Eof do
       begin
-        Rows.Add(Format('<row r="%d">', [Row]));
-        for I := 0 to Columns.Count - 1 do
-          AddInlineTextCell(Rows, I, Row, FExporter.HeaderCaptionFor(Columns[I]));
-        Rows.Add('</row>');
-        Inc(Row);
-      end;
+        if (FExporter.Options.MaxRows > 0) and
+          (RowCount >= FExporter.Options.MaxRows) then
+          Break;
+        if FExporter.FCancelled then
+          Break;
 
-      // Data rows
-      // Prepare iteration: preserve position; when ExportFilteredOnly is False
-      // and the dataset is filtered, export all records.
-      Bookmark := FExporter.BeginExportIteration(FilteredToggledOff);
-
-      FExporter.Dataset.DisableControls;
-      try
-        FExporter.FProgressTotal := FExporter.CaptureProgressTotal;
-        FExporter.Dataset.First;
-        RowCount := 0;
-
-        while not FExporter.Dataset.Eof do
+        if RowCount >= DataLimit then
         begin
-          if (FExporter.Options.MaxRows > 0) and
-            (RowCount >= FExporter.Options.MaxRows) then
-            Break;
-          if FExporter.FCancelled then
-            Break;
-
-          Rows.Add(Format('<row r="%d">', [Row]));
-
-          for I := 0 to Columns.Count - 1 do
-          begin
-            Col := Columns[I];
-            if Assigned(Col.Field) then
-              EmitDataCell(Rows, I, Row, Col.Field);
-          end;
-
-          Rows.Add('</row>');
-
-          Inc(Row);
-          Inc(RowCount);
-          if RowCount mod 100 = 0 then
-            FExporter.CheckProgress(RowCount, FExporter.FProgressTotal);
-
-          FExporter.Dataset.Next;
+          if FExporter.Options.XlsxRowLimitAction = xraRaise then
+            raise EVittixExportError.CreateFmt(
+              'The XLSX export exceeds the worksheet row limit of %d rows ' +
+              '(including the header and footer rows).', [RowLimit]);
+          Break;
         end;
-      finally
-        FExporter.EndExportIteration(Bookmark, FilteredToggledOff);
-        FExporter.Dataset.EnableControls;
-      end;
 
-      // Footer row: display text, so it stays an inline string cell.
-      if FExporter.Options.IncludeFooter then
-      begin
-        FooterRow := FExporter.BuildFooterRow(Columns);
+        Rows.Clear;
         Rows.Add(Format('<row r="%d">', [Row]));
         for I := 0 to Columns.Count - 1 do
-          AddInlineTextCell(Rows, I, Row, FooterRow[I]);
+        begin
+          Col := Columns[I];
+          if Assigned(Col.Field) then
+            EmitDataCell(Rows, I, Row, Col.Field);
+        end;
         Rows.Add('</row>');
+        WriteUTF8Text(AStream, Rows.Text);
+
+        Inc(Row);
+        Inc(RowCount);
+        if RowCount mod 100 = 0 then
+          FExporter.CheckProgress(RowCount, FExporter.FProgressTotal);
+
+        FExporter.Dataset.Next;
       end;
-
     finally
-      Columns.Free;
+      FExporter.EndExportIteration(Bookmark, FilteredToggledOff);
+      FExporter.Dataset.EnableControls;
     end;
 
-    // <cols> must precede <sheetData> per the schema, so the worksheet is
-    // composed only after every row — and therefore every heuristic column
-    // width — is known.
-    SB := TStringBuilder.Create;
-    try
-      SB.Append('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>');
-      SB.Append('<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">');
-      SB.Append(BuildColsXML(ColumnCount));
-      SB.Append('<sheetData>');
-      SB.Append(Rows.Text);
-      SB.Append('</sheetData>');
-      SB.Append('</worksheet>');
-      Result := SB.ToString;
-    finally
-      SB.Free;
+    // Footer row: display text, so it stays an inline string cell.
+    if FExporter.Options.IncludeFooter then
+    begin
+      FooterRow := FExporter.BuildFooterRow(Columns);
+      Rows.Clear;
+      Rows.Add(Format('<row r="%d">', [Row]));
+      for I := 0 to Columns.Count - 1 do
+        AddInlineTextCell(Rows, I, Row, FooterRow[I]);
+      Rows.Add('</row>');
+      WriteUTF8Text(AStream, Rows.Text);
     end;
+
+    WriteUTF8Text(AStream, '</sheetData></worksheet>');
   finally
     Rows.Free;
+    Columns.Free;
   end;
 end;
 
@@ -2075,7 +2105,8 @@ procedure TVittixExcelExporter.WriteXLSX(Stream: TStream);
 var
   Zip: TZipFile;
   TempStream: TMemoryStream;
-  SheetXML: string;
+  SheetStream: TFileStream;
+  SheetFileName: string;
 
   procedure AddEntry(const ZipPath, Content: string);
   var
@@ -2097,10 +2128,16 @@ begin
   if not Assigned(FExporter.Dataset) or not FExporter.Dataset.Active then
     raise EVittixExportError.Create('Dataset is not active');
 
-  SheetXML := BuildSheetXML;
+  // The worksheet is generated straight into a temp file so the raw XML is
+  // never held in memory; the zip reads it in chunks.
+  SheetFileName := TPath.Combine(TPath.GetTempPath,
+    TGuid.NewGuid.ToString + '.vittix-sheet.xml');
+  SheetStream := TFileStream.Create(SheetFileName, fmCreate);
   TempStream := TMemoryStream.Create;
   Zip := TZipFile.Create;
   try
+    WriteSheetXML(SheetStream);
+    SheetStream.Position := 0;
     Zip.Open(TempStream, zmWrite);
     AddEntry('[Content_Types].xml',
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
@@ -2129,7 +2166,8 @@ begin
       '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
       '</Relationships>');
     AddEntry('xl/styles.xml', BuildStylesXML);
-    AddEntry('xl/worksheets/sheet1.xml', SheetXML);
+    // Add the worksheet from its stream; TZipFile reads it in chunks.
+    Zip.Add(SheetStream, 'xl/worksheets/sheet1.xml');
     Zip.Close;
 
     TempStream.Position := 0;
@@ -2137,6 +2175,13 @@ begin
   finally
     Zip.Free;
     TempStream.Free;
+    SheetStream.Free;
+    try
+      TFile.Delete(SheetFileName);
+    except
+      // The temp file is best-effort cleanup; a locked file must not mask
+      // the export result.
+    end;
   end;
 end;
 

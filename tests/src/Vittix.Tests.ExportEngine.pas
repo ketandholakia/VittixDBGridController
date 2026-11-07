@@ -67,6 +67,12 @@ type
     [Test]
     procedure XlsxUsesColumnLettersPastZ;
     [Test]
+    procedure XlsxRowLimitRaisesByDefault;
+    [Test]
+    procedure XlsxRowLimitCanTruncate;
+    [Test]
+    procedure XlsxLargeExportMemoryBounded;
+    [Test]
     procedure CancelStopsExportEarly;
     [Test]
     procedure CancelledFileExportDoesNotOverwriteExistingFile;
@@ -232,8 +238,21 @@ implementation
 uses
   System.IOUtils,
   System.JSON,
+  Winapi.Windows,
+  Winapi.Psapi,
   Vittix.Tests.TestData,
   Vittix.DBGrid.Clipboard;
+
+function CurrentWorkingSetBytes: SIZE_T;
+var
+  Counters: TProcessMemoryCounters;
+begin
+  Counters.cb := SizeOf(Counters);
+  if GetProcessMemoryInfo(GetCurrentProcess, @Counters, Counters.cb) then
+    Result := Counters.WorkingSetSize
+  else
+    Result := 0;
+end;
 
 // Splits CSV text into logical records. Commas, quotes and line breaks
 // inside quoted fields (RFC 4180 style) must not start a new record.
@@ -502,6 +521,106 @@ begin
 
   Assert.IsTrue(SheetXml.Contains('r="AA1"'));
   Assert.IsTrue(SheetXml.Contains('r="AB1"'));
+end;
+
+procedure TVittixExportEngineTests.XlsxRowLimitRaisesByDefault;
+var
+  Exporter: TVittixDBGridExporter;
+  Stream: TMemoryStream;
+begin
+  Exporter := TVittixDBGridExporter.Create(FGrid);
+  try
+    // Header + two data rows fit; a third data row must trip the limit.
+    Exporter.Options.XlsxRowLimit := 3;
+    Exporter.Options.XlsxRowLimitAction := xraRaise;
+    Stream := TMemoryStream.Create;
+    try
+      Assert.WillRaise(
+        procedure
+        begin
+          Exporter.ExportToStream(Stream, vefExcelXLSX);
+        end,
+        EVittixExportError);
+    finally
+      Stream.Free;
+    end;
+  finally
+    Exporter.Free;
+  end;
+end;
+
+procedure TVittixExportEngineTests.XlsxRowLimitCanTruncate;
+var
+  Exporter: TVittixDBGridExporter;
+  Stream: TMemoryStream;
+  SheetXml: string;
+begin
+  Exporter := TVittixDBGridExporter.Create(FGrid);
+  try
+    Exporter.Options.XlsxRowLimit := 3; // header + 2 data rows
+    Exporter.Options.XlsxRowLimitAction := xraTruncate;
+    Stream := TMemoryStream.Create;
+    try
+      Exporter.ExportToStream(Stream, vefExcelXLSX);
+      SheetXml := ExtractSheetXml(Stream);
+    finally
+      Stream.Free;
+    end;
+  finally
+    Exporter.Free;
+  end;
+  Assert.AreEqual(3, Length(SheetXml.Split(['<row '])) - 1,
+    'the sheet stops at the configured row limit');
+  Assert.IsTrue(SheetXml.Contains('r="3"'), 'the last allowed row is present');
+  Assert.IsFalse(SheetXml.Contains('r="4"'), 'rows past the limit are omitted');
+end;
+
+procedure TVittixExportEngineTests.XlsxLargeExportMemoryBounded;
+const
+  RowCount = 200000;
+  MemoryBound = 300 * 1024 * 1024;
+var
+  DataSet: TClientDataSet;
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+  Exporter: TVittixDBGridExporter;
+  FileName: string;
+  Before, After: SIZE_T;
+  Delta: Int64;
+begin
+  FileName := '';
+  DataSet := CreateLargeDataSet(RowCount);
+  OwnerForm := nil;
+  try
+    Grid := CreateHeadlessGrid(DataSet, OwnerForm);
+    try
+      Exporter := TVittixDBGridExporter.Create(Grid);
+      try
+        FileName := TPath.Combine(TPath.GetTempPath,
+          TGuid.NewGuid.ToString + '.xlsx');
+        Before := CurrentWorkingSetBytes;
+        Exporter.ExportToFile(FileName, vefExcelXLSX);
+        After := CurrentWorkingSetBytes;
+
+        Assert.IsTrue(TFile.Exists(FileName), 'the workbook was written');
+        Assert.IsTrue(TFile.GetSize(FileName) > 0, 'the workbook is not empty');
+        Delta := Int64(After) - Int64(Before);
+        Assert.IsTrue((Delta < MemoryBound),
+          Format('XLSX export memory delta %d bytes exceeds the bound',
+            [Delta]));
+        Writeln(Format('200k-row XLSX export: working-set delta %d MB',
+          [Delta div (1024 * 1024)]));
+      finally
+        Exporter.Free;
+      end;
+    finally
+      OwnerForm.Free;
+    end;
+  finally
+    DataSet.Free;
+    if (FileName <> '') and TFile.Exists(FileName) then
+      TFile.Delete(FileName);
+  end;
 end;
 
 procedure TVittixExportEngineTests.CancelStopsExportEarly;
@@ -1291,7 +1410,7 @@ begin
   finally
     TfrmExportDialog.StateFileName := '';
     if FileExists(TempFile) then
-      DeleteFile(TempFile);
+      System.SysUtils.DeleteFile(TempFile);
   end;
 end;
 
@@ -1328,7 +1447,7 @@ begin
   finally
     TfrmExportDialog.StateFileName := '';
     if FileExists(TempFile) then
-      DeleteFile(TempFile);
+      System.SysUtils.DeleteFile(TempFile);
   end;
 end;
 
@@ -1365,7 +1484,7 @@ begin
   finally
     TfrmExportDialog.StateFileName := '';
     if FileExists(TempFile) then
-      DeleteFile(TempFile);
+      System.SysUtils.DeleteFile(TempFile);
   end;
 end;
 
@@ -1438,7 +1557,7 @@ begin
   finally
     TfrmExportDialog.StateFileName := '';
     if FileExists(TempFile) then
-      DeleteFile(TempFile);
+      System.SysUtils.DeleteFile(TempFile);
   end;
 end;
 

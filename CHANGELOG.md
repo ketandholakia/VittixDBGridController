@@ -22,6 +22,16 @@ releases only.
 
 ### Changed
 
+- **XLSX streaming and row limit.** The worksheet XML is written
+  incrementally as UTF-8 to a temp stream and added to the zip from that
+  stream instead of being accumulated in a `TStringList`/`TStringBuilder`
+  and copied several times. `<cols>` is emitted first using grid-width or
+  caption-heuristic widths (no data-driven pass). New options
+  `XlsxRowLimit` (default 1,048,576, header/footer included) and
+  `XlsxRowLimitAction` (`xraRaise` default / `xraTruncate`) prevent a
+  corrupt workbook on oversized exports. Atomic swap, cancellation,
+  progress and cursor restore are unchanged.
+
 - **Filter engine compiles per-column conditions.** The classic per-column
   AND path is now compiled once into a condition group and evaluated with
   the same matcher as saved filter sets, removing the per-row re-trim,
