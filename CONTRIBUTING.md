@@ -27,13 +27,11 @@ Please keep these principles in mind when contributing.
 
 ## 🧰 Supported Delphi Versions
 
-The supported and CI-tested toolchain is:
-
-- Delphi **12 Athens** (Win32) — this is what the packages, the test suite and the installer are built with
-
-The source avoids RTL features newer than Delphi 10.3 where practical, but
-only 12 is actively tested. If a change needs a newer RTL feature, please
-note it in your PR description.
+The supported build target is **Delphi 12 Athens, Win32**. The runtime and
+design-time packages, DUnitX suite, feature demo, and installer payload use
+that target. See the [README requirements](README.md#requirements) for the
+project's compatibility statement. Other Delphi versions and platforms need
+their own build and verification before being claimed as supported.
 
 ---
 
@@ -56,6 +54,7 @@ source/           All runtime units (flat, unit-named by area)
 ├─ Vittix.DBGrid.Layout.pas           JSON layout storage
 └─ ...
 packages/         Runtime + design-time .dpk/.dproj
+assets/palette/   Bitmap and resource sources for the component palette icon
 tests/            DUnitX test suite (VittixDBGridTests.dpr, build-tests.bat)
 demos/            features-demo — the complete feature demo
 installer/        Inno Setup script + payload build scripts
@@ -83,6 +82,15 @@ VittixDBGridTests.exe
 Run the suite before submitting; it must be green (the clipboard tests can
 fail spuriously on machines where another process holds the clipboard —
 rerun if only those fail).
+
+The [Delphi 12 Win32 CI workflow](.github/workflows/delphi12-win32.yml) runs on
+pushes to `main` and by manual dispatch. It needs a Windows self-hosted GitHub
+Actions runner labeled `delphi12`, with Delphi 12 Athens, FireDAC, and MSBuild
+installed. The runner must have an interactive desktop session for VCL and
+clipboard tests. Set `VITTIX_DELPHI_ROOT` in the workflow if Delphi is installed
+outside its default `C:\Program Files (x86)\Embarcadero\Studio\23.0` path. The
+job builds all three packages and the DUnitX suite in Win32 Release, then
+uploads the NUnit XML result.
 
 If your change affects behavior or UI, please also update the demo in
 `demos/features-demo`. Demos must compile with a plain Delphi installation
@@ -152,7 +160,8 @@ Large features should be discussed **before** submitting a PR.
 ## 📦 Packages & Design-Time Code
 
 - Runtime logic → `source/`
-- Design-time registration → `packages/`
+- Design-time registration and component editor units → `source/Vittix.DBGrid.Reg.pas` and `source/Vittix.DBGrid.Editor.pas`
+- Design-time package definition → `packages/VittixDBGridControllerD.dpk`
 - Keep design-time units minimal
 - No runtime logic inside registration units
 

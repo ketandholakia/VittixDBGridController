@@ -10,6 +10,7 @@ uses
   Vcl.StdCtrls,
   Vcl.ExtCtrls,
   Vcl.DBGrids,
+  Vcl.Menus,
   Winapi.Windows,
   Vcl.Graphics,
   Winapi.Messages,
@@ -28,6 +29,8 @@ type
     FBtnOK: TButton;
     FBtnClear: TButton;
     FBtnClearHistory: TButton;
+    FBtnSaved: TButton;
+    FSavedMenu: TPopupMenu;
     FBtnCancel: TButton;
     FLabelTitle: TLabel;
     FValidationLabel: TLabel;
@@ -47,6 +50,11 @@ type
 
     procedure BtnClearClick(Sender: TObject);
     procedure BtnClearHistoryClick(Sender: TObject);
+    procedure BtnSavedClick(Sender: TObject);
+    procedure BuildSavedMenu;
+    procedure ApplySavedSet(Sender: TObject);
+    procedure SaveCurrentAsClick(Sender: TObject);
+    procedure ManageClick(Sender: TObject);
     procedure ApplyChanges;
     procedure ApplySavedTextToControls(const AText: string);
     procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
@@ -73,6 +81,9 @@ type
       AColumnInfo: TVittixDBGridColumnInfo
     ); reintroduce;
 
+    /// <summary>Opens a filter editor for AColumnInfo. Applies the filter
+    /// on OK and returns True; returns False on cancel or nil metadata.
+    /// AOnValidate can reject the entered filter.</summary>
     class function Execute(
       AOwner: TComponent;
       AColumnInfo: TVittixDBGridColumnInfo;
@@ -98,7 +109,11 @@ uses
   System.IniFiles,
   System.Math,
   System.Generics.Collections,
-  Vittix.DBGrid;
+  Vcl.Dialogs,
+  Vittix.DBGrid,
+  Vittix.DBGrid.Controller,
+  Vittix.DBGrid.FilterSets.Dialog,
+  Vittix.DBGrid.Styles;
 
 var
   GFilterHistory: TObjectDictionary<string, TStringList>;
@@ -106,6 +121,11 @@ const
   BlankValueCaption = '(Blank)';
 
 { TVittixDBGridFilterPopup }
+
+// Forward declaration: CreatePopup enables/disables the Saved button before
+// the helper's body appears further down.
+function PopupOwnerController(
+  APopup: TVittixDBGridFilterPopup): TVittixDBGridController; forward;
 
 // Splits a stored filter text into operator selection + value text, applying
 // both to the combo controls. Used for the column's active filter and for
@@ -169,7 +189,9 @@ begin
   Caption := 'Filter Column';
   BorderStyle := bsDialog;
   Position := poScreenCenter;
-  ClientWidth := 340;
+  // Widened for the Saved filters button; the button panel packs its
+  // left- and right-aligned buttons from both ends.
+  ClientWidth := 460;
   ClientHeight := 140;
   KeyPreview := True; // Enable ESC/ENTER handling at form level
   OnKeyDown := FormKeyDown;
@@ -189,8 +211,15 @@ begin
   FButtonPanel.Align := alBottom;
   FButtonPanel.Height := 48;
   FButtonPanel.BevelOuter := bvNone;
-  FButtonPanel.ParentBackground := False;
-  FButtonPanel.Color := clBtnFace;
+  if TVittixStylePalette.IsCustomStyleActive(Self) then
+    // A custom style paints the panel surface itself; the hard-coded face
+    // color would punch a classic-gray hole into the styled dialog.
+    FButtonPanel.ParentBackground := True
+  else
+  begin
+    FButtonPanel.ParentBackground := False;
+    FButtonPanel.Color := clBtnFace;
+  end;
 
   // Buttons
   FBtnCancel := TButton.Create(Self);
@@ -230,13 +259,30 @@ begin
   FBtnClearHistory.Width := 100;
   FBtnClearHistory.OnClick := BtnClearHistoryClick;
 
+  // Saved filters button: opens the set menu (apply / save as / manage).
+  // Disabled when the owner is not a Vittix grid with a controller.
+  FBtnSaved := TButton.Create(Self);
+  FBtnSaved.Parent := FButtonPanel;
+  FBtnSaved.Caption := 'Saved...';
+  FBtnSaved.Align := alLeft;
+  FBtnSaved.AlignWithMargins := True;
+  FBtnSaved.Margins.SetBounds(4, 8, 4, 8);
+  FBtnSaved.Width := 84;
+  FBtnSaved.OnClick := BtnSavedClick;
+  // Enabled only when the owner is a Vittix grid with a controller.
+  FBtnSaved.Enabled := Assigned(PopupOwnerController(Self));
+
+  FSavedMenu := TPopupMenu.Create(Self);
+
   // Validation Label
   FValidationLabel := TLabel.Create(Self);
   FValidationLabel.Parent := Self;
   FValidationLabel.Align := alBottom;
   FValidationLabel.AlignWithMargins := True;
   FValidationLabel.Margins.SetBounds(12, 2, 12, 2);
-  FValidationLabel.Font.Color := clRed;
+  // Resolved through the style service so styled apps get a readable red
+  // variant; without a custom style this is plain clRed as before.
+  FValidationLabel.Font.Color := TVittixStylePalette.ErrorColor(Self);
   FValidationLabel.Font.Style := [fsBold];
   FValidationLabel.Height := 20;
   FValidationLabel.Visible := False;
@@ -466,6 +512,10 @@ var
   DataSet: TDataSet;
   Field: TField;
   Values: TStringList;
+  Seen: TDictionary<string, Byte>;
+  Bookmark: TBookmark;
+  Value: string;
+  ValueKey: string;
   HasBlank: Boolean;
 begin
   if not (Owner is TDBGrid) then
@@ -476,7 +526,8 @@ begin
     Exit;
 
   DataSet := Grid.DataSource.DataSet;
-  if not Assigned(DataSet) or not DataSet.Active then
+  if not Assigned(DataSet) or not DataSet.Active or
+     (DataSet.State in dsEditModes) then
     Exit;
 
   Field := DataSet.FindField(FColumnInfo.FieldName);
@@ -484,31 +535,61 @@ begin
     Exit;
 
   Values := TStringList.Create;
+  Seen := nil;
   try
-    Values.Sorted := True;
-    Values.Duplicates := dupIgnore;
+    Seen := TDictionary<string, Byte>.Create;
     HasBlank := False;
 
+    Bookmark := nil;
+    if not DataSet.IsEmpty then
+      Bookmark := DataSet.GetBookmark;
     DataSet.DisableControls;
     try
       DataSet.First;
       while not DataSet.Eof do
       begin
-        if Field.IsNull or (Trim(Field.AsString) = '') then
+        if Field.IsNull then
           HasBlank := True
         else
-          Values.Add(Trim(Field.AsString));
+        begin
+          Value := Trim(Field.AsString);
+          if Value = '' then
+            HasBlank := True
+          else
+          begin
+            ValueKey := AnsiUpperCase(Value);
+            if not Seen.ContainsKey(ValueKey) then
+            begin
+              Seen.Add(ValueKey, 0);
+              Values.Add(Value);
+            end;
+          end;
+        end;
         DataSet.Next;
       end;
     finally
-      DataSet.EnableControls;
+      try
+        if Bookmark <> nil then
+        begin
+          try
+            if DataSet.BookmarkValid(Bookmark) then
+              DataSet.GotoBookmark(Bookmark);
+          finally
+            DataSet.FreeBookmark(Bookmark);
+          end;
+        end;
+      finally
+        DataSet.EnableControls;
+      end;
     end;
 
+    Values.Sort;
     if HasBlank then
       FRecentCombo.Items.Add(BlankValueCaption);
     if Values.Count > 0 then
       FRecentCombo.Items.AddStrings(Values);
   finally
+    Seen.Free;
     Values.Free;
   end;
 end;
@@ -669,6 +750,135 @@ begin
   finally
     Frm.Free;
   end;
+end;
+
+{ --- Saved filter sets menu --- }
+
+// Execute passes the grid as owner; nil for non-Vittix usage. A unit-level
+// helper because the controller type cannot appear in this class's
+// interface (the controller's interface uses this unit).
+function PopupOwnerController(
+  APopup: TVittixDBGridFilterPopup): TVittixDBGridController;
+begin
+  Result := nil;
+  if (APopup.Owner is TVittixDBGrid) and
+     Assigned(TVittixDBGrid(APopup.Owner).Controller) then
+    Result := TVittixDBGrid(APopup.Owner).Controller;
+end;
+
+procedure TVittixDBGridFilterPopup.BtnSavedClick(Sender: TObject);
+var
+  P: TPoint;
+begin
+  BuildSavedMenu;
+  P := FBtnSaved.ClientToScreen(Point(0, FBtnSaved.Height));
+  FSavedMenu.Popup(P.X, P.Y);
+end;
+
+procedure TVittixDBGridFilterPopup.ApplySavedSet(Sender: TObject);
+var
+  Controller: TVittixDBGridController;
+begin
+  Controller := PopupOwnerController(Self);
+  if not Assigned(Controller) then Exit;
+  if Controller.ApplyFilterSet(TMenuItem(Sender).Caption) then
+  begin
+    // Reflect the applied first-group conditions in this popup's editors.
+    FOriginalText := FColumnInfo.FilterText;
+    ApplySavedTextToControls(FOriginalText);
+  end;
+end;
+
+procedure TVittixDBGridFilterPopup.SaveCurrentAsClick(Sender: TObject);
+var
+  Controller: TVittixDBGridController;
+  Name: string;
+begin
+  Controller := PopupOwnerController(Self);
+  if not Assigned(Controller) then Exit;
+
+  Name := '';
+  if not InputQuery('Save Current Filters', 'Filter set name:', Name) then
+    Exit;
+  if Trim(Name) = '' then
+    Exit;
+  Controller.SaveCurrentFilterAs(Trim(Name));
+end;
+
+procedure TVittixDBGridFilterPopup.ManageClick(Sender: TObject);
+var
+  Controller: TVittixDBGridController;
+  Dialog: TVittixDBGridFilterSetManager;
+  Columns: TStringList;
+  I: Integer;
+  AppliedName: string;
+begin
+  Controller := PopupOwnerController(Self);
+  if not Assigned(Controller) then Exit;
+
+  Columns := TStringList.Create;
+  try
+    if Assigned(Owner) and (Owner is TDBGrid) then
+      for I := 0 to TDBGrid(Owner).Columns.Count - 1 do
+        if TDBGrid(Owner).Columns[I].FieldName <> '' then
+          Columns.Add(TDBGrid(Owner).Columns[I].FieldName);
+
+    Dialog := TVittixDBGridFilterSetManager.CreateManager(Self,
+      Controller.FilterSetList, Columns,
+      procedure
+      begin
+        // The manager edits the list in place; persist after every change.
+        Controller.PersistFilterSets;
+      end,
+      procedure(AName: string)
+      begin
+        Controller.SaveCurrentFilterAs(AName);
+      end);
+    try
+      if Dialog.Execute(AppliedName) and (AppliedName <> '') then
+        Controller.ApplyFilterSet(AppliedName);
+    finally
+      Dialog.Free;
+    end;
+  finally
+    Columns.Free;
+  end;
+end;
+
+procedure TVittixDBGridFilterPopup.BuildSavedMenu;
+var
+  Controller: TVittixDBGridController;
+  Item: TMenuItem;
+  Names: TArray<string>;
+  I: Integer;
+begin
+  FSavedMenu.Items.Clear;
+  Controller := PopupOwnerController(Self);
+  if not Assigned(Controller) then
+    Exit;
+
+  Names := Controller.FilterSetNames;
+  for I := 0 to High(Names) do
+  begin
+    Item := TMenuItem.Create(FSavedMenu);
+    Item.Caption := Names[I];
+    Item.OnClick := ApplySavedSet;
+    FSavedMenu.Items.Add(Item);
+  end;
+
+  Item := TMenuItem.Create(FSavedMenu);
+  Item.Caption := '-';
+  FSavedMenu.Items.Add(Item);
+
+  Item := TMenuItem.Create(FSavedMenu);
+  Item.Caption := 'Save current as...';
+  Item.OnClick := SaveCurrentAsClick;
+  FSavedMenu.Items.Add(Item);
+
+  Item := TMenuItem.Create(FSavedMenu);
+  Item.Caption := 'Manage...';
+  Item.OnClick := ManageClick;
+  FSavedMenu.Items.Add(Item);
 end;
 
 initialization

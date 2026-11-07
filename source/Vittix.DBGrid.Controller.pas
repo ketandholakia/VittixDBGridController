@@ -1,4 +1,4 @@
-﻿unit Vittix.DBGrid.Controller;
+unit Vittix.DBGrid.Controller;
 
 {$REGION 'Documentation'}
 /// <summary>
@@ -17,6 +17,8 @@ uses
   System.SysUtils,
   System.Variants,
   System.Math,
+  System.Diagnostics,
+  System.TypInfo,
   Winapi.Windows,
   Winapi.Messages,
   System.IOUtils,
@@ -33,6 +35,8 @@ uses
   Vittix.DBGrid.Editors,
   Vittix.DBGrid.Sort.Engine,
   Vittix.DBGrid.Filter.Engine,
+  Vittix.DBGrid.FilterSets,
+  Vittix.DBGrid.Provider,
   Vittix.DBGrid.Aggregation.Engine,
   Vittix.DBGrid.Filter.Popup,
   Vittix.DBGrid.FooterPanel,
@@ -66,6 +70,37 @@ type
   /// sort state is rolled back before this fires.</summary>
   TVittixSortErrorEvent = procedure(Sender: TObject; Column: TColumn;
     AError: Exception) of object;
+
+  /// <summary>Raised after an incremental (type-ahead) search keystroke was
+  /// processed. SearchText is the current search buffer ('' when the buffer
+  /// was just reset); Found reports whether the buffer located a record.</summary>
+  TVittixIncrementalSearchEvent = procedure(Sender: TObject;
+    const SearchText: string; Found: Boolean) of object;
+
+  /// <summary>Raised after a saved filter set was applied
+  /// (ApplyFilterSet / layout restore). AName is the applied set.</summary>
+  TVittixFilterSetAppliedEvent = procedure(Sender: TObject;
+    const AName: string) of object;
+
+  /// <summary>Raised by every Vittix popup editor (memo, date, pick list,
+  /// lookup, masked numeric) before a value is committed; the built-in
+  /// Required/Min/Max rules run first. Accept = False keeps the editor
+  /// open and shows Message. Declared in the editors unit as
+  /// TVittixValidateCellEvent and re-exported here.</summary>
+  TVittixValidateCellEvent = Vittix.DBGrid.Editors.TVittixValidateCellEvent;
+
+  /// <summary>Fired when server-side filtering fell back to the client
+  /// engine: AReason says why (no provider, unwrappable SQL, inexpressible
+  /// filter, failing query). vcmAuto fires it too when a provider exists
+  /// but declined - applications can log the reason.</summary>
+  TVittixProviderFallbackEvent = procedure(Sender: TObject;
+    const AReason: string) of object;
+
+  /// <summary>Fired when the provider's re-query raised. Set Handled to
+  /// True to swallow it; unhandled errors re-raise after the provider has
+  /// restored the original SQL and re-opened the dataset.</summary>
+  TVittixProviderErrorEvent = procedure(Sender: TObject; E: Exception;
+    var Handled: Boolean) of object;
 
   TVittixGridDataLink = class(TDataLink)
   private
@@ -118,6 +153,37 @@ type
     FOnValidateFilter: TFilterValidationEvent;
     FOnFormatAggregation: TFormatAggregationEvent;
     FOnFieldValidation: TFieldValidationEvent;
+    FOnIncrementalSearch: TVittixIncrementalSearchEvent;
+
+    // Incremental (type-ahead) search state. The stopwatch timestamps the
+    // last keystroke so the buffer expires after the grid's timeout.
+    FSearchBuffer: string;
+    FSearchWatch: TStopwatch;
+
+    // Saved filter sets. The list loads lazily from FilterSetsFileName on
+    // first use; the active set name survives dataset churn because the
+    // engine is re-bound from it in CreateEngines.
+    FFilterSetList: TVittixFilterSetList;
+    FFilterSetListLoaded: Boolean;
+    FFilterSetsFileName: string;
+    FActiveFilterSetName: string;
+    FOnFilterSetApplied: TVittixFilterSetAppliedEvent;
+    FOnFilterSetsChanged: TNotifyEvent;
+    FOnValidateCell: TVittixValidateCellEvent;
+
+    // Server-side filter/sort provider state (v2.0). The provider is an
+    // application-supplied interface; the server path is only taken when
+    // the grid's FilterMode asks for it.
+    FProvider: IVittixDataProvider;
+    FOnProviderFallback: TVittixProviderFallbackEvent;
+    FOnProviderError: TVittixProviderErrorEvent;
+    FServerFilterActive: Boolean;
+    FServerSortActive: Boolean;
+    FPendingServerRoute: Boolean;
+
+    // Last observed multi-select row count; the footer must repaint when the
+    // selection changes so its selection aggregates stay current.
+    FLastSelectionCount: Integer;
 
     // Event hooks — only the WindowProc remains; grid input/draw integration
     // happens via virtual overrides on TVittixDBGrid calling the DoXxx methods.
@@ -127,6 +193,49 @@ type
     function IsReady: Boolean;
     function FindInfoByColumn(AColumn: TColumn): TVittixDBGridColumnInfo;
     function FindColumnByField(AField: TField): TColumn;
+
+    /// <summary>Pushes a layout-restore DisplayFormat onto the column's
+    /// backing field (numeric and datetime fields only; empty leaves the
+    /// field format untouched).</summary>
+    procedure ApplyColumnDisplayFormat(AColumn: TColumn; const AFormat: string);
+
+    /// <summary>True when the column carries a configured per-column
+    /// editor (EditorKind &lt;&gt; veNone).</summary>
+    function ColumnWantsEditor(AColumn: TColumn): Boolean;
+
+    // Incremental search helpers
+    function IncrementalSearchFieldName: string;
+    function IncrementalSearchTimedOut: Boolean;
+    procedure RunIncrementalSearch;
+    procedure ResetSearchBuffer;
+    procedure UpdateSearchHint(const AText: string);
+    procedure DoIncrementalSearch(const SearchText: string; Found: Boolean);
+    function LocateByPrefix(const AFieldName, AText: string): Boolean;
+    function FallbackScanForPrefix(const AFieldName, AText: string): Boolean;
+    procedure UpdateSelectionFooterSync;
+
+    // Saved filter sets
+    procedure EnsureFilterSetListLoaded;
+    function GetFilterSetList: TVittixFilterSetList;
+    function ResolveFilterSetsFileName: string;
+    procedure StoreSetInEngine(ASet: TVittixFilterSet);
+    procedure ReapplyActiveFilterSetToEngine;
+    procedure UpdateFilterSetHint;
+    procedure DoFilterSetApplied(const AName: string);
+    procedure DoFilterSetsChanged;
+
+    // Server-side provider routing
+    function FilterMode: TVittixFilterMode;
+    function CollectFieldInfos: TArray<TVittixSQLFieldInfo>;
+    function CollectSortColumns: TArray<TVittixSortColumn>;
+    procedure DoProviderFallback(const AReason: string);
+    procedure DoProviderError(E: Exception; var Handled: Boolean);
+    procedure UpdateServerHint(const AText: string);
+    procedure RestoreClientFiltering(const AReason: string;
+      AFireFallback: Boolean);
+    procedure DeactivateServerState;
+    procedure SetProvider(const Value: IVittixDataProvider);
+    procedure ApplyClientFiltering;
 
     procedure SetGrid(const Value: TDBGrid);
     procedure SetActive(const Value: Boolean);
@@ -173,9 +282,18 @@ type
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
 
+    /// <summary>Recomputes the footer aggregates on the server provider
+    /// (one aggregate SELECT against the active server WHERE). Returns
+    /// False when the server path was not taken (no provider, no filter,
+    /// provider decline/failure) - the caller then falls back to the
+    /// client scan. Public so hosts can force a footer refresh after bulk
+    /// data changes; also exercised directly by the provider regression
+    /// tests.</summary>
+    function ServerAggregateRefresh: Boolean;
+
     // Integration points called from TVittixDBGrid's virtual overrides.
-    // DoMouseDown/DoDblClick/DoKeyDown return True when the event was
-    // consumed and must not reach inherited VCL processing.
+    // DoMouseDown/DoDblClick/DoKeyDown/DoKeyPress return True when the event
+    // was consumed and must not reach inherited VCL processing.
     procedure DoTitleClick(Column: TColumn);
     procedure DoDrawColumnCell(const Rect: TRect; DataCol: Integer;
       Column: TColumn; State: TGridDrawState);
@@ -183,35 +301,164 @@ type
       X, Y: Integer): Boolean;
     function DoDblClick: Boolean;
     function DoKeyDown(var Key: Word; Shift: TShiftState): Boolean;
+    function DoKeyPress(var Key: Char): Boolean;
+
+    /// <summary>True when clipboard shortcuts must not be consumed by the
+    /// grid copy because the in-place editor (or a pending dataset edit)
+    /// owns them: EditorMode means the editor is up and its native
+    /// copy/cut/paste/select-all must win; an edit/insert state without the
+    /// editor leaves the keys unconsumed, which is still safer than the
+    /// grid copy walking bookmarks (GotoBookmark would implicitly post the
+    /// pending edit). Exposed for tests.</summary>
+    class function ShouldBypassClipboardShortcut(AEditorMode: Boolean;
+      AState: TDataSetState): Boolean; static;
+
+    /// <summary>Current incremental search buffer (type-ahead locate). Empty
+    /// when no search is in progress. Exposed for status displays and tests.
+    /// </summary>
+    property IncrementalSearchBuffer: string read FSearchBuffer;
 
     // Called by TVittixDBGrid (chooser moves, VCL ColumnMoved) after a
     // column's display position changed; raises OnColumnMoved.
     procedure DoColumnMoved(Column: TColumn; OldIndex, NewIndex: Integer);
 
+    /// <summary>Unhooks the grid before its destruction.</summary>
     procedure Detach;
+    /// <summary>Installs the runtime window hook after a handle is created.
+    /// Called by the grid; has no effect in the form designer.</summary>
     procedure InstallWindowProc;
+    /// <summary>Reattaches runtime hooks after a grid reload.</summary>
     procedure RehookGrid;
+    /// <summary>Realigns the runtime footer to the current grid layout.</summary>
     procedure GridLayoutChanged;
 
+    /// <summary>Recalculates dirty footer aggregates when the dataset is
+    /// active, then repaints the grid and footer.</summary>
     procedure Refresh;
+    /// <summary>Clears filters and sorting, then refreshes aggregates.</summary>
     procedure Clear;
+    /// <summary>Applies the current sort state and refreshes aggregates.
+    /// Filter changes are routed through RefreshFiltering.</summary>
     procedure ApplyState;
+    /// <summary>Opens the column chooser for the attached grid.</summary>
     procedure ShowColumnChooser;
+    /// <summary>Sets the global search text used alongside column filters
+    /// and refreshes the active filter route.</summary>
     procedure SetGlobalFilter(const Text: string);
+    /// <summary>Removes column, global, and saved-set filters.</summary>
     procedure ClearFilters;
+    /// <summary>Sets a column's footer aggregation and refreshes its
+    /// displayed value. An unknown column has no effect.</summary>
     procedure SetColumnAggregation(Column: TColumn; Aggregation: TVittixAggregationType);
+    /// <summary>Copies the current grid layout into State. Nil State is a
+    /// no-op.</summary>
     procedure CaptureLayout(State: TVittixDBGridLayoutState);
+    /// <summary>Restores a captured layout to the attached grid.</summary>
     procedure ApplyLayout(State: TVittixDBGridLayoutState);
+    /// <summary>True while the controller is applying a guarded update.</summary>
     function IsUpdating: Boolean;
+    /// <summary>Writes the current layout as JSON to Stream. Nil Stream is
+    /// a no-op.</summary>
     procedure SaveLayoutToStream(Stream: TStream);
+    /// <summary>Reads layout JSON from Stream and applies it. Nil Stream is
+    /// a no-op.</summary>
     procedure LoadLayoutFromStream(Stream: TStream);
+    /// <summary>Atomically saves layout JSON. An empty FileName uses
+    /// LayoutStorageFileName, then PersistenceRootPath\layout.json; raises
+    /// EVittixLayoutError if none is configured.</summary>
     procedure SaveLayoutToFile(const FileName: string = '');
+    /// <summary>Loads layout JSON. An empty FileName uses
+    /// LayoutStorageFileName, then PersistenceRootPath\layout.json; a missing
+    /// file is ignored, but no configured path raises EVittixLayoutError.
+    /// </summary>
     procedure LoadLayoutFromFile(const FileName: string = '');
+    /// <summary>Restores column order, visibility, and widths, clears
+    /// sorting/filtering and footer aggregates, and shows the footer.</summary>
     procedure ResetLayout;
 
     /// <summary>Finds a grid column by its FieldName; nil when not found.
     /// Public helper used by the export engine and tests.</summary>
     function FindColumnByFieldName(const FieldName: string): TColumn;
+
+    /// <summary>Copies the current cell (or the selected rows when
+    /// dgMultiSelect holds more than one row) to the clipboard as TSV.
+    /// AIncludeHeaders prepends the visible-column header row regardless of
+    /// the grid's CopyIncludeHeaders default.</summary>
+    procedure CopySelectionToClipboard(AIncludeHeaders: Boolean);
+
+    /// <summary>Saves the current per-column filters (AND-combined) as one
+    /// named filter set and makes it the active set. Persists to the filter
+    /// set file when one can be resolved.</summary>
+    procedure SaveCurrentFilterAs(const AName: string);
+
+    /// <summary>Applies a saved filter set by (case-insensitive) name.
+    /// Returns False when no set carries the name (the layout restore uses
+    /// that to skip silently). Conditions within the stored groups are
+    /// ANDed, groups are ORed; the first group is mirrored to the per-column
+    /// filter texts so titles, popup and exports stay consistent.</summary>
+    function ApplyFilterSet(const AName: string): Boolean;
+
+    /// <summary>Deletes a saved filter set; clears the active set name when
+    /// it is the deleted one. Returns False when the name is unknown.</summary>
+    function DeleteFilterSet(const AName: string): Boolean;
+
+    /// <summary>Names of the saved filter sets, in stored order.</summary>
+    function FilterSetNames: TArray<string>;
+
+    /// <summary>Saves the filter set list to the resolved file; a no-op
+    /// when no file can be resolved. Called after direct edits to the
+    /// FilterSetList (the manager dialog edits it in place).</summary>
+    procedure PersistFilterSets;
+
+    /// <summary>Name of the currently applied filter set ('' when none).
+    /// Survives dataset close/reopen cycles.</summary>
+    property ActiveFilterSetName: string read FActiveFilterSetName;
+
+    /// <summary>Lazily loaded saved filter sets (for the manager dialog).
+    /// </summary>
+    property FilterSetList: TVittixFilterSetList read GetFilterSetList;
+
+    /// <summary>Application-supplied server provider. Assigning it does
+    /// not switch modes by itself: the grid's FilterMode decides. When a
+    /// provider is swapped while the server path is active, the old one
+    /// restores the dataset's original SQL first.</summary>
+    property Provider: IVittixDataProvider read FProvider write SetProvider;
+
+    /// <summary>Routes the currently active filter conditions (column
+    /// texts, applied filter set groups, global search) to the server
+    /// provider or the client engine according to FilterMode. Called by
+    /// every filter entry point; applications changing conditions directly
+    /// can call it after their changes.</summary>
+    procedure RefreshFiltering;
+
+    /// <summary>Routes the current column sort state to the server
+    /// provider or the client sort engine according to FilterMode. Called
+    /// by the sort entry points (title click, ApplyState, layout).</summary>
+    procedure RefreshSorting;
+
+    /// <summary>True while the server provider owns the WHERE clause.
+    /// </summary>
+    property ServerFilterActive: Boolean read FServerFilterActive;
+
+    /// <summary>True while the server provider owns the ORDER BY.
+    /// </summary>
+    property ServerSortActive: Boolean read FServerSortActive;
+
+    /// <summary>Fired when server-side filtering fell back to the client
+    /// engine. Shares storage with the grid's OnProviderFallback.</summary>
+    property OnProviderFallback: TVittixProviderFallbackEvent
+      read FOnProviderFallback write FOnProviderFallback;
+
+    /// <summary>Fired when the provider's re-query raised. Shares storage
+    /// with the grid's OnProviderError.</summary>
+    property OnProviderError: TVittixProviderErrorEvent
+      read FOnProviderError write FOnProviderError;
+
+    /// <summary>File the filter sets persist to. Empty falls back to
+    /// PersistenceRootPath\filtersets.json; empty both means in-memory
+    /// only.</summary>
+    property FilterSetsFileName: string read FFilterSetsFileName
+      write FFilterSetsFileName;
 
     /// <summary>Returns the footer text that should appear for a column
     /// identified by field name: the aggregation display text when an
@@ -223,13 +470,22 @@ type
     // Called by TVittixDBGrid when its DataSource property changes
     procedure DataSourceChanged;
 
-    // Expose engines for testing and advanced scenarios
+    /// <summary>Active client filter engine, or nil before runtime engine
+    /// creation.</summary>
     property FilterEngine: TVittixDBGridFilterEngine read FFilterEngine;
+    /// <summary>Active client sort engine, or nil before runtime engine
+    /// creation.</summary>
     property SortEngine: TVittixDBGridSortEngine read FSortEngine;
+    /// <summary>Footer aggregation engine, or nil before runtime engine
+    /// creation.</summary>
     property AggregationEngine: TVittixDBGridAggregationEngine read FAggregationEngine;
 
+    /// <summary>Grid attached to this controller.</summary>
     property Grid: TDBGrid read FGrid write SetGrid;
+    /// <summary>Default layout JSON path for SaveLayoutToFile and
+    /// LoadLayoutFromFile.</summary>
     property LayoutStorageFileName: string read FLayoutStorageFileName write FLayoutStorageFileName;
+    /// <summary>Root directory for default persistence files.</summary>
     property PersistenceRootPath: string read FPersistenceRootPath write FPersistenceRootPath;
 
     // Notification events. The controller is the implementation owner;
@@ -248,6 +504,30 @@ type
       read FOnAfterApplyLayout write FOnAfterApplyLayout;
     property OnColumnMoved: TVittixColumnMovedEvent
       read FOnColumnMoved write FOnColumnMoved;
+
+    /// <summary>Fired after an incremental search keystroke; SearchText is
+    /// the active buffer ('' after a reset) and Found reports a locate hit.
+    /// The grid re-publishes this as OnIncrementalSearch over the same
+    /// storage, so an assignment on either surface fires exactly once.</summary>
+    property OnIncrementalSearch: TVittixIncrementalSearchEvent
+      read FOnIncrementalSearch write FOnIncrementalSearch;
+
+    /// <summary>Fired after a saved filter set was applied. The grid
+    /// re-publishes this as OnFilterSetApplied over the same storage.</summary>
+    property OnFilterSetApplied: TVittixFilterSetAppliedEvent
+      read FOnFilterSetApplied write FOnFilterSetApplied;
+
+    /// <summary>Fired after the saved filter sets changed (save, delete,
+    /// rename, reorder). The grid re-publishes this as
+    /// OnFilterSetsChanged over the same storage.</summary>
+    property OnFilterSetsChanged: TNotifyEvent
+      read FOnFilterSetsChanged write FOnFilterSetsChanged;
+
+    /// <summary>Per-column validation for every Vittix popup editor; runs
+    /// after the built-in Required/Min/Max rules. The grid re-publishes
+    /// this as OnValidateCell over the same storage.</summary>
+    property OnValidateCell: TVittixValidateCellEvent
+      read FOnValidateCell write FOnValidateCell;
 
     // Engine callbacks, previously unreachable (the engines are private).
     // Handlers are cached and pushed to the engines when they (re)appear.
@@ -277,7 +557,10 @@ uses
   // Implementation-only on purpose: TVittixDBGrid needs this unit in its
   // interface (strongly typed Controller property), so this unit must not
   // reference Vittix.DBGrid in its own interface section.
-  Vittix.DBGrid;
+  System.Character,
+  System.StrUtils,
+  Vittix.DBGrid,
+  Vittix.DBGrid.Export.Engine;
 
 function VittixGrid(AGrid: TDBGrid): TVittixDBGrid;
 begin
@@ -287,6 +570,28 @@ begin
     Result := TVittixDBGrid(AGrid)
   else
     Result := nil;
+end;
+
+function IsAsciiText(const S: string): Boolean;
+var
+  I: Integer;
+begin
+  for I := 1 to Length(S) do
+    if Ord(S[I]) >= $80 then
+      Exit(False);
+  Result := True;
+end;
+
+function UpperCaseUnicode(const S: string): string;
+var
+  I: Integer;
+begin
+  // Per-character TCharHelper.ToUpper applies Unicode simple case mapping —
+  // accented Latin, Cyrillic and Greek fold correctly and the caseless
+  // Indic scripts pass through unchanged. UpperCase would only fold ASCII.
+  SetLength(Result, Length(S));
+  for I := 1 to Length(S) do
+    Result[I] := S[I].ToUpper;
 end;
 
 { TVittixGridDataLink }
@@ -335,13 +640,25 @@ begin
 
   FAggregationDirty := True;
   FDataLink := TVittixGridDataLink.Create(Self);
+  FLastSelectionCount := -1;
+  FSearchWatch := TStopwatch.StartNew;
 end;
 
 destructor TVittixDBGridController.Destroy;
 begin
+  // Release the provider FIRST: its destructor may re-open the dataset,
+  // which walks the data links - they must still be alive (and the grid
+  // not half-torn-down) when the original SQL is restored.
+  FProvider := nil;
   UnhookGrid;
   FreeAndNil(FDataLink);
+  // The controller (owned by the grid) can die while the dataset it
+  // watches lives on; without this Remove the dataset's later
+  // destruction fires a notification into the freed controller.
+  if Assigned(FDataset) then
+    FDataset.RemoveFreeNotification(Self);
   DestroyEngines;
+  FreeAndNil(FFilterSetList);
   inherited;
 end;
 
@@ -652,6 +969,9 @@ begin
 
   SetAggregationDirty;
   Refresh;
+  // A server filter change requested during an edit applies now.
+  if FPendingServerRoute then
+    RefreshFiltering;
 end;
 
 { ============================================================================= }
@@ -694,6 +1014,12 @@ begin
   FEnginesCreated := True;
   SetAggregationDirty;
   Refresh;
+  // The active filter set name survives dataset churn: re-bind its groups
+  // to the freshly created engine, then re-route to the server provider
+  // when the grid is in a server mode.
+  ReapplyActiveFilterSetToEngine;
+  RefreshFiltering;
+  RefreshSorting;
 end;
 
 procedure TVittixDBGridController.DestroyEngines;
@@ -788,6 +1114,11 @@ begin
       end;
     end;
   end;
+
+  // The footer shows selection aggregates when rows are selected; the grid
+  // does not notify the footer on selection changes, so piggyback on the
+  // cell draws every selection change causes.
+  UpdateSelectionFooterSync;
 end;
 
 { ============================================================================= }
@@ -798,6 +1129,11 @@ procedure TVittixDBGridController.DoTitleClick(Column: TColumn);
 begin
   if Assigned(FSortEngine) then
   begin
+    // In server/auto modes the client engine never writes IndexFieldNames:
+    // a leftover client index would re-sort every re-opened result
+    // client-side and silently override the server ORDER BY. ToggleSort
+    // still maintains the column state for the UI arrows and fallbacks.
+    FSortEngine.ClientApplyEnabled := FilterMode = vcmClient;
     try
       FSortEngine.ToggleSort(
         Column,
@@ -818,6 +1154,8 @@ begin
         raise;
       end;
     end;
+    if FilterMode <> vcmClient then
+      RefreshSorting;
     SetAggregationDirty;
     Refresh;
     // Reached only when ToggleSort applied without raising.
@@ -863,7 +1201,9 @@ begin
       begin
         if Assigned(FFilterEngine) then
         begin
-          FFilterEngine.Active := True;
+          RefreshFiltering;
+          if not FServerFilterActive then
+            FFilterEngine.Active := True;
           SetAggregationDirty;
           Refresh;
           DoFilterApplied(Col.FieldName);
@@ -887,12 +1227,19 @@ begin
   Column := FindColumnByField(Field);
 
   if Assigned(Column) and Assigned(Field) and
-     (Field.DataType in [ftMemo, ftWideMemo, ftFmtMemo, ftDate, ftTime, ftDateTime]) and
-     TVittixDBGridEditors.EditField(FGrid, Column) then
+     (ColumnWantsEditor(Column) or
+      (Field.DataType in [ftMemo, ftWideMemo, ftFmtMemo, ftDate, ftTime, ftDateTime])) and
+     TVittixDBGridEditors.EditField(FGrid, Column, FOnValidateCell) then
   begin
     Refresh;
     Result := True; // consumed: the field editor handled it
   end;
+end;
+
+class function TVittixDBGridController.ShouldBypassClipboardShortcut(
+  AEditorMode: Boolean; AState: TDataSetState): Boolean;
+begin
+  Result := AEditorMode or (AState in dsEditModes);
 end;
 
 function TVittixDBGridController.DoKeyDown(var Key: Word;
@@ -900,8 +1247,28 @@ function TVittixDBGridController.DoKeyDown(var Key: Word;
 var
   Field: TField;
   Column: TColumn;
+  State: TDataSetState;
 begin
   Result := False;
+
+  // Copy selection (see CopySelectionToClipboard): Ctrl+C honors the grid's
+  // CopyIncludeHeaders default, Ctrl+Shift+C always includes the header row.
+  // While an edit is in progress the clipboard shortcuts belong to the
+  // in-place editor's native handling (the focused editor normally consumes
+  // them before the grid sees this; the guard covers routed/Perform'ed keys).
+  if Assigned(FDataset) then
+    State := FDataset.State
+  else
+    State := dsInactive;
+  if Assigned(FGrid) and (Key = Ord('C')) and
+     ([ssCtrl] * Shift = [ssCtrl]) and
+     not ShouldBypassClipboardShortcut(FGrid.EditorMode, State) then
+  begin
+    CopySelectionToClipboard(ssShift in Shift);
+    Key := 0;
+    Exit(True);
+  end;
+
   if Key <> VK_F2 then Exit;
 
   Field := nil;
@@ -910,12 +1277,312 @@ begin
   Column := FindColumnByField(Field);
 
   if Assigned(Column) and Assigned(Field) and
-     (Field.DataType in [ftMemo, ftWideMemo, ftFmtMemo, ftDate, ftTime, ftDateTime]) and
-     TVittixDBGridEditors.EditField(FGrid, Column) then
+     (ColumnWantsEditor(Column) or
+      (Field.DataType in [ftMemo, ftWideMemo, ftFmtMemo, ftDate, ftTime, ftDateTime])) and
+     TVittixDBGridEditors.EditField(FGrid, Column, FOnValidateCell) then
   begin
     Refresh;
     Result := True;
   end;
+end;
+
+function TVittixDBGridController.ColumnWantsEditor(AColumn: TColumn): Boolean;
+var
+  Info: TVittixDBGridColumnInfo;
+begin
+  // A configured per-column editor opens regardless of the field type;
+  // the dispatcher itself decides what the editor shows.
+  Info := FindInfoByColumn(AColumn);
+  Result := Assigned(Info) and (Info.EditorKind <> veNone);
+end;
+
+function TVittixDBGridController.DoKeyPress(var Key: Char): Boolean;
+var
+  Grid: TVittixDBGrid;
+begin
+  Result := False;
+  Grid := VittixGrid(FGrid);
+  if not Assigned(Grid) or not Grid.IncrementalSearch then Exit;
+
+  // A closed dataset must never see a search; any pending buffer is stale.
+  if not Assigned(FDataset) or not FDataset.Active then
+  begin
+    if FSearchBuffer <> '' then
+      ResetSearchBuffer;
+    Exit;
+  end;
+
+  // In-place editing owns the keyboard: never steal characters while the
+  // dataset is in an edit/insert state (the grid's KeyPress override skips
+  // delegation while the in-place editor itself is open).
+  if FDataset.State in dsEditModes then Exit;
+
+  if Key = #27 then
+  begin
+    // Esc clears the buffer. With nothing accumulated, Esc keeps its default
+    // grid behavior (e.g. canceling an edit).
+    if FSearchBuffer = '' then Exit;
+    ResetSearchBuffer;
+    Key := #0;
+    Result := True;
+    Exit;
+  end;
+
+  if Key = #8 then
+  begin
+    if FSearchBuffer = '' then Exit;
+    SetLength(FSearchBuffer, Length(FSearchBuffer) - 1);
+    // Backspace granularity matches the Windows EDIT control: one UTF-16
+    // code unit per keystroke — except that a trailing low surrogate pulls
+    // its high surrogate with it, so half of a surrogate pair never
+    // survives in the buffer. Combining marks (Indic matras, virama,
+    // nukta) are one Char each by the same rule.
+    if (Length(FSearchBuffer) > 0) and
+       (Ord(FSearchBuffer[Length(FSearchBuffer)]) >= $D800) and
+       (Ord(FSearchBuffer[Length(FSearchBuffer)]) <= $DBFF) then
+      SetLength(FSearchBuffer, Length(FSearchBuffer) - 1);
+    RunIncrementalSearch;
+    Key := #0;
+    Result := True;
+    Exit;
+  end;
+
+  // Printable characters only; control characters (Tab, Enter, Ctrl+letter
+  // combos) keep their grid semantics.
+  if Key < #32 then Exit;
+
+  // An expired buffer starts a fresh search instead of growing stale text.
+  if (FSearchBuffer <> '') and IncrementalSearchTimedOut then
+    FSearchBuffer := '';
+  FSearchBuffer := FSearchBuffer + Key;
+  FSearchWatch := TStopwatch.StartNew;
+
+  // A high surrogate is half a code point: locating with a lone half is a
+  // guaranteed miss, so wait for the completing low surrogate (the next
+  // WM_CHAR) before searching. BMP characters — including Indic text
+  // injected per character by keyboard hooks — search immediately.
+  if (Ord(Key) >= $D800) and (Ord(Key) <= $DBFF) then
+  begin
+    Key := #0;
+    Result := True;
+    Exit;
+  end;
+
+  RunIncrementalSearch;
+
+  // The character was consumed whether or not the search matched; a failed
+  // search keeps the buffer so Backspace can recover, and Locate leaves the
+  // cursor on the current record.
+  Key := #0;
+  Result := True;
+end;
+
+procedure TVittixDBGridController.ResetSearchBuffer;
+begin
+  if FSearchBuffer = '' then Exit;
+  FSearchBuffer := '';
+  UpdateSearchHint('');
+  DoIncrementalSearch('', False);
+end;
+
+procedure TVittixDBGridController.RunIncrementalSearch;
+var
+  FieldName: string;
+  Found: Boolean;
+begin
+  if FSearchBuffer = '' then
+  begin
+    // Fully erased buffer: clear the hint and stop searching.
+    UpdateSearchHint('');
+    DoIncrementalSearch('', False);
+    Exit;
+  end;
+
+  FieldName := IncrementalSearchFieldName;
+  Found := (FieldName <> '') and LocateByPrefix(FieldName, FSearchBuffer);
+  if Found then
+    UpdateSearchHint('Find: ' + FSearchBuffer)
+  else
+    UpdateSearchHint('Find: ' + FSearchBuffer + ' (no match)');
+  DoIncrementalSearch(FSearchBuffer, Found);
+end;
+
+function TVittixDBGridController.IncrementalSearchFieldName: string;
+var
+  Grid: TVittixDBGrid;
+  Info: TVittixDBGridColumnInfo;
+  Best: TVittixDBGridColumnInfo;
+  I: Integer;
+begin
+  Result := '';
+  Grid := VittixGrid(FGrid);
+  if not Assigned(Grid) then Exit;
+
+  // The primary sort column leads the search: the user reads the data in
+  // that order, so type-ahead must locate within it.
+  Best := nil;
+  if Assigned(Grid.ColumnInfo) then
+    for I := 0 to Grid.ColumnInfo.Count - 1 do
+    begin
+      Info := Grid.ColumnInfo[I];
+      if (Info.SortOrder <> vsoNone) and
+         ((Best = nil) or (Info.SortIndex < Best.SortIndex)) then
+        Best := Info;
+    end;
+
+  if Assigned(Best) then
+    Exit(Best.FieldName);
+
+  // Unsorted: search the current column.
+  if Assigned(Grid.SelectedField) and (Grid.SelectedField.FieldName <> '') then
+    Exit(Grid.SelectedField.FieldName);
+
+  // Last resort: the first column bound to a field.
+  for I := 0 to Grid.Columns.Count - 1 do
+    if Grid.Columns[I].FieldName <> '' then
+      Exit(Grid.Columns[I].FieldName);
+end;
+
+function TVittixDBGridController.IncrementalSearchTimedOut: Boolean;
+var
+  Grid: TVittixDBGrid;
+begin
+  Grid := VittixGrid(FGrid);
+  if not Assigned(Grid) then
+    Exit(False);
+  // A timeout of 0 or less expires every accumulated buffer immediately.
+  if Grid.IncrementalSearchTimeout <= 0 then
+    Exit(True);
+  Result := FSearchWatch.ElapsedMilliseconds > Grid.IncrementalSearchTimeout;
+end;
+
+function TVittixDBGridController.LocateByPrefix(const AFieldName,
+  AText: string): Boolean;
+var
+  Field: TField;
+  BufferIsUnicode: Boolean;
+begin
+  Result := False;
+  if (AFieldName = '') or (AText = '') then Exit;
+
+  BufferIsUnicode := not IsAsciiText(AText);
+  Field := FDataset.FindField(AFieldName);
+
+  // Midas and FireDAC compare ANSI (ftString) values through a codepage
+  // conversion that collapses every non-ASCII character to '?', so a
+  // non-ASCII buffer can match the WRONG record on such fields (a
+  // Devanagari prefix matched a Gujarati row in testing). Wide string
+  // fields compare in UTF-16 — Midas keeps strings wide internally and
+  // FireDAC.DatS routes dtWideString through CompareStringW with
+  // NORM_IGNORECASE (FireDAC.Stan.Util.FDCompareWideStr) — so the fast
+  // Locate path is safe there. ASCII buffers are safe on any field.
+  if (not BufferIsUnicode) or
+     (Assigned(Field) and
+      (Field.DataType in [ftWideString, ftFixedWideChar, ftWideMemo])) then
+  begin
+    try
+      // Prefix, case-insensitive. Locate keeps the cursor on the current
+      // record when nothing matches.
+      Result := FDataset.Locate(AFieldName, AText,
+        [loCaseInsensitive, loPartialKey]);
+    except
+      // Datasets without Locate support raise; fall back to a plain scan
+      // that preserves the cursor when nothing matches.
+      Result := FallbackScanForPrefix(AFieldName, AText);
+    end;
+  end
+  else
+    Result := FallbackScanForPrefix(AFieldName, AText);
+end;
+
+function TVittixDBGridController.FallbackScanForPrefix(const AFieldName,
+  AText: string): Boolean;
+var
+  Bookmark: TBookmark;
+  Field: TField;
+  FoldedBuffer: string;
+  BufLen, I: Integer;
+  Value: string;
+  Matched: Boolean;
+begin
+  Result := False;
+  Field := FDataset.FindField(AFieldName);
+  if not Assigned(Field) or FDataset.IsEmpty then Exit;
+
+  // Fold the needle once. Per row, only the first BufLen characters are
+  // folded (char-wise, via TCharHelper - no per-row string allocation),
+  // which keeps a 50k-row scan in the low milliseconds. Char-wise simple
+  // case mapping is equivalent to StartsText over fully folded strings.
+  FoldedBuffer := UpperCaseUnicode(AText);
+  BufLen := Length(FoldedBuffer);
+  Bookmark := FDataset.GetBookmark;
+  try
+    FDataset.DisableControls;
+    try
+      FDataset.First;
+      while not FDataset.Eof do
+      begin
+        if not Field.IsNull then
+        begin
+          Value := Field.AsString;
+          if Length(Value) >= BufLen then
+          begin
+            Matched := True;
+            for I := 1 to BufLen do
+              if Value[I].ToUpper <> FoldedBuffer[I] then
+              begin
+                Matched := False;
+                Break;
+              end;
+            if Matched then
+              Exit(True); // cursor is already parked on the match
+          end;
+        end;
+        FDataset.Next;
+      end;
+
+      // No match: restore the position the search started from.
+      if Bookmark <> nil then
+      begin
+        try
+          if FDataset.BookmarkValid(Bookmark) then
+            FDataset.GotoBookmark(Bookmark);
+        except
+        end;
+      end;
+    finally
+      FDataset.EnableControls;
+    end;
+  finally
+    if Bookmark <> nil then
+      FDataset.FreeBookmark(Bookmark);
+  end;
+end;
+
+procedure TVittixDBGridController.UpdateSearchHint(const AText: string);
+begin
+  if Assigned(FFooterPanel) then
+    FFooterPanel.SetSearchHint(AText);
+end;
+
+procedure TVittixDBGridController.UpdateSelectionFooterSync;
+var
+  Count: Integer;
+begin
+  if not Assigned(FFooterPanel) or not Assigned(FGrid) then Exit;
+  Count := FGrid.SelectedRows.Count;
+  if Count <> FLastSelectionCount then
+  begin
+    FLastSelectionCount := Count;
+    FFooterPanel.Invalidate;
+  end;
+end;
+
+procedure TVittixDBGridController.DoIncrementalSearch(const SearchText: string;
+  Found: Boolean);
+begin
+  if Assigned(FOnIncrementalSearch) then
+    FOnIncrementalSearch(Self, SearchText, Found);
 end;
 
 { ============================================================================= }
@@ -941,7 +1608,11 @@ begin
        Assigned(FDataset) and FDataset.Active and
        not (FDataset.State in dsEditModes) then
     begin
-      FAggregationEngine.Recalculate;
+      // Server mode first: one SELECT COUNT/SUM/... against the applied
+      // WHERE. Any failure falls back to the client full scan (the
+      // correctness baseline).
+      if not ServerAggregateRefresh then
+        FAggregationEngine.Recalculate;
       FAggregationDirty := False;
     end;
   finally
@@ -981,6 +1652,13 @@ begin
   ClearFilters;
   if Assigned(FSortEngine) then
     FSortEngine.ClearSorting;
+  if FServerSortActive then
+  begin
+    if Assigned(FProvider) then
+      FProvider.ClearSort;
+    FServerSortActive := False;
+    FSortEngine.ClientApplyEnabled := not FServerFilterActive;
+  end;
   SetAggregationDirty;
   Refresh;
   // ClearFilters already raised OnFilterApplied for the filter side.
@@ -995,7 +1673,12 @@ begin
   SortingApplied := False;
   if Assigned(FSortEngine) then
   begin
-    FSortEngine.ApplySorting;
+    // In server mode this routes the ORDER BY instead of writing
+    // IndexFieldNames.
+    if FServerSortActive or (FilterMode <> vcmClient) then
+      RefreshSorting
+    else
+      FSortEngine.ApplySorting;
     SortingApplied := True;
   end;
   SetAggregationDirty;
@@ -1015,7 +1698,17 @@ begin
     Exit;
 
   FFilterEngine.GlobalSearchText := Text;
-  FFilterEngine.Active := Text <> '';
+  RefreshFiltering;
+  // When the server provider took the WHERE, the client engine stays off;
+  // otherwise the client path applies here (which also fixed the pre-2.0
+  // no-op when the engine was already active).
+  if not FServerFilterActive then
+  begin
+    if FFilterEngine.Active and Assigned(FDataSet) and FDataSet.Active then
+      FFilterEngine.ApplyFilter
+    else
+      FFilterEngine.Active := Text <> '';
+  end;
   SetAggregationDirty;
   Refresh;
   DoFilterApplied('');
@@ -1026,7 +1719,17 @@ begin
   if not Assigned(FFilterEngine) then
     Exit;
 
+  // Clearing also drops any applied filter set (the engine's Clear removes
+  // the OR-groups and the per-column texts) and the server WHERE.
   FFilterEngine.Clear;
+  FActiveFilterSetName := '';
+  if FServerFilterActive then
+  begin
+    if Assigned(FProvider) then
+      FProvider.ClearFilter;
+    FServerFilterActive := False;
+    UpdateServerHint('');
+  end;
   SetAggregationDirty;
   Refresh;
   DoFilterApplied('');
@@ -1112,6 +1815,7 @@ begin
   State.FooterVisible := VittixGrid(FGrid).FooterVisible;
   State.AlternatingRowColors := VittixGrid(FGrid).AlternatingRowColors;
   State.AlternateRowColor := VittixGrid(FGrid).AlternateRowColor;
+  State.ActiveFilterSetName := FActiveFilterSetName;
   for I := 0 to FGrid.Columns.Count - 1 do
   begin
     Col := FGrid.Columns[I];
@@ -1120,6 +1824,20 @@ begin
     Item.DisplayIndex := Col.Index;
     Item.Width := Col.Width;
     Item.Visible := Col.Visible;
+    // Schema v2 defaults for columns without ColumnInfo
+    Item.Pinned := False;
+    Item.TitleCaption := '';
+    Item.DisplayFormat := '';
+    Item.ExportInclude := True;
+    Item.ExportCaption := '';
+    Item.EditorKind := 'veNone';
+    Item.PickItems := '';
+    Item.HasMin := False;
+    Item.MinValue := 0;
+    Item.HasMax := False;
+    Item.MaxValue := 0;
+    Item.Required := False;
+    Item.DecimalPlaces := -1;
     Info := VittixGrid(FGrid).ColumnInfo.FindByFieldName(Col.FieldName);
     if Assigned(Info) then
     begin
@@ -1128,6 +1846,20 @@ begin
       Item.AggregationType := Info.AggregationType;
       Item.FooterText := Info.FooterText;
       Item.CellConditionsJson := CellConditionsToJson(Info.CellConditions);
+      Item.Pinned := Info.Pinned;
+      Item.TitleCaption := Info.TitleCaption;
+      Item.DisplayFormat := Info.DisplayFormat;
+      Item.ExportInclude := Info.ExportInclude;
+      Item.ExportCaption := Info.ExportCaption;
+      Item.EditorKind := GetEnumName(TypeInfo(TVittixEditorKind),
+        Ord(Info.EditorKind));
+      Item.PickItems := Info.PickItems;
+      Item.HasMin := Info.HasMin;
+      Item.MinValue := Info.MinValue;
+      Item.HasMax := Info.HasMax;
+      Item.MaxValue := Info.MaxValue;
+      Item.Required := Info.Required;
+      Item.DecimalPlaces := Info.DecimalPlaces;
     end;
     State.Columns.Add(Item);
   end;
@@ -1166,6 +1898,32 @@ begin
         Info.AggregationType := Item.AggregationType;
         Info.FooterText := Item.FooterText;
         CellConditionsFromJson(Info.CellConditions, Item.CellConditionsJson);
+        Info.Pinned := Item.Pinned;
+        Info.TitleCaption := Item.TitleCaption;
+        Info.DisplayFormat := Item.DisplayFormat;
+        Info.ExportInclude := Item.ExportInclude;
+        Info.ExportCaption := Item.ExportCaption;
+        // Editor configuration; an unknown enum name falls back to veNone.
+        case GetEnumValue(TypeInfo(TVittixEditorKind), Item.EditorKind) of
+          1: Info.EditorKind := vePickList;
+          2: Info.EditorKind := veLookup;
+          3: Info.EditorKind := veMaskedNumber;
+        else
+          Info.EditorKind := veNone;
+        end;
+        Info.PickItems := Item.PickItems;
+        Info.HasMin := Item.HasMin;
+        Info.MinValue := Item.MinValue;
+        Info.HasMax := Item.HasMax;
+        Info.MaxValue := Item.MaxValue;
+        Info.Required := Item.Required;
+        Info.DecimalPlaces := Item.DecimalPlaces;
+        // Push the v2 overrides onto the live objects. An empty
+        // TitleCaption/DisplayFormat leaves the current value untouched
+        // (a layout cannot know the application's default).
+        if Info.TitleCaption <> '' then
+          Col.Title.Caption := Info.TitleCaption;
+        ApplyColumnDisplayFormat(Col, Info.DisplayFormat);
       end;
     end;
     // Grid visual properties delegate to this controller (single source of
@@ -1181,6 +1939,13 @@ begin
       FUpdating := False;
     end;
   end;
+  // Restore the frozen region from the loaded Pinned flags; this must run
+  // outside the FUpdating guard so its LayoutChanged can reapply FixedCols.
+  VittixGrid(FGrid).RefreshFrozenColumns;
+  // Restore the applied filter set when it still exists; unknown names are
+  // skipped silently (ApplyFilterSet returns False).
+  if State.ActiveFilterSetName <> '' then
+    ApplyFilterSet(State.ActiveFilterSetName);
   SetAggregationDirty;
   Refresh;
   GridLayoutChanged;
@@ -1331,6 +2096,11 @@ var
   Info: TVittixDBGridColumnInfo;
 begin
   if not Assigned(FGrid) then Exit;
+
+  // Freezing is part of the layout: clear it first so the setter's Pinned
+  // sync runs before the column resets below.
+  VittixGrid(FGrid).UnfreezeAll;
+
   FGrid.Columns.BeginUpdate;
   try
     if Assigned(FGrid.DataSource) and Assigned(FGrid.DataSource.DataSet) then
@@ -1370,14 +2140,766 @@ begin
 
   if TVittixDBGridColumnChooserForm.Execute(FGrid) then
   begin
+    // Hiding a frozen column must shrink the frozen region accordingly.
+    VittixGrid(FGrid).RefreshFrozenColumns;
     SetAggregationDirty;
     Refresh;
   end;
 end;
 
-{ =============================================================================
-  NOTIFICATION EVENTS
-  ============================================================================= }
+/// <summary>Layout restores apply DisplayFormat to the backing field.
+/// Only numeric and datetime fields carry a DisplayFormat; an empty format
+/// leaves the application's own field settings untouched.</summary>
+procedure TVittixDBGridController.ApplyColumnDisplayFormat(AColumn: TColumn;
+  const AFormat: string);
+begin
+  if (AFormat = '') or not Assigned(AColumn) or not Assigned(AColumn.Field) then
+    Exit;
+
+  if AColumn.Field is TNumericField then
+    TNumericField(AColumn.Field).DisplayFormat := AFormat
+  else if AColumn.Field is TDateTimeField then
+    TDateTimeField(AColumn.Field).DisplayFormat := AFormat;
+end;
+
+{ ============================================================================= }
+{ SELECTION COPY (Ctrl+C / Ctrl+Shift+C, routed from TVittixDBGrid.KeyDown) }
+{ ============================================================================= }
+
+procedure TVittixDBGridController.CopySelectionToClipboard(
+  AIncludeHeaders: Boolean);
+var
+  Grid: TVittixDBGrid;
+  Exporter: TVittixDBGridExporter;
+begin
+  Grid := VittixGrid(FGrid);
+  if not Assigned(Grid) then Exit;
+
+  Exporter := TVittixDBGridExporter.Create(Grid);
+  try
+    // Full-precision invariant values (unless the exporter's locale opt-out
+    // is set), visible columns in grid order, tab-delimited with proper
+    // quoting — all owned by the exporter so copy and export never drift.
+    Exporter.CopySelectionToClipboard(AIncludeHeaders);
+  finally
+    Exporter.Free;
+  end;
+end;
+
+{ ============================================================================= }
+{ SERVER-SIDE PROVIDER ROUTING (v2.0) }
+{ ============================================================================= }
+
+function TVittixDBGridController.FilterMode: TVittixFilterMode;
+begin
+  // The grid owns the published property; no grid or a design-time grid
+  // means the safe default.
+  Result := vcmClient;
+  if Assigned(FGrid) and not (csDesigning in FGrid.ComponentState) then
+    Result := VittixGrid(FGrid).FilterMode;
+end;
+
+function TVittixDBGridController.CollectFieldInfos: TArray<TVittixSQLFieldInfo>;
+var
+  I: Integer;
+begin
+  SetLength(Result, 0);
+  if not Assigned(FDataset) or not FDataset.Active then
+    Exit;
+  for I := 0 to FDataset.Fields.Count - 1 do
+  begin
+    SetLength(Result, Length(Result) + 1);
+    Result[High(Result)].Name := FDataset.Fields[I].FieldName;
+    Result[High(Result)].DataType := FDataset.Fields[I].DataType;
+  end;
+end;
+
+function TVittixDBGridController.CollectSortColumns: TArray<TVittixSortColumn>;
+var
+  Infos: TArray<TVittixDBGridColumnInfo>;
+  I, J, Count: Integer;
+  Info: TVittixDBGridColumnInfo;
+begin
+  // Same ordering rule as the client sort engine: SortIndex ascending.
+  SetLength(Infos, 0);
+  if Assigned(FGrid) then
+    for I := 0 to VittixGrid(FGrid).ColumnInfo.Count - 1 do
+      if VittixGrid(FGrid).ColumnInfo[I].SortOrder <> vsoNone then
+      begin
+        SetLength(Infos, Length(Infos) + 1);
+        Infos[High(Infos)] := VittixGrid(FGrid).ColumnInfo[I];
+      end;
+  for I := 1 to High(Infos) do
+    for J := I downto 1 do
+      if Infos[J].SortIndex < Infos[J - 1].SortIndex then
+      begin
+        Info := Infos[J];
+        Infos[J] := Infos[J - 1];
+        Infos[J - 1] := Info;
+      end;
+
+  SetLength(Result, Length(Infos));
+  Count := 0;
+  for I := 0 to High(Infos) do
+  begin
+    Result[Count].FieldName := Infos[I].FieldName;
+    Result[Count].Descending := Infos[I].SortOrder = vsoDesc;
+    Inc(Count);
+  end;
+end;
+
+procedure TVittixDBGridController.DoProviderFallback(const AReason: string);
+begin
+  if Assigned(FOnProviderFallback) then
+    FOnProviderFallback(Self, AReason);
+end;
+
+procedure TVittixDBGridController.DoProviderError(E: Exception;
+  var Handled: Boolean);
+begin
+  if Assigned(FOnProviderError) then
+    FOnProviderError(Self, E, Handled);
+end;
+
+procedure TVittixDBGridController.UpdateServerHint(const AText: string);
+begin
+  if Assigned(FFooterPanel) then
+    FFooterPanel.SetServerHint(AText);
+end;
+
+procedure TVittixDBGridController.ApplyClientFiltering;
+begin
+  // The client engine takes over with the same texts (the per-column Info
+  // texts and the stored groups stay in place).
+  if Assigned(FFilterEngine) and not FFilterEngine.Active and
+     Assigned(FDataset) and FDataset.Active then
+    FFilterEngine.Active := True;
+end;
+
+procedure TVittixDBGridController.RestoreClientFiltering(
+  const AReason: string; AFireFallback: Boolean);
+begin
+  if FServerFilterActive then
+  begin
+    if Assigned(FProvider) then
+      FProvider.ClearFilter;
+    FServerFilterActive := False;
+  end;
+  ApplyClientFiltering;
+  SetAggregationDirty;
+  Refresh;
+
+  if AReason <> '' then
+    UpdateServerHint('Client filter (fallback)')
+  else
+    UpdateServerHint('');
+  if AFireFallback and (AReason <> '') then
+    DoProviderFallback(AReason);
+end;
+
+procedure TVittixDBGridController.DeactivateServerState;
+begin
+  // Mode switched back to client (or teardown): everything back to the
+  // application's original SQL and the client engine.
+  if Assigned(FProvider) then
+    FProvider.RestoreOriginal;
+  FServerFilterActive := False;
+  FServerSortActive := False;
+  if Assigned(FSortEngine) then
+    FSortEngine.ClientApplyEnabled := True;
+  UpdateServerHint('');
+end;
+
+procedure TVittixDBGridController.SetProvider(const Value: IVittixDataProvider);
+begin
+  if FProvider = Value then Exit;
+
+  // A provider swap while the server path is live must not leave the old
+  // wrapper SQL on the dataset.
+  if FServerFilterActive or FServerSortActive then
+  begin
+    if Assigned(FProvider) then
+      FProvider.RestoreOriginal;
+    FServerFilterActive := False;
+    FServerSortActive := False;
+    if Assigned(FSortEngine) then
+      FSortEngine.ClientApplyEnabled := True;
+    ApplyClientFiltering;
+    UpdateServerHint('');
+  end;
+  FProvider := Value;
+end;
+
+procedure TVittixDBGridController.RefreshFiltering;
+var
+  Groups, ColumnGroup: TVittixFilterConditionGroups;
+  GlobalSearch: string;
+  Mode: TVittixFilterMode;
+  Reason: string;
+  Handled: Boolean;
+  HasCondition: Boolean;
+  G, C: Integer;
+begin
+  if FUpdating then Exit;
+
+  Mode := FilterMode;
+  if Mode = vcmClient then
+  begin
+    if FServerFilterActive or FServerSortActive then
+    begin
+      DeactivateServerState;
+      ApplyClientFiltering;
+      SetAggregationDirty;
+      Refresh;
+    end
+    else
+      // Pure client mode: keep the engine in step with the active
+      // conditions (column texts, stored groups, global search).
+      ApplyClientFiltering;
+    Exit;
+  end;
+
+  // A running edit defers the re-query exactly like the aggregation
+  // refresh does; DataLinkRecordChanged routes it after the post/cancel.
+  if Assigned(FDataset) and (FDataset.State in dsEditModes) then
+  begin
+    FPendingServerRoute := True;
+    Exit;
+  end;
+  FPendingServerRoute := False;
+
+  if not (Assigned(FDataset) and FDataset.Active) then
+    Exit;
+
+  // Conditions: an applied filter set's groups win; otherwise the classic
+  // per-column texts form one AND-group.
+  Groups := nil;
+  GlobalSearch := '';
+  if Assigned(FFilterEngine) then
+  begin
+    Groups := FFilterEngine.GetStoredGroups;
+    if Length(Groups) = 0 then
+      Groups := FFilterEngine.GetColumnConditions;
+    GlobalSearch := FFilterEngine.GlobalSearchText;
+  end;
+
+  HasCondition := GlobalSearch <> '';
+  if not HasCondition then
+    for G := 0 to High(Groups) do
+      for C := 0 to High(Groups[G]) do
+        if Trim(Groups[G][C].FilterText) <> '' then
+        begin
+          HasCondition := True;
+          Break;
+        end;
+
+  if not HasCondition then
+  begin
+    // Nothing to filter: drop the server WHERE (sort survives) and let
+    // the client side be the no-filter baseline.
+    if FServerFilterActive then
+    begin
+      if Assigned(FProvider) then
+        FProvider.ClearFilter;
+      FServerFilterActive := False;
+    end;
+    ApplyClientFiltering;
+    UpdateServerHint('');
+    Exit;
+  end;
+
+  if FProvider = nil then
+  begin
+    if Mode = vcmServer then
+      RestoreClientFiltering('no provider assigned', True)
+    else
+      RestoreClientFiltering('', False);
+    Exit;
+  end;
+
+  if not FProvider.CanHandle(FDataset) then
+  begin
+    Reason := FProvider.GetLastFallbackReason;
+    if Reason = '' then
+      Reason := 'the provider cannot handle this dataset';
+    RestoreClientFiltering(Reason, True);
+    Exit;
+  end;
+
+  // The client validation hook belongs to the client engine; server mode
+  // would silently skip it, so those setups stay client-side.
+  if Assigned(FOnValidateFilter) then
+  begin
+    RestoreClientFiltering(
+      'an OnValidateFilter hook requires client-side evaluation', True);
+    Exit;
+  end;
+
+  try
+    if FProvider.ApplyFilter(Groups, GlobalSearch, CollectFieldInfos) then
+    begin
+      // Server owns the WHERE: the client engine must not evaluate too.
+      if Assigned(FFilterEngine) and FFilterEngine.Active then
+        FFilterEngine.Active := False;
+      FServerFilterActive := True;
+      UpdateServerHint('Server filter (' + FProvider.GetDialectName + ')');
+    end
+    else
+      RestoreClientFiltering(FProvider.GetLastFallbackReason, True);
+  except
+    on E: Exception do
+    begin
+      Handled := False;
+      DoProviderError(E, Handled);
+      if not Handled then
+        raise;
+      RestoreClientFiltering('error: ' + E.Message, True);
+    end;
+  end;
+end;
+
+procedure TVittixDBGridController.RefreshSorting;
+var
+  Columns: TArray<TVittixSortColumn>;
+  Fields: TArray<TVittixSQLFieldInfo>;
+  Mode: TVittixFilterMode;
+  Reason: string;
+  Handled: Boolean;
+begin
+  if FUpdating or not Assigned(FSortEngine) then Exit;
+
+  Mode := FilterMode;
+  Columns := CollectSortColumns;
+  Fields := CollectFieldInfos;
+
+  if (Mode = vcmClient) or (FProvider = nil) or
+     (not FServerSortActive and not FServerFilterActive and
+      (Mode = vcmAuto) and (Length(Columns) > 0) and
+      not FProvider.CanHandle(FDataset)) then
+  begin
+    // Client path. An active server sort is torn down first.
+    if FServerSortActive then
+    begin
+      FProvider.ClearSort;
+      FServerSortActive := False;
+    end;
+    FSortEngine.ClientApplyEnabled := True;
+    FSortEngine.ApplySorting;
+    Exit;
+  end;
+
+  // Server path. ApplySorting is a no-op while ClientApplyEnabled is off,
+  // so both entry points (ToggleSort, ApplyState) can call here safely.
+  if Length(Columns) = 0 then
+  begin
+    if FServerSortActive then
+    begin
+      FProvider.ClearSort;
+      FServerSortActive := False;
+      FSortEngine.ClientApplyEnabled := FServerFilterActive;
+    end;
+    Exit;
+  end;
+
+  // A client sort may have left IndexFieldNames on the dataset; it would
+  // re-sort the re-opened result client-side and override the ORDER BY.
+  if (GetPropInfo(FDataset.ClassInfo, 'IndexFieldNames') <> nil) and
+     (GetPropValue(FDataset, 'IndexFieldNames', True) <> '') then
+  begin
+    FDataset.DisableControls;
+    try
+      SetPropValue(FDataset, 'IndexFieldNames', '');
+    finally
+      FDataset.EnableControls;
+    end;
+  end;
+
+  try
+    if FProvider.ApplySort(Columns, Fields) then
+    begin
+      FServerSortActive := True;
+      FSortEngine.ClientApplyEnabled := False;
+    end
+    else
+    begin
+      Reason := FProvider.GetLastFallbackReason;
+      FSortEngine.ClientApplyEnabled := True;
+      FSortEngine.ApplySorting;
+      if Mode = vcmAuto then
+        FSortEngine.ClientApplyEnabled := False;
+      DoProviderFallback(Reason);
+    end;
+  except
+    on E: Exception do
+    begin
+      Handled := False;
+      DoProviderError(E, Handled);
+      if not Handled then
+        raise;
+      FSortEngine.ClientApplyEnabled := True;
+      FSortEngine.ApplySorting;
+    end;
+  end;
+end;
+
+function TVittixDBGridController.ServerAggregateRefresh: Boolean;
+var
+  Requests: TArray<TVittixAggRequest>;
+  Results: TArray<TVittixAggResult>;
+  I: Integer;
+  Info: TVittixDBGridColumnInfo;
+  Agg: TVittixAggregation;
+  Field: TField;
+begin
+  // Server-side footer aggregates: one SELECT COUNT/SUM/... against the
+  // same WHERE the provider applied. Any failure falls back to the client
+  // scan (the correctness baseline).
+  Result := False;
+  if (not FServerFilterActive) or (FProvider = nil) then
+    Exit;
+
+  SetLength(Requests, 0);
+  if Assigned(FGrid) then
+    for I := 0 to VittixGrid(FGrid).ColumnInfo.Count - 1 do
+    begin
+      Info := VittixGrid(FGrid).ColumnInfo[I];
+      if Info.AggregationType <> vatNone then
+      begin
+        SetLength(Requests, Length(Requests) + 1);
+        Requests[High(Requests)].FieldName := Info.FieldName;
+        Requests[High(Requests)].AggType := Info.AggregationType;
+      end;
+    end;
+  if Length(Requests) = 0 then
+    Exit(False);
+
+  try
+    if not FProvider.FetchAggregates(Requests, Results) then
+      Exit(False);
+  except
+    Exit(False);
+  end;
+
+  for I := 0 to High(Requests) do
+  begin
+    Info := VittixGrid(FGrid).ColumnInfo.FindByFieldName(Requests[I].FieldName);
+    if not Assigned(Info) then
+      Continue;
+    Agg := Info.Aggregation;
+    Agg.Clear;
+    if I <= High(Results) then
+    begin
+      Agg.Count := Results[I].Count;
+      Agg.NullCount := Results[I].NullCount;
+      Field := FDataset.FindField(Requests[I].FieldName);
+      if (Field <> nil) and not VarIsNull(Results[I].Value) then
+      begin
+        case Field.DataType of
+          ftSmallint, ftInteger, ftWord, ftLargeint, ftAutoInc,
+          ftShortint, ftByte, ftLongWord:
+            begin
+              Agg.HasInt := True;
+              case Requests[I].AggType of
+                vatSum: Agg.SumInt := Results[I].Value;
+                vatAvg: begin
+                  Agg.HasFloat := True;
+                  Agg.SumFloat := Results[I].Value * Agg.Count;
+                end;
+                vatMin: Agg.MinInt := Results[I].Value;
+                vatMax: Agg.MaxInt := Results[I].Value;
+              end;
+            end;
+          ftCurrency:
+            begin
+              Agg.HasCurrency := True;
+              case Requests[I].AggType of
+                vatSum: Agg.SumCurrency := Results[I].Value;
+                vatAvg: begin
+                  Agg.HasFloat := True;
+                  Agg.SumFloat := Results[I].Value * Agg.Count;
+                end;
+                vatMin: Agg.MinCurrency := Results[I].Value;
+                vatMax: Agg.MaxCurrency := Results[I].Value;
+              end;
+            end;
+          ftString, ftWideString, ftMemo, ftWideMemo, ftFixedChar,
+          ftFixedWideChar:
+            begin
+              Agg.HasString := True;
+              case Requests[I].AggType of
+                vatMin: Agg.MinString := Results[I].Value;
+                vatMax: Agg.MaxString := Results[I].Value;
+              end;
+            end;
+        else
+          begin
+            Agg.HasFloat := True;
+            case Requests[I].AggType of
+              vatSum: Agg.SumFloat := Results[I].Value;
+              vatAvg: begin
+                Agg.HasFloat := True;
+                Agg.SumFloat := Results[I].Value * Agg.Count;
+              end;
+              vatMin: Agg.MinFloat := Results[I].Value;
+              vatMax: Agg.MaxFloat := Results[I].Value;
+            end;
+          end;
+        end;
+      end;
+    end;
+    Info.Aggregation := Agg;
+  end;
+  Result := True;
+end;
+
+{ ============================================================================= }
+{ SAVED FILTER SETS }
+{ ============================================================================= }
+
+procedure TVittixDBGridController.EnsureFilterSetListLoaded;
+var
+  FileName: string;
+begin
+  if FFilterSetListLoaded then Exit;
+
+  if FFilterSetList = nil then
+    FFilterSetList := TVittixFilterSetList.Create;
+
+  // A corrupt file raises EVittixFilterSetError here (on first use) rather
+  // than silently dropping the saved sets. The loaded flag is only set
+  // after a successful parse, so every later access retries (and keeps
+  // raising) until the file is fixed - no save path can overwrite it.
+  FileName := ResolveFilterSetsFileName;
+  if (FileName <> '') and FileExists(FileName) then
+    FFilterSetList.LoadFromFile(FileName);
+  FFilterSetListLoaded := True;
+end;
+
+function TVittixDBGridController.GetFilterSetList: TVittixFilterSetList;
+begin
+  EnsureFilterSetListLoaded;
+  Result := FFilterSetList;
+end;
+
+function TVittixDBGridController.ResolveFilterSetsFileName: string;
+begin
+  if FFilterSetsFileName <> '' then
+    Result := FFilterSetsFileName
+  else if FPersistenceRootPath <> '' then
+    Result := TPath.Combine(FPersistenceRootPath, 'filtersets.json')
+  else
+    Result := '';
+end;
+
+procedure TVittixDBGridController.StoreSetInEngine(ASet: TVittixFilterSet);
+var
+  Groups: TVittixFilterConditionGroups;
+  G, C: Integer;
+begin
+  if not Assigned(ASet) or not Assigned(FFilterEngine) then
+    Exit;
+
+  SetLength(Groups, ASet.GroupCount);
+  for G := 0 to ASet.GroupCount - 1 do
+  begin
+    SetLength(Groups[G], ASet[G].ConditionCount);
+    for C := 0 to ASet[G].ConditionCount - 1 do
+      Groups[G][C] := ASet[G][C];
+  end;
+  FFilterEngine.SetFilterGroups(Groups);
+end;
+
+procedure TVittixDBGridController.ReapplyActiveFilterSetToEngine;
+var
+  ActiveSet: TVittixFilterSet;
+begin
+  if FActiveFilterSetName = '' then Exit;
+  EnsureFilterSetListLoaded;
+  ActiveSet := FFilterSetList.FindByName(FActiveFilterSetName);
+  if not Assigned(ActiveSet) then
+  begin
+    // The set vanished (file replaced, set deleted): drop the stale name
+    // instead of keeping a filter nobody can see or clear by name.
+    FActiveFilterSetName := '';
+    UpdateFilterSetHint;
+    Exit;
+  end;
+  StoreSetInEngine(ActiveSet);
+  RefreshFiltering;
+  if not FServerFilterActive then
+  begin
+    if Assigned(FFilterEngine) and not FFilterEngine.Active then
+      FFilterEngine.Active := True;
+  end;
+  // The footer panel may have been recreated with the engines: restore its
+  // hint for the active set.
+  UpdateFilterSetHint;
+end;
+
+procedure TVittixDBGridController.SaveCurrentFilterAs(const AName: string);
+var
+  Set_: TVittixFilterSet;
+  Group: TVittixFilterSetGroup;
+  I: Integer;
+  Info: TVittixDBGridColumnInfo;
+  Grid: TVittixDBGrid;
+begin
+  if Trim(AName) = '' then
+    raise EVittixFilterSetError.Create('A filter set needs a name');
+
+  EnsureFilterSetListLoaded;
+  Set_ := FFilterSetList.AddOrUpdate(Trim(AName));
+  Group := Set_.AddGroup;
+
+  Grid := VittixGrid(FGrid);
+  if Assigned(Grid) then
+    for I := 0 to Grid.ColumnInfo.Count - 1 do
+    begin
+      Info := Grid.ColumnInfo[I];
+      if Info.HasFilter and (Trim(Info.FilterText) <> '') then
+        Group.AddCondition(Info.FieldName, Info.FilterText);
+    end;
+
+  if ResolveFilterSetsFileName <> '' then
+    FFilterSetList.SaveToFile(ResolveFilterSetsFileName);
+
+  // The current filter state IS this set now, so it becomes the active one
+  // without re-applying (the engine state already matches group 1).
+  FActiveFilterSetName := Set_.Name;
+  UpdateFilterSetHint;
+  DoFilterSetsChanged;
+end;
+
+function TVittixDBGridController.ApplyFilterSet(const AName: string): Boolean;
+var
+  Set_: TVittixFilterSet;
+  Grid: TVittixDBGrid;
+  I, C: Integer;
+  Info: TVittixDBGridColumnInfo;
+  Col: TColumn;
+begin
+  Result := False;
+  if AName = '' then Exit;
+
+  EnsureFilterSetListLoaded;
+  Set_ := FFilterSetList.FindByName(AName);
+  if not Assigned(Set_) then Exit;
+
+  Grid := VittixGrid(FGrid);
+
+  // Reset the per-column filters first so removed conditions cannot linger.
+  if Assigned(Grid) then
+    for I := 0 to Grid.ColumnInfo.Count - 1 do
+    begin
+      Grid.ColumnInfo[I].FilterText := '';
+      Grid.ColumnInfo[I].HasFilter := False;
+    end;
+
+  // The first group mirrors into the per-column texts so titles, the filter
+  // popup and exports reflect it; extra groups live in the engine only.
+  if Set_.GroupCount > 0 then
+    for C := 0 to Set_[0].ConditionCount - 1 do
+    begin
+      if not Assigned(Grid) then
+        Break;
+      Col := Grid.Controller.FindColumnByFieldName(Set_[0][C].FieldName);
+      if not Assigned(Col) then
+        Continue;
+      Info := Grid.ColumnInfoByColumn(Col);
+      if Assigned(Info) then
+      begin
+        Info.FilterText := Set_[0][C].FilterText;
+        Info.HasFilter := True;
+      end;
+    end;
+
+  if Assigned(FFilterEngine) then
+  begin
+    StoreSetInEngine(Set_);
+    // One routing point: server mode wraps the groups into the WHERE,
+    // client mode activates/re-applies the engine.
+    RefreshFiltering;
+    if not FServerFilterActive then
+    begin
+      if FFilterEngine.Active and Assigned(FDataSet) and FDataSet.Active then
+        FFilterEngine.ApplyFilter
+      else
+        FFilterEngine.Active := True;
+    end;
+  end;
+  // With a closed dataset the engine is absent; the set name is kept and
+  // CreateEngines re-binds the groups when the dataset reopens.
+
+  FActiveFilterSetName := Set_.Name;
+  SetAggregationDirty;
+  Refresh;
+  GridLayoutChanged;
+  UpdateFilterSetHint;
+  DoFilterSetApplied(Set_.Name);
+  Result := True;
+end;
+
+function TVittixDBGridController.DeleteFilterSet(const AName: string): Boolean;
+begin
+  EnsureFilterSetListLoaded;
+  Result := FFilterSetList.Delete(AName);
+  if not Result then
+    Exit;
+
+  if ResolveFilterSetsFileName <> '' then
+    FFilterSetList.SaveToFile(ResolveFilterSetsFileName);
+
+  if SameText(FActiveFilterSetName, AName) then
+  begin
+    FActiveFilterSetName := '';
+    UpdateFilterSetHint;
+  end;
+  DoFilterSetsChanged;
+end;
+
+procedure TVittixDBGridController.PersistFilterSets;
+begin
+  EnsureFilterSetListLoaded;
+  if ResolveFilterSetsFileName <> '' then
+    FFilterSetList.SaveToFile(ResolveFilterSetsFileName);
+end;
+
+function TVittixDBGridController.FilterSetNames: TArray<string>;
+var
+  I: Integer;
+begin
+  EnsureFilterSetListLoaded;
+  SetLength(Result, FFilterSetList.Count);
+  for I := 0 to FFilterSetList.Count - 1 do
+    Result[I] := FFilterSetList[I].Name;
+end;
+
+procedure TVittixDBGridController.UpdateFilterSetHint;
+begin
+  if Assigned(FFooterPanel) then
+  begin
+    if FActiveFilterSetName <> '' then
+      FFooterPanel.SetFilterSetHint('Filter set: ' + FActiveFilterSetName)
+    else
+      FFooterPanel.SetFilterSetHint('');
+  end;
+end;
+
+procedure TVittixDBGridController.DoFilterSetApplied(const AName: string);
+begin
+  if Assigned(FOnFilterSetApplied) then
+    FOnFilterSetApplied(Self, AName);
+end;
+
+procedure TVittixDBGridController.DoFilterSetsChanged;
+begin
+  if Assigned(FOnFilterSetsChanged) then
+    FOnFilterSetsChanged(Self);
+end;
+
+{ ============================================================================= }
+{ NOTIFICATION EVENTS }
+{ ============================================================================= }
 
 procedure TVittixDBGridController.DoAfterSort(Column: TColumn);
 begin

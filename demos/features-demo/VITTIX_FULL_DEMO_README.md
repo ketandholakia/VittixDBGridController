@@ -44,6 +44,8 @@ The demo uses a `TClientDataSet` with 50 sample records and does not require an 
 5. Right-click footer cells to clear or copy aggregations.
 6. Use Save Layout and Load Layout to persist the current arrangement.
 7. Open Export Data to test the export formats, including text and clipboard.
+8. Use HTML Print Preview to save the current grid view and open it in the
+   system browser, then print from the browser.
 
 ## Shortcut summary
 

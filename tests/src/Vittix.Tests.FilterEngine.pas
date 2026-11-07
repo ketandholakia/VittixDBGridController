@@ -113,6 +113,8 @@ type
     [Test]
     procedure FilterPopupCanRestrictValuesToDistinctList;
     [Test]
+    procedure FilterPopupDistinctScanPreservesCursorAndActiveEdit;
+    [Test]
     procedure FilterPopupDistinctValuesIncludeBlankEntry;
     [Test]
     procedure FilterPopupBlankDistinctSelectionPersistsCleanToken;
@@ -1125,6 +1127,49 @@ begin
       Assert.IsFalse(Popup.ValidateCurrentInput);
     finally
       Popup.Free;
+    end;
+  finally
+    OwnerForm.Free;
+  end;
+end;
+
+procedure TVittixFilterEngineTests.FilterPopupDistinctScanPreservesCursorAndActiveEdit;
+var
+  OwnerForm: TForm;
+  Grid: TDBGrid;
+  Source: TDataSource;
+  Popup: TVittixDBGridFilterPopup;
+begin
+  OwnerForm := TForm.CreateNew(nil);
+  try
+    Grid := TDBGrid.Create(OwnerForm);
+    Grid.Parent := OwnerForm;
+    Source := TDataSource.Create(OwnerForm);
+    Source.DataSet := FDataSet;
+    Grid.DataSource := Source;
+
+    FDataSet.Locate('ID', 3, []);
+    Popup := TVittixDBGridFilterPopup.CreatePopup(Grid,
+      FColumns.FindByFieldName('Name'));
+    try
+      Assert.AreEqual(3, FDataSet.FieldByName('ID').AsInteger);
+      Popup.UseDistinctValuesOnly := True;
+      Popup.FilterText := 'Alpha';
+      Assert.IsTrue(Popup.ValidateCurrentInput);
+    finally
+      Popup.Free;
+    end;
+
+    FDataSet.Edit;
+    FDataSet.FieldByName('Name').AsString := 'Pending edit';
+    Popup := TVittixDBGridFilterPopup.CreatePopup(Grid,
+      FColumns.FindByFieldName('Name'));
+    try
+      Assert.AreEqual(dsEdit, FDataSet.State);
+      Assert.AreEqual('Pending edit', FDataSet.FieldByName('Name').AsString);
+    finally
+      Popup.Free;
+      FDataSet.Cancel;
     end;
   finally
     OwnerForm.Free;

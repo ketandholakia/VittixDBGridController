@@ -1,9 +1,21 @@
-# Documentation Index
+# Documentation
 
-- [Main README](../README.md) — features, installation, usage, persistence, export formats, filter operators
-- [Roadmap](ROADMAP.md) — planned and completed engineering work
-- [Contributing](../CONTRIBUTING.md) — how to build, test and submit changes
-- [Changelog](../CHANGELOG.md) — release history
-- [License](LICENSE.md)
+Start with the [main README](../README.md) for installation, package
+structure, usage examples, export formats, filtering, and layout persistence.
+Its screenshots are [one](ss1.png), [two](ss2.png), and [three](ss3.png).
 
-Screenshots: `ss1.png`, `ss2.png`, `ss3.png` (referenced by the main README).
+- [Roadmap](ROADMAP.md) — completed work, remaining fixes, and larger features.
+- [API guide](API.md) — grid settings, controller operations, persistence, and
+  dialog entry points.
+- [Contributing](../CONTRIBUTING.md) — repository layout, Delphi build and test
+  workflow, and pull request guidance.
+- [Feature demo](../demos/features-demo/VITTIX_FULL_DEMO_README.md) — running the
+  complete VCL example.
+- [Installer notes](../installer/README.md) — building the installer payload.
+- [Changelog](../CHANGELOG.md) — release history.
+- [License](LICENSE.md) — license text.
+
+Implementation units, including the design-time registration, are in
+`source/`. Package projects are in `packages/`, the DUnitX suite is in
+`tests/`, and the component palette bitmap and resource sources are in
+`assets/palette/`.

@@ -43,6 +43,16 @@
         <DCCReference Include="src\Vittix.Tests.FilterEngine.pas"/>
         <DCCReference Include="src\Vittix.Tests.AggregationEngine.pas"/>
         <DCCReference Include="src\Vittix.Tests.ExportEngine.pas"/>
+        <DCCReference Include="src\Vittix.Tests.Styles.pas"/>
+        <DCCReference Include="src\Vittix.Tests.IncrementalSearch.pas"/>
+        <DCCReference Include="src\Vittix.Tests.ClipboardCopy.pas"/>
+        <DCCReference Include="src\Vittix.Tests.LayoutSchema.pas"/>
+        <DCCReference Include="src\Vittix.Tests.FreezeColumns.pas"/>
+        <DCCReference Include="src\Vittix.Tests.Editors.pas"/>
+        <DCCReference Include="src\Vittix.Tests.FilterSets.pas"/>
+        <DCCReference Include="src\Vittix.Tests.SQLBuilder.pas"/>
+        <DCCReference Include="src\Vittix.Tests.ProviderFireDAC.pas"/>
+        <DCCReference Include="src\Vittix.Tests.PagedDataSet.pas"/>
         <DCCReference Include="src\Vittix.Tests.Controller.Regression.pas"/>
     </ItemGroup>
     <ProjectExtensions>

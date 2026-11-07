@@ -47,7 +47,15 @@ contains
   Vittix.DBGrid.ColumnChooser in '..\source\Vittix.DBGrid.ColumnChooser.pas',
   Vittix.DBGrid.Editors in '..\source\Vittix.DBGrid.Editors.pas',
   Vittix.DBGrid.Filter.Popup in '..\source\Vittix.DBGrid.Filter.Popup.pas',
+  Vittix.DBGrid.FilterSets in '..\source\Vittix.DBGrid.FilterSets.pas',
+  Vittix.DBGrid.Provider in '..\source\Vittix.DBGrid.Provider.pas',
+  Vittix.DBGrid.Paging.DataSet in '..\source\Vittix.DBGrid.Paging.DataSet.pas',
+  Vittix.DBGrid.Paging.GlobalScroll in '..\source\Vittix.DBGrid.Paging.GlobalScroll.pas',
+  Vittix.DBGrid.Paging.Controls.Base in '..\source\Vittix.DBGrid.Paging.Controls.Base.pas',
+  Vittix.DBGrid.Paging.DataSet.Controls in '..\source\Vittix.DBGrid.Paging.DataSet.Controls.pas',
+  Vittix.DBGrid.FilterSets.Dialog in '..\source\Vittix.DBGrid.FilterSets.Dialog.pas',
   Vittix.DBGrid.Layout in '..\source\Vittix.DBGrid.Layout.pas',
+  Vittix.DBGrid.Styles in '..\source\Vittix.DBGrid.Styles.pas',
   Vittix.DBGrid.Export.Engine in '..\source\Vittix.DBGrid.Export.Engine.pas',
   Vittix.DBGrid.Export.Dialog in '..\source\Vittix.DBGrid.Export.Dialog.pas';
 

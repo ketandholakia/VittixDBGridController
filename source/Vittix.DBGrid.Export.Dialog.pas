@@ -1,4 +1,4 @@
-unit Vittix.DBGrid.Export.Dialog;
+﻿unit Vittix.DBGrid.Export.Dialog;
 
 {$REGION 'Documentation'}
 /// <summary>
@@ -83,6 +83,14 @@ type
   private
     FGrid: TVittixDBGrid;
     FExporter: TVittixDBGridExporter;
+    // Export lifecycle: while FExporting is True, btnExportClick is still
+    // on the stack. The exporter pumps messages (Application.ProcessMessages
+    // inside CheckProgress), so a Cancel click can arrive and be dispatched
+    // DURING the export. Keep the modal result pending until the export
+    // handler has stopped and released its exporter; a confirmed cancel
+    // still wins over a successful result.
+    FExporting: Boolean;
+    FCancelRequested: Boolean;
     chkIncludeFooter: TCheckBox; // Created dynamically in FormCreate (not in DFM)
     
     procedure LoadDefaults;
@@ -103,13 +111,29 @@ type
   public
     class var StateFileName: string;
     class var RootPath: string;
+    /// <summary>Opens the export dialog for an active dataset. Returns True
+    /// after a successful export; raises when the grid or active dataset is
+    /// missing.</summary>
     class function Execute(AGrid: TVittixDBGrid): Boolean;
+    /// <summary>True while the export handler is running (the export loop
+    /// is on the stack and pumping messages).</summary>
+    property Exporting: Boolean read FExporting;
+    /// <summary>A cancellation was requested during the active export.
+    /// Writable so hosts/tests can pre-confirm the cancellation question;
+    /// the Cancel click then routes straight to the exporter.</summary>
+    property CancelRequested: Boolean read FCancelRequested write FCancelRequested;
+    /// <summary>The grid the dialog exports from (set by Execute).</summary>
+    property BoundGrid: TVittixDBGrid read FGrid write FGrid;
+    /// <summary>Restores the dialog's saved format and destination choices.
+    /// </summary>
     procedure LoadDialogState;
+    /// <summary>Persists the current format and destination choices.</summary>
     procedure SaveDialogState;
     property IncludeFooterChecked: Boolean read GetIncludeFooterChecked write SetIncludeFooterChecked;
     property TextFormatChecked: Boolean read GetTextFormatChecked write SetTextFormatChecked;
     function GetActivePageIndex: Integer;
     procedure SetActivePageIndex(Value: Integer);
+    /// <summary>Returns an export preview capped at 50 dataset rows.</summary>
     function GetPreviewContent: string;
   end;
 
@@ -123,7 +147,12 @@ implementation
 {$R *.dfm}
 
 uses
-  System.IOUtils;
+  System.IOUtils,
+  System.UITypes,
+  Vittix.DBGrid.Styles;
+
+const
+  EXPORT_PREVIEW_MAX_ROWS = 50;
 
 { TfrmExportDialog }
 
@@ -174,6 +203,15 @@ begin
   PageControl1.ActivePageIndex := 0;
   ProgressBar1.Visible := False;
   lblProgress.Visible := False;
+
+  // The DFM banner (dark panel, white title) is the unstyled look. A custom
+  // VCL style must paint both: releasing ParentBackground lets the style
+  // surface through and the label's seFont/seClient follow the style font.
+  if TVittixStylePalette.IsCustomStyleActive(Self) then
+  begin
+    pnlTop.ParentBackground := True;
+    lblTitle.StyleElements := [seFont, seClient];
+  end;
 
   // Load defaults now that all controls exist
   LoadDefaults;
@@ -470,20 +508,15 @@ begin
     Exporter.Options.ExportVisibleOnly := chkVisibleOnly.Checked;
     Exporter.Options.ExportFilteredOnly := chkFilteredOnly.Checked;
     Exporter.Options.IncludeHeaders := chkIncludeHeaders.Checked;
+    Exporter.Options.MaxRows := EXPORT_PREVIEW_MAX_ROWS;
     Exporter.Options.DateFormat := edtDateFormat.Text;
     Exporter.Options.TimeFormat := edtTimeFormat.Text;
     Exporter.Options.CurrencyFormat := edtCurrencyFormat.Text;
 
-    FGrid.DataSource.DataSet.DisableControls;
-    try
-      FGrid.DataSource.DataSet.First;
-      case GetSelectedFormat of
-        vefCSV, vefTSV, vefText,
-        vefHTML, vefXML, vefJSON:
-          Result := Exporter.ExportToString(GetSelectedFormat);
-      end;
-    finally
-      FGrid.DataSource.DataSet.EnableControls;
+    case GetSelectedFormat of
+      vefCSV, vefTSV, vefText,
+      vefHTML, vefXML, vefJSON:
+        Result := Exporter.ExportToString(GetSelectedFormat);
     end;
   finally
     Exporter.Free;
@@ -536,7 +569,9 @@ begin
     lblProgress.Visible := True;
     btnExport.Enabled := False;
     btnCancel.Caption := 'Cancel';
-    
+    FExporting := True;
+    FCancelRequested := False;
+
     try
       // Export
       if rbFile.Checked then
@@ -561,11 +596,16 @@ begin
           0
         );
       end;
-      
+
       SaveDialogState;
       ModalResult := mrOk;
-      
+
     except
+      // A cancelled file export raises EAbort from the atomic staging
+      // helper BEFORE the target is touched - that is a normal outcome,
+      // not an error, and the dialog closes through FCancelRequested.
+      on E: EAbort do
+        ;
       on E: Exception do
       begin
         MessageDlg(
@@ -576,26 +616,38 @@ begin
         );
       end;
     end;
-    
+
   finally
+    FExporting := False;
     ProgressBar1.Visible := False;
     lblProgress.Visible := False;
     btnExport.Enabled := True;
     btnCancel.Caption := 'Close';
     FExporter.Free;
     FExporter := nil;
+    // Apply a cancel that arrived (via the exporter's message pump) while
+    // this handler was on the stack. Apply the modal result after exporter
+    // cleanup so the dialog closes only after the cancellation has finished.
+    // A cancel wins over a completed export's mrOk.
+    if FCancelRequested then
+      ModalResult := mrCancel;
   end;
 end;
 
 procedure TfrmExportDialog.btnCancelClick(Sender: TObject);
 begin
-  if Assigned(FExporter) then
+  if FExporting then
   begin
-    if MessageDlg('Cancel export?', mtConfirmation, [mbYes, mbNo], 0) = mrYes then
+    // This click is dispatched from the exporter's message pump while
+    // btnExportClick is on the stack. Record the request and stop the
+    // exporter here; btnExportClick applies ModalResult after cleanup.
+    if not FCancelRequested then
     begin
-      FExporter.Cancel;
-      ModalResult := mrCancel;
+      if MessageDlg('Cancel export?', mtConfirmation, [mbYes, mbNo], 0) = mrYes then
+        FCancelRequested := True;
     end;
+    if FCancelRequested and Assigned(FExporter) then
+      FExporter.Cancel;
   end
   else
     ModalResult := mrCancel;
@@ -610,7 +662,9 @@ begin
     ProgressBar1.Position := Current;
     lblProgress.Caption := Format('Exporting... %d of %d records', [Current, Total]);
   end;
-  
+  // Surface a pending cancel straight into the engine so the row loop
+  // stops at the next progress callback even without a pump dispatch.
+  Cancel := FCancelRequested;
 end;
 
 initialization

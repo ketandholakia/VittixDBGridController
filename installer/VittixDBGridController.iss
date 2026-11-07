@@ -65,26 +65,28 @@ Name: "demo"; Description: "Feature demo project"; Types: full custom
 Name: "delphi12"; Description: "{#DelphiDisplayName} integration files"; Types: full custom
 
 [Tasks]
-Name: "addlibrarypath"; Description: "Add {app}\source to Delphi 12 Win32 library path"; Components: delphi12; Flags: checkedonce
-Name: "registerdesignpkg"; Description: "Register design-time package in Delphi 12"; Components: delphi12; Flags: checkedonce
+Name: "addlibrarypath"; Description: "Add {app}\source to {#DelphiDisplayName} {#PayloadPlatform} library path"; Components: delphi12; Flags: checkedonce
+Name: "registerdesignpkg"; Description: "Register design-time package in {#DelphiDisplayName}"; Components: delphi12; Flags: checkedonce
 
 [Dirs]
 Name: "{app}\source"; Components: core
 Name: "{app}\packages"; Components: core
+Name: "{app}\assets\palette"; Components: core
 Name: "{app}\docs"; Components: docs
 Name: "{app}\demos\features-demo"; Components: demo
 Name: "{app}\payload\{#PayloadRootName}\{#PayloadPlatform}\Bpl"; Components: delphi12
 Name: "{app}\payload\{#PayloadRootName}\{#PayloadPlatform}\Dcp"; Components: delphi12
 
 [Files]
-Source: "..\source\*"; DestDir: "{app}\source"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: core
-Source: "..\packages\*"; DestDir: "{app}\packages"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: core
+Source: "..\source\*"; DestDir: "{app}\source"; Excludes: "*.dcu,*.bak,*.~*,__history\*"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: core
+Source: "..\packages\*"; DestDir: "{app}\packages"; Excludes: "*.bpl,*.dcp,*.dcu,*.local,*.identcache,build\*,__history\*"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: core
+Source: "..\assets\palette\*.dcr"; DestDir: "{app}\assets\palette"; Flags: ignoreversion; Components: core
 Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion; Components: core
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion; Components: core
 
 Source: "..\docs\*"; DestDir: "{app}\docs"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: docs
 
-Source: "..\demos\features-demo\*"; DestDir: "{app}\demos\features-demo"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: demo
+Source: "..\demos\features-demo\*"; DestDir: "{app}\demos\features-demo"; Excludes: "*.dcu,*.drc,*.dres,*.exe,*.identcache,*.map,*.mes,*.local,build\*,features-demo-state\*"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: demo
 
 #ifexist PayloadBplDir + "\\" + DesignPackageName
 Source: "{#PayloadBplDir}\{#DesignPackageName}"; DestDir: "{app}\payload\{#PayloadRootName}\{#PayloadPlatform}\Bpl"; Flags: ignoreversion; Components: delphi12
@@ -105,7 +107,7 @@ Source: "README.md"; DestDir: "{tmp}"; Flags: deleteafterinstall dontcopy
 const
   DelphiRootKey = 'Software\Embarcadero\BDS\{#DelphiVersion}';
   DelphiKnownPackagesKey = DelphiRootKey + '\Known Packages';
-  DelphiLibraryKey = DelphiRootKey + '\Library\Win32';
+  DelphiLibraryKey = DelphiRootKey + '\Library\{#PayloadPlatform}';
   DelphiLibraryValueName = 'Search Path';
 
 function RemoveTrailingBackslash(const Value: string): string;
@@ -240,7 +242,7 @@ begin
   if (CurPageID = wpSelectTasks) and WizardIsTaskSelected('registerdesignpkg') and not HasCompiledPackages() then
   begin
     SuppressibleMsgBox(
-      'The installer payload does not contain compiled Delphi 12 package files (' +
+      'The installer payload does not contain compiled {#DelphiDisplayName} package files (' +
       '{#DesignPackageName} and {#RuntimePackageName}).' + #13#10#13#10 +
       'Source files will still be installed, but design-time registration will be skipped.' + #13#10#13#10 +
       'To enable IDE package registration, place the compiled BPL/DCP files under:' + #13#10 +

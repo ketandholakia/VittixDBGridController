@@ -4,13 +4,16 @@ interface
 
 uses
   System.SysUtils,
+  System.UITypes,
   System.Classes,
   System.IniFiles,
   System.Zip,
+  Data.DB,
   Datasnap.DBClient,
   Vcl.Forms,
   Vcl.Clipbrd,
   Vcl.DBGrids,
+  Vcl.ExtCtrls,
   Vcl.Grids,
   DUnitX.TestFramework,
   Vittix.DBGrid,
@@ -56,6 +59,8 @@ type
     [Test]
     procedure HtmlAndXmlEscapeSpecialCharactersWithoutLosingUnicode;
     [Test]
+    procedure HtmlPrintStylesKeepHeadersOnEachPageAndCursorPosition;
+    [Test]
     procedure JsonEscapesQuotesWithoutLosingUnicode;
     [Test]
     procedure XlsxProducesValidZipPackage;
@@ -65,6 +70,8 @@ type
     procedure CancelStopsExportEarly;
     [Test]
     procedure CancelledFileExportDoesNotOverwriteExistingFile;
+    [Test]
+    procedure ExportCancelClickDuringExportDoesNotFreeDialog;
     [Test]
     procedure CsvNeutralizesFormulaLeadingValues;
     [Test]
@@ -90,6 +97,22 @@ type
     [Test]
     procedure XlsxWritesNumbersAsNumericCells;
     [Test]
+    procedure XlsxWritesNullAsEmptyCell;
+    [Test]
+    procedure XlsxWritesNegativeNumbersAsNumericCells;
+    [Test]
+    procedure XlsxWritesDatesAsSerialCellsWithDateStyle;
+    [Test]
+    procedure XlsxWritesDateTimeTimeAndLargeintTypes;
+    [Test]
+    procedure XlsxPackageContainsStylesPart;
+    [Test]
+    procedure XlsxWritesColumnWidthsFromGrid;
+    [Test]
+    procedure XlsxPreservesLeadingAndTrailingSpaces;
+    [Test]
+    procedure XlsxLocaleFormatWritesDisplayTextCells;
+    [Test]
     procedure XlsxReportsProgressDuringExport;
     [Test]
     procedure ClipboardExportWritesExpectedText;
@@ -103,6 +126,8 @@ type
     procedure ExportDialogPreviewSupportsTextFormat;
     [Test]
     procedure ExportDialogRemembersDestinationPerFormat;
+    [Test]
+    procedure ExportDialogDoesNotOfferPdf;
   end;
 
   [TestFixture]
@@ -392,6 +417,19 @@ begin
   Assert.IsTrue(Html.Contains('અમદાવાદ'));
   Assert.IsTrue(Xml.Contains('&lt;tag&gt; &amp; &quot;quote&quot;'));
   Assert.IsTrue(Xml.Contains('અમદાવાદ'));
+end;
+
+procedure TVittixExportEngineTests.HtmlPrintStylesKeepHeadersOnEachPageAndCursorPosition;
+var
+  Html: string;
+begin
+  FDataSet.Locate('ID', 3, []);
+  Html := FExporter.ExportToString(vefHTML);
+
+  Assert.IsTrue(Html.Contains('@media print'));
+  Assert.IsTrue(Html.Contains('thead { display: table-header-group; }'));
+  Assert.IsTrue(Html.Contains('page-break-inside: avoid;'));
+  Assert.AreEqual(3, FDataSet.FieldByName('ID').AsInteger);
 end;
 
 procedure TVittixExportEngineTests.JsonEscapesQuotesWithoutLosingUnicode;
@@ -861,11 +899,298 @@ begin
     Stream.Position := 0;
     SheetXml := ExtractSheetXml(Stream);
 
-    // Amount (column C, row 2 = 100.50) as a numeric cell, not inlineStr
-    Assert.IsTrue(SheetXml.Contains('<c r="C2"><v>100.5</v></c>'),
+    // Amount (column C, row 2 = 100.50) as an explicit numeric cell, not
+    // inlineStr, and the integer ID straight from the field's digits.
+    Assert.IsTrue(SheetXml.Contains('<c r="C2" t="n"><v>100.5</v></c>'),
       'numbers are stored as numeric cells');
+    Assert.IsTrue(SheetXml.Contains('<c r="A2" t="n"><v>1</v></c>'),
+      'integers are stored as numeric cells');
+    Assert.IsTrue(SheetXml.Contains('<c r="G2" t="b"><v>1</v></c>'),
+      'true booleans are stored as 1');
+    Assert.IsTrue(SheetXml.Contains('<c r="G3" t="b"><v>0</v></c>'),
+      'false booleans are stored as 0');
     Assert.IsTrue(SheetXml.Contains('xml:space="preserve"'),
       'string cells preserve whitespace');
+  finally
+    Stream.Free;
+  end;
+end;
+
+procedure TVittixExportEngineTests.XlsxWritesNullAsEmptyCell;
+var
+  Stream: TMemoryStream;
+  SheetXml: string;
+begin
+  // Row 4 (ID 3) has no Amount; row 3 (ID 2) has no Notes.
+  Stream := TMemoryStream.Create;
+  try
+    FExporter.ExportToStream(Stream, vefExcelXLSX);
+    Stream.Position := 0;
+    SheetXml := ExtractSheetXml(Stream);
+
+    Assert.IsTrue(SheetXml.Contains('<c r="C4"/>'),
+      'null numeric field exports as an empty cell');
+    Assert.IsTrue(SheetXml.Contains('<c r="E3"/>'),
+      'null memo field exports as an empty cell');
+    Assert.IsFalse(SheetXml.Contains('<c r="C4" t='),
+      'null cell must carry no type or value');
+  finally
+    Stream.Free;
+  end;
+end;
+
+procedure TVittixExportEngineTests.XlsxWritesNegativeNumbersAsNumericCells;
+var
+  Stream: TMemoryStream;
+  SheetXml: string;
+begin
+  FDataSet.First;
+  FDataSet.Edit;
+  FDataSet.FieldByName('Amount').AsCurrency := -12.5;
+  FDataSet.Post;
+
+  Stream := TMemoryStream.Create;
+  try
+    FExporter.ExportToStream(Stream, vefExcelXLSX);
+    Stream.Position := 0;
+    SheetXml := ExtractSheetXml(Stream);
+
+    // Negative values stay invariant numbers ('.' separator, no grouping)
+    Assert.IsTrue(SheetXml.Contains('<c r="C2" t="n"><v>-12.5</v></c>'),
+      'negative numbers are invariant numeric cells');
+  finally
+    Stream.Free;
+  end;
+end;
+
+procedure TVittixExportEngineTests.XlsxWritesDatesAsSerialCellsWithDateStyle;
+var
+  Stream: TMemoryStream;
+  SheetXml: string;
+  Serial: Integer;
+begin
+  Stream := TMemoryStream.Create;
+  try
+    FExporter.ExportToStream(Stream, vefExcelXLSX);
+    Stream.Position := 0;
+    SheetXml := ExtractSheetXml(Stream);
+
+    // Created (column F, ftDateTime) row 2 = 2026-01-10. For every date in
+    // the modern era the Excel serial equals Delphi's day number.
+    Serial := Trunc(EncodeDate(2026, 1, 10));
+    Assert.IsTrue(SheetXml.Contains(
+      Format('<c r="F2" t="n" s="3"><v>%d</v></c>', [Serial])),
+      'datetime exports as a serial with the datetime style');
+    Serial := Trunc(EncodeDate(2026, 2, 15));
+    Assert.IsTrue(SheetXml.Contains(
+      Format('<c r="F3" t="n" s="3"><v>%d</v></c>', [Serial])),
+      'second datetime row serial matches');
+  finally
+    Stream.Free;
+  end;
+end;
+
+procedure TVittixExportEngineTests.XlsxWritesDateTimeTimeAndLargeintTypes;
+var
+  DataSet: TClientDataSet;
+  OwnerForm: TForm;
+  Grid: TVittixDBGrid;
+  Exporter: TVittixDBGridExporter;
+  Stream: TMemoryStream;
+  SheetXml: string;
+  Serial: Integer;
+  StampSerial: Double;
+  StampText: string;
+begin
+  DataSet := TClientDataSet.Create(nil);
+  try
+    DataSet.FieldDefs.Add('When', ftDate);
+    DataSet.FieldDefs.Add('AtTime', ftTime);
+    DataSet.FieldDefs.Add('Stamp', ftTimeStamp);
+    DataSet.FieldDefs.Add('Big', ftLargeint);
+    DataSet.CreateDataSet;
+    DataSet.Append;
+    DataSet.FieldByName('When').AsDateTime := EncodeDate(2025, 6, 15);
+    DataSet.FieldByName('AtTime').AsDateTime := EncodeTime(12, 0, 0, 0);
+    StampSerial := EncodeDate(2025, 6, 15) + EncodeTime(6, 30, 0, 0);
+    DataSet.FieldByName('Stamp').AsDateTime := StampSerial;
+    DataSet.FieldByName('Big').AsLargeInt := 9007199254740993;
+    DataSet.Post;
+
+    Grid := CreateHeadlessGrid(DataSet, OwnerForm);
+    try
+      Exporter := TVittixDBGridExporter.Create(Grid);
+      try
+        Stream := TMemoryStream.Create;
+        try
+          Exporter.ExportToStream(Stream, vefExcelXLSX);
+          Stream.Position := 0;
+          SheetXml := ExtractSheetXml(Stream);
+
+          // Date-only gets the date style (s="1")
+          Serial := Trunc(EncodeDate(2025, 6, 15));
+          Assert.IsTrue(SheetXml.Contains(
+            Format('<c r="A2" t="n" s="1"><v>%d</v></c>', [Serial])),
+            'date-only exports with the date style');
+
+          // Time-only keeps serial 0.5: the pre-1900 serial shift must not
+          // fire for a zero day part.
+          Assert.IsTrue(SheetXml.Contains('<c r="B2" t="n" s="2"><v>0.5</v></c>'),
+            'time-only exports with the time style');
+
+          // Timestamp gets the datetime style (s="3") and the full serial
+          StampText := FloatToStrF(StampSerial, ffGeneral, 15, 0,
+            TFormatSettings.Invariant);
+          Assert.IsTrue(SheetXml.Contains(
+            Format('<c r="C2" t="n" s="3"><v>%s</v></c>', [StampText])),
+            'timestamp exports as a full serial with the datetime style');
+
+          // Int64 magnitudes beyond 2^53 must keep their exact digits
+          // (a Double round trip would round to ...992).
+          Assert.IsTrue(SheetXml.Contains('<c r="D2" t="n"><v>9007199254740993</v></c>'),
+            'large integers keep exact precision');
+        finally
+          Stream.Free;
+        end;
+      finally
+        Exporter.Free;
+      end;
+    finally
+      OwnerForm.Free;
+    end;
+  finally
+    DataSet.Free;
+  end;
+end;
+
+procedure TVittixExportEngineTests.XlsxPackageContainsStylesPart;
+var
+  Stream: TMemoryStream;
+  Zip: TZipFile;
+  TempDir: string;
+  StylesXml: string;
+  RelsXml: string;
+  ContentTypesXml: string;
+begin
+  Stream := TMemoryStream.Create;
+  try
+    FExporter.ExportToStream(Stream, vefExcelXLSX);
+    Stream.Position := 0;
+
+    TempDir := TPath.Combine(TPath.GetTempPath, TGuid.NewGuid.ToString);
+    ForceDirectories(TempDir);
+    Zip := TZipFile.Create;
+    try
+      Zip.Open(Stream, zmRead);
+      Assert.IsTrue(Zip.IndexOf('xl/styles.xml') >= 0,
+        'package ships a styles part');
+      Zip.ExtractAll(TempDir);
+
+      StylesXml := TFile.ReadAllText(TPath.Combine(TempDir, 'xl\styles.xml'),
+        TEncoding.UTF8);
+      Assert.IsTrue(StylesXml.Contains('numFmtId="164"'), 'date numFmt present');
+      Assert.IsTrue(StylesXml.Contains('cellXfs count="4"'),
+        'default plus date/time/datetime styles present');
+
+      RelsXml := TFile.ReadAllText(
+        TPath.Combine(TempDir, 'xl\_rels\workbook.xml.rels'), TEncoding.UTF8);
+      Assert.IsTrue(RelsXml.Contains('Target="styles.xml"'),
+        'workbook references the styles part');
+
+      ContentTypesXml := TFile.ReadAllText(
+        TPath.Combine(TempDir, '[Content_Types].xml'), TEncoding.UTF8);
+      Assert.IsTrue(ContentTypesXml.Contains(
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml'),
+        'content types declare the styles part');
+    finally
+      Zip.Free;
+      TDirectory.Delete(TempDir, True);
+    end;
+  finally
+    Stream.Free;
+  end;
+end;
+
+procedure TVittixExportEngineTests.XlsxWritesColumnWidthsFromGrid;
+var
+  Stream: TMemoryStream;
+  SheetXml: string;
+begin
+  // The test grid gives every column a 100 px width; (100-5)/7 = 13.57.
+  FGrid.Columns[1].Width := 0;
+  Stream := TMemoryStream.Create;
+  try
+    FExporter.ExportToStream(Stream, vefExcelXLSX);
+    Stream.Position := 0;
+    SheetXml := ExtractSheetXml(Stream);
+
+    Assert.IsTrue(SheetXml.Contains('<cols>'), 'column widths element present');
+    Assert.IsTrue(SheetXml.Contains(
+      '<col min="1" max="1" width="13.57" customWidth="1"/>'),
+      'width derived from the grid column width');
+    // Width 0 has no usable grid value: the Name caption (4 chars) plus
+    // padding becomes the heuristic width.
+    Assert.IsTrue(SheetXml.Contains(
+      '<col min="2" max="2" width="6" customWidth="1"/>'),
+      'unavailable width falls back to the caption heuristic');
+  finally
+    Stream.Free;
+  end;
+end;
+
+procedure TVittixExportEngineTests.XlsxPreservesLeadingAndTrailingSpaces;
+var
+  Stream: TMemoryStream;
+  SheetXml: string;
+  Padded: string;
+begin
+  FDataSet.First;
+  FDataSet.Edit;
+  FDataSet.FieldByName('Name').AsString := '  padded  ';
+  FDataSet.Post;
+
+  Stream := TMemoryStream.Create;
+  try
+    FExporter.ExportToStream(Stream, vefExcelXLSX);
+    Stream.Position := 0;
+    SheetXml := ExtractSheetXml(Stream);
+
+    // The XML contract: whatever the dataset reports is emitted verbatim
+    // inside xml:space="preserve" (TClientDataSet itself trims trailing
+    // spaces of fixed-width string fields, which is dataset semantics, not
+    // an export loss).
+    Padded := FDataSet.FieldByName('Name').AsString;
+    Assert.IsTrue(Padded.StartsWith('  '),
+      'leading spaces survive the dataset round trip');
+    Assert.IsTrue(SheetXml.Contains(
+      '<t xml:space="preserve">' + Padded + '</t>'),
+      'the value is emitted verbatim with whitespace preserved');
+    Assert.IsFalse(SheetXml.Contains('<t>'), 'no bare text elements');
+  finally
+    Stream.Free;
+  end;
+end;
+
+procedure TVittixExportEngineTests.XlsxLocaleFormatWritesDisplayTextCells;
+var
+  Stream: TMemoryStream;
+  SheetXml: string;
+begin
+  // The locale opt-out restores the pre-1.2 wholesale text behavior
+  FExporter.Options.ExportLocaleFormat := True;
+
+  Stream := TMemoryStream.Create;
+  try
+    FExporter.ExportToStream(Stream, vefExcelXLSX);
+    Stream.Position := 0;
+    SheetXml := ExtractSheetXml(Stream);
+
+    Assert.IsFalse(SheetXml.Contains('t="n"'),
+      'no numeric cells under the locale opt-out');
+    Assert.IsTrue(SheetXml.Contains('100.50'),
+      'currency keeps the configured display format');
+    Assert.IsTrue(SheetXml.Contains('2026-01-10 00:00:00'),
+      'datetime keeps the configured display format');
   finally
     Stream.Free;
   end;
@@ -900,7 +1225,8 @@ begin
 
         Assert.IsTrue(FProgressCount > 0);
         Assert.IsTrue(FLastProgressCurrent > 0);
-        Assert.IsTrue(FLastProgressTotal > 0);
+        Assert.AreEqual(250, FLastProgressTotal,
+          'ordinary dataset progress keeps its full record count');
       finally
         BigExporter.Free;
       end;
@@ -1113,6 +1439,44 @@ begin
     TfrmExportDialog.StateFileName := '';
     if FileExists(TempFile) then
       DeleteFile(TempFile);
+  end;
+end;
+
+procedure TVittixExportEngineTests.ExportDialogDoesNotOfferPdf;
+var
+  Dlg: TfrmExportDialog;
+
+  procedure CheckFilter(const ALabel: string);
+  begin
+    Dlg.rbFormatClick(Dlg);
+    Assert.IsFalse(Dlg.SaveDialog1.Filter.ToLower.Contains('pdf'),
+      ALabel + ' filter must not offer PDF');
+  end;
+
+begin
+  // vefPDF is not implemented: the dialog must not list it anywhere.
+  Dlg := TfrmExportDialog.Create(nil);
+  try
+    Assert.IsNull(Dlg.FindComponent('rbPDF'), 'no PDF radio button exists');
+
+    // Every selectable format resolves to an implemented file filter;
+    // none of them may surface a PDF entry point.
+    Dlg.rbCSV.Checked := True;
+    CheckFilter('CSV');
+    Dlg.rbTSV.Checked := True;
+    CheckFilter('TSV');
+    Dlg.rbExcel.Checked := True;
+    CheckFilter('Excel');
+    Dlg.rbHTML.Checked := True;
+    CheckFilter('HTML');
+    Dlg.rbXML.Checked := True;
+    CheckFilter('XML');
+    Dlg.rbJSON.Checked := True;
+    CheckFilter('JSON');
+    Dlg.TextFormatChecked := True;
+    CheckFilter('Text');
+  finally
+    Dlg.Free;
   end;
 end;
 
@@ -1934,6 +2298,108 @@ begin
   finally
     Zip.Free;
     TDirectory.Delete(TempDir, True);
+  end;
+end;
+
+{ M2 regression driver: dispatches Cancel through the exporter's message }
+{ pump and records the modal result while the export handler is active. }
+type
+  TCancelDriver = class
+  public
+    Phase: Integer;
+    Dlg: TfrmExportDialog;
+    ExportingDuringCancel: Boolean;
+    ModalResultDuringCancel: Integer;
+    procedure OnTick(Sender: TObject);
+  end;
+
+procedure TCancelDriver.OnTick(Sender: TObject);
+begin
+  case Phase of
+    0:
+    begin
+      Inc(Phase);
+      // Runs the export inline; the exporter pumps messages from within,
+      // which is how the next tick gets dispatched mid-export.
+      Dlg.btnExportClick(Dlg);
+    end;
+    1:
+    begin
+      Inc(Phase);
+      // Executed from the exporter's message pump while btnExportClick
+      // is on the stack, before the export handler has unwound.
+      Dlg.CancelRequested := True; // pre-confirmed: no MessageDlg
+      Dlg.btnCancelClick(Dlg);
+      ExportingDuringCancel := Dlg.Exporting;
+      ModalResultDuringCancel := Dlg.ModalResult;
+    end;
+  end;
+end;
+
+procedure TVittixExportEngineTests.ExportCancelClickDuringExportDoesNotFreeDialog;
+var
+  Driver: TCancelDriver;
+  Timer: TTimer;
+  TargetFile: string;
+  LargeDataSet: TClientDataSet;
+  LargeForm: TForm;
+  LargeGrid: TVittixDBGrid;
+  Dlg: TfrmExportDialog;
+  ModalResultValue: Integer;
+begin
+  // M2 regression: a Cancel click dispatched during the export (the
+  // exporter pumps Application.ProcessMessages) must leave ModalResult
+  // pending while btnExportClick is on the stack. The final modal result
+  // is applied after the export handler unwinds.
+  TargetFile := TPath.Combine(TPath.GetTempPath, TGuid.NewGuid.ToString + '.csv');
+  LargeDataSet := CreateLargeDataSet(200000);
+  try
+    LargeGrid := CreateHeadlessGrid(LargeDataSet, LargeForm);
+    try
+      Dlg := TfrmExportDialog.Create(nil);
+      try
+        Dlg.BoundGrid := LargeGrid;
+        Dlg.edtFileName.Text := TargetFile; // rbFile is the default target
+        Assert.IsFalse(Dlg.Exporting, 'no export before the handler runs');
+
+        Driver := TCancelDriver.Create;
+        try
+          Driver.Dlg := Dlg;
+          Timer := TTimer.Create(nil);
+          try
+            Timer.Interval := 1;
+            Timer.OnTimer := Driver.OnTick;
+            Timer.Enabled := True;
+
+            // ShowModal returns after the export handler has unwound.
+            ModalResultValue := Dlg.ShowModal;
+            Assert.AreEqual(2, Driver.Phase,
+              'the timer dispatched the Cancel click during export');
+            Assert.IsTrue(Driver.ExportingDuringCancel,
+              'the export handler was still active when Cancel was processed');
+            Assert.AreEqual(Ord(mrNone), Driver.ModalResultDuringCancel,
+              'Cancel must defer ModalResult until the export handler unwinds');
+          finally
+            Timer.Enabled := False;
+            Timer.Free;
+          end;
+        finally
+          Driver.Free;
+        end;
+
+        Assert.AreEqual(Ord(mrCancel), ModalResultValue,
+          'the deferred cancel closes the dialog after the export unwound');
+        Assert.IsFalse(Dlg.Exporting, 'export flag cleared after unwind');
+      finally
+        Dlg.Free;
+      end;
+    finally
+      LargeForm.Free;
+    end;
+  finally
+    LargeDataSet.Free;
+    if TFile.Exists(TargetFile) then
+      TFile.Delete(TargetFile);
   end;
 end;
 

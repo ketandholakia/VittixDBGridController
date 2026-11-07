@@ -52,7 +52,8 @@ uses
   Vcl.Clipbrd,
   Data.DB,
   Vittix.DBGrid,
-  Vittix.DBGrid.ColumnInfo;
+  Vittix.DBGrid.ColumnInfo,
+  Vittix.DBGrid.Paging.DataSet;
 
 type
   // Raised for unsupported/unimplemented export formats and engine misuse
@@ -66,7 +67,11 @@ type
     vefHTML,          // HTML table
     vefXML,           // XML document
     vefJSON,          // JSON array
-    vefPDF,           // PDF document (requires reporting component)
+    /// <summary>Not implemented. The member is kept so existing compiled
+    /// code keeps loading, but the export dialog never offers it and
+    /// ExportToStream raises EVittixExportError for it. PDF needs a
+    /// reporting engine the core package does not ship.</summary>
+    vefPDF,
     vefClipboard,     // Copy to clipboard
     vefText           // Fixed-width text
   );
@@ -78,6 +83,7 @@ type
     FExportFilteredOnly: Boolean;
     FIncludeHeaders: Boolean;
     FIncludeFooter: Boolean;
+    FMaxRows: Integer;
     FDateFormat: string;
     FTimeFormat: string;
     FDateTimeFormat: string;
@@ -101,6 +107,9 @@ type
     property ExportFilteredOnly: Boolean read FExportFilteredOnly write FExportFilteredOnly default True;
     property IncludeHeaders: Boolean read FIncludeHeaders write FIncludeHeaders default True;
     property IncludeFooter: Boolean read FIncludeFooter write FIncludeFooter default False;
+    /// <summary>Maximum data rows to format; zero or less exports every row.
+    /// Intended for bounded previews while leaving normal exports unlimited.</summary>
+    property MaxRows: Integer read FMaxRows write FMaxRows default 0;
     property DateFormat: string read FDateFormat write FDateFormat;
     property TimeFormat: string read FTimeFormat write FTimeFormat;
     property DateTimeFormat: string read FDateTimeFormat write FDateTimeFormat;
@@ -134,6 +143,7 @@ type
     FOnProgress: TVittixExportProgressEvent;
     FCancelled: Boolean;
     FExporting: Boolean;
+    FProgressTotal: Integer;
     FPumpWatch: TStopwatch;
     procedure ExecuteExport(const Action: TProc);
     procedure WriteCSVStream(Stream: TStream);
@@ -144,6 +154,9 @@ type
 
     // function GetVisibleColumns: TList<TColumn>; // Removed, logic integrated into GetExportColumns
     function GetExportColumns: TList<TColumn>;
+    function ColumnInfoFor(AColumn: TColumn): TVittixDBGridColumnInfo;
+    function HeaderCaptionFor(AColumn: TColumn): string;
+    function ExportColumnIncluded(AColumn: TColumn): Boolean;
     function FormatFieldValue(Field: TField): string; overload;
     function FormatFieldValue(Field: TField;
       AMachineReadable: Boolean): string; overload;
@@ -157,6 +170,7 @@ type
     function EscapeXML(const Value: string): string;
     function EscapeJSON(const Value: string): string;
     procedure CheckProgress(Current, Total: Integer);
+    function CaptureProgressTotal: Integer;
     function SanitizeXMLTagName(const TagName: string): string;
     procedure ExportToTextStream(Stream: TStream);
     procedure ExportToFileAtomic(const FileName: string; const ExportProc: TProc<TStream>);
@@ -181,6 +195,10 @@ type
     procedure ExportToTSV(const FileName: string);
     procedure ExportToExcel(const FileName: string);
     procedure ExportToHTML(const FileName: string);
+    /// <summary>Exports print-ready HTML to FileName and opens it in the
+    /// system browser. The file remains at the caller-chosen path so the
+    /// browser can reload or print it later.</summary>
+    procedure OpenHTMLPrintPreview(const FileName: string);
     procedure ExportToXML(const FileName: string);
     procedure ExportToJSON(const FileName: string);
     procedure ExportToClipboard(Format: TVittixExportFormat = vefTSV);
@@ -193,7 +211,20 @@ type
     procedure ExportToJSONStream(Stream: TStream);
     
     procedure Cancel;
-    
+
+    /// <summary>Builds the TSV text for a selection copy: the selected rows
+    /// when the grid has dgMultiSelect with more than one selected row,
+    /// otherwise the current cell's value. Values use the same formatting as
+    /// the machine-readable exports (full-precision invariant, or the locale
+    /// display text when ExportLocaleFormat is on); values containing tabs,
+    /// quotes or line breaks are quoted. Visible columns and grid order are
+    /// respected; the dataset cursor is preserved.</summary>
+    function BuildCopyText(AIncludeHeaders: Boolean): string;
+
+    /// <summary>Writes BuildCopyText to the clipboard through the
+    /// retry-tolerant clipboard helpers.</summary>
+    procedure CopySelectionToClipboard(AIncludeHeaders: Boolean);
+
     property Grid: TVittixDBGrid read FGrid;
     property Dataset: TDataSet read FDataset;
     property Options: TVittixExportOptions read FOptions write FOptions;
@@ -204,8 +235,21 @@ type
   TVittixExcelExporter = class
   private
     FExporter: TVittixDBGridExporter;
+    // Resolved per export column: -1 means "no usable grid width" and the
+    // heuristic length in FHeuristicMax is used instead (in characters).
+    FTextWidths: TArray<Double>;
+    FHeuristicMax: TArray<Integer>;
     function BuildSheetXML: string;
+    function BuildStylesXML: string;
+    function BuildColsXML(ColumnCount: Integer): string;
     function ColumnLetter(Index: Integer): string;
+    function CellStyleForField(AField: TField): Integer;
+    procedure ResolveColumnWidths(Columns: TList<TColumn>);
+    procedure TrackHeuristicLength(AColumnIndex, ATextLength: Integer);
+    procedure AddInlineTextCell(Rows: TStrings; AColumnIndex, ARow: Integer;
+      const Text: string);
+    procedure EmitDataCell(Rows: TStrings; AColumnIndex, ARow: Integer;
+      AField: TField);
     procedure WriteXLSX(Stream: TStream);
   public
     constructor Create(AExporter: TVittixDBGridExporter);
@@ -220,6 +264,7 @@ uses
   System.DateUtils,
   System.StrUtils,
   Winapi.Windows,
+  Winapi.ShellAPI,
   Vcl.Forms,
   Vcl.Dialogs,
   Vittix.DBGrid.Clipboard,
@@ -239,6 +284,7 @@ begin
   FExportFilteredOnly := True;
   FIncludeHeaders := True;
   FIncludeFooter := False;
+  FMaxRows := 0;
   FDateFormat := 'yyyy-mm-dd';
   FTimeFormat := 'hh:nn:ss';
   FDateTimeFormat := 'yyyy-mm-dd hh:nn:ss';
@@ -265,6 +311,7 @@ begin
     FExportFilteredOnly := Src.ExportFilteredOnly;
     FIncludeHeaders := Src.IncludeHeaders;
     FIncludeFooter := Src.IncludeFooter;
+    FMaxRows := Src.MaxRows;
     FDateFormat := Src.DateFormat;
     FTimeFormat := Src.TimeFormat;
     FDateTimeFormat := Src.DateTimeFormat;
@@ -328,28 +375,54 @@ begin
   end;
 end;
 
+function TVittixDBGridExporter.ColumnInfoFor(AColumn: TColumn): TVittixDBGridColumnInfo;
+begin
+  Result := nil;
+  if not Assigned(FGrid) or not Assigned(AColumn) or (AColumn.FieldName = '') then
+    Exit;
+  Result := FGrid.ColumnInfo.FindByFieldName(AColumn.FieldName);
+end;
+
+function TVittixDBGridExporter.HeaderCaptionFor(AColumn: TColumn): string;
+var
+  Info: TVittixDBGridColumnInfo;
+begin
+  // A per-column ExportCaption overrides the grid title in every
+  // caption-based header row.
+  Info := ColumnInfoFor(AColumn);
+  if Assigned(Info) and (Info.ExportCaption <> '') then
+    Result := Info.ExportCaption
+  else
+    Result := AColumn.Title.Caption;
+end;
+
 function TVittixDBGridExporter.GetExportColumns: TList<TColumn>;
 var
   I: Integer;
 begin
   Result := TList<TColumn>.Create;
-  
+
   if not Assigned(FGrid) then
     Exit;
-    
-  if FOptions.ExportVisibleOnly then
+
+  for I := 0 to FGrid.Columns.Count - 1 do
   begin
-    for I := 0 to FGrid.Columns.Count - 1 do
-    begin
-      if FGrid.Columns[I].Visible then
-        Result.Add(FGrid.Columns[I]);
-    end;
-  end
-  else
-  begin
-    for I := 0 to FGrid.Columns.Count - 1 do
-      Result.Add(FGrid.Columns[I]);
+    // ExportInclude=False opts a column out of every export format,
+    // independent of the visible-only switch.
+    if not ExportColumnIncluded(FGrid.Columns[I]) then
+      Continue;
+    if FOptions.ExportVisibleOnly and not FGrid.Columns[I].Visible then
+      Continue;
+    Result.Add(FGrid.Columns[I]);
   end;
+end;
+
+function TVittixDBGridExporter.ExportColumnIncluded(AColumn: TColumn): Boolean;
+var
+  Info: TVittixDBGridColumnInfo;
+begin
+  Info := ColumnInfoFor(AColumn);
+  Result := not Assigned(Info) or Info.ExportInclude;
 end;
 
 function TVittixDBGridExporter.FormatFieldValue(Field: TField): string;
@@ -584,6 +657,27 @@ begin
   end;
 end;
 
+function TVittixDBGridExporter.CaptureProgressTotal: Integer;
+begin
+  Result := 0;
+  if not Assigned(FOnProgress) then
+    Exit;
+
+  // RecordCount can fetch rows on some datasets. Read once, after any
+  // temporary filter change. Virtual paging exposes a global RecordCount,
+  // but export iterates only the loaded page, so use its local row count.
+  if (FDataset is TVittixPagedDataSet) and
+     TVittixPagedDataSet(FDataset).GlobalScrollActive then
+    Result := TVittixPagedDataSet(FDataset).LoadedRecordCount
+  else
+    Result := FDataset.RecordCount;
+  if (FOptions.MaxRows > 0) and
+     ((Result < 0) or (Result > FOptions.MaxRows)) then
+    Result := FOptions.MaxRows;
+  if Result < 0 then
+    Result := 0;
+end;
+
 procedure TVittixDBGridExporter.Cancel;
 begin
   FCancelled := True;
@@ -695,6 +789,7 @@ begin
     raise EVittixExportError.Create('An export is already running on this exporter');
   FExporting := True;
   FCancelled := False;
+  FProgressTotal := 0;
   WasEnabled := Assigned(FGrid) and FGrid.Enabled;
   FPumpWatch := TStopwatch.StartNew;
   try
@@ -832,7 +927,7 @@ begin
         begin
           if I > 0 then
             Line := Line + FOptions.Delimiter;
-          Line := Line + EscapeCSV(Columns[I].Title.Caption);
+          Line := Line + EscapeCSV(HeaderCaptionFor(Columns[I]));
         end;
         Writer.WriteLine(Line);
       end;
@@ -844,11 +939,14 @@ begin
       // Write data
       FDataset.DisableControls;
       try
+        FProgressTotal := CaptureProgressTotal;
         FDataset.First;
         RowCount := 0;
 
         while not FDataset.Eof do
         begin
+          if (FOptions.MaxRows > 0) and (RowCount >= FOptions.MaxRows) then
+            Break;
           if FCancelled then
             Break;
 
@@ -867,7 +965,7 @@ begin
 
           Inc(RowCount);
           if RowCount mod 100 = 0 then
-            CheckProgress(RowCount, FDataset.RecordCount);
+            CheckProgress(RowCount, FProgressTotal);
 
           FDataset.Next;
         end;
@@ -943,7 +1041,7 @@ begin
     try
       SetLength(MaxLengths, Columns.Count);
       for I := 0 to Columns.Count - 1 do
-        MaxLengths[I] := Length(Columns[I].Title.Caption);
+        MaxLengths[I] := Length(HeaderCaptionFor(Columns[I]));
 
       SetLength(RowCache, 0);
 
@@ -954,11 +1052,14 @@ begin
       // Single pass: collect all data AND compute max widths simultaneously
       FDataset.DisableControls;
       try
+        FProgressTotal := CaptureProgressTotal;
         FDataset.First;
         RowCount := 0;
 
         while not FDataset.Eof do
         begin
+          if (FOptions.MaxRows > 0) and (RowCount >= FOptions.MaxRows) then
+            Break;
           if FCancelled then Break;
 
           SetLength(RowData, Columns.Count);
@@ -983,7 +1084,7 @@ begin
 
           Inc(RowCount);
           if RowCount mod 100 = 0 then
-            CheckProgress(RowCount, FDataset.RecordCount);
+            CheckProgress(RowCount, FProgressTotal);
 
           FDataset.Next;
         end;
@@ -997,7 +1098,7 @@ begin
       begin
         Line := '';
         for I := 0 to Columns.Count - 1 do
-          Line := Line + Format('%-*s', [MaxLengths[I] + 1, Columns[I].Title.Caption]);
+          Line := Line + Format('%-*s', [MaxLengths[I] + 1, HeaderCaptionFor(Columns[I])]);
         Writer.WriteLine(Line);
         // Separator line
         Line := '';
@@ -1064,6 +1165,21 @@ begin
     end);
 end;
 
+procedure TVittixDBGridExporter.OpenHTMLPrintPreview(const FileName: string);
+var
+  FullPath: string;
+begin
+  if Trim(FileName) = '' then
+    raise EVittixExportError.Create('Print preview file name is empty');
+
+  FullPath := ExpandFileName(FileName);
+  ExportToHTML(FullPath);
+  if NativeInt(ShellExecute(0, 'open', PChar(FullPath), nil, nil,
+    SW_SHOWNORMAL)) <= 32 then
+    raise EVittixExportError.CreateFmt(
+      'Could not open print preview in the system browser: %s', [FullPath]);
+end;
+
 procedure TVittixDBGridExporter.ExportToHTMLStream(Stream: TStream);
 begin
   ExecuteExport(procedure begin WriteHTMLStream(Stream); end);
@@ -1101,6 +1217,12 @@ begin
       Writer.WriteLine('tr:nth-child(even) { background-color: #f2f2f2; }');
       Writer.WriteLine('tr:hover { background-color: #ddd; }');
       Writer.WriteLine('tr.footer-row td { font-weight: bold; background-color: #d9e1f2; }');
+      Writer.WriteLine('@media print {');
+      Writer.WriteLine('  @page { margin: 12mm; }');
+      Writer.WriteLine('  thead { display: table-header-group; }');
+      Writer.WriteLine('  tr { break-inside: avoid; page-break-inside: avoid; }');
+      Writer.WriteLine('  tr:hover { background-color: inherit; }');
+      Writer.WriteLine('}');
       Writer.WriteLine('</style>');
       Writer.WriteLine('</head>');
       Writer.WriteLine('<body>');
@@ -1113,7 +1235,7 @@ begin
         for I := 0 to Columns.Count - 1 do
         begin
           Writer.Write('<th>');
-          Writer.Write(EscapeHTML(Columns[I].Title.Caption));
+          Writer.Write(EscapeHTML(HeaderCaptionFor(Columns[I])));
           Writer.Write('</th>');
         end;
         Writer.WriteLine('</tr></thead>');
@@ -1128,11 +1250,14 @@ begin
 
       FDataset.DisableControls;
       try
+        FProgressTotal := CaptureProgressTotal;
         FDataset.First;
         RowCount := 0;
 
         while not FDataset.Eof do
         begin
+          if (FOptions.MaxRows > 0) and (RowCount >= FOptions.MaxRows) then
+            Break;
           if FCancelled then
             Break;
 
@@ -1151,7 +1276,7 @@ begin
 
           Inc(RowCount);
           if RowCount mod 100 = 0 then
-            CheckProgress(RowCount, FDataset.RecordCount);
+            CheckProgress(RowCount, FProgressTotal);
 
           FDataset.Next;
         end;
@@ -1233,11 +1358,14 @@ begin
 
       FDataset.DisableControls;
       try
+        FProgressTotal := CaptureProgressTotal;
         FDataset.First;
         RowCount := 0;
 
         while not FDataset.Eof do
         begin
+          if (FOptions.MaxRows > 0) and (RowCount >= FOptions.MaxRows) then
+            Break;
           if FCancelled then
             Break;
 
@@ -1263,7 +1391,7 @@ begin
 
           Inc(RowCount);
           if RowCount mod 100 = 0 then
-            CheckProgress(RowCount, FDataset.RecordCount);
+            CheckProgress(RowCount, FProgressTotal);
 
           FDataset.Next;
         end;
@@ -1375,12 +1503,15 @@ begin
 
       FDataset.DisableControls;
       try
+        FProgressTotal := CaptureProgressTotal;
         FDataset.First;
         RowCount := 0;
         FirstRow := True;
 
         while not FDataset.Eof do
         begin
+          if (FOptions.MaxRows > 0) and (RowCount >= FOptions.MaxRows) then
+            Break;
           if FCancelled then
             Break;
 
@@ -1411,7 +1542,7 @@ begin
 
           Inc(RowCount);
           if RowCount mod 100 = 0 then
-            CheckProgress(RowCount, FDataset.RecordCount);
+            CheckProgress(RowCount, FProgressTotal);
 
           FDataset.Next;
         end;
@@ -1487,10 +1618,141 @@ var
   Data: string;
 begin
   Data := ExportToString(Format);
+  if FCancelled then
+    raise EAbort.Create('Clipboard export cancelled');
   VittixSetClipboardText(Data);
 end;
 
+{ Selection copy }
+
+function TVittixDBGridExporter.BuildCopyText(AIncludeHeaders: Boolean): string;
+var
+  Columns: TList<TColumn>;
+  Lines: TStringList;
+  Line: string;
+  I, RowIndex: Integer;
+  Col: TColumn;
+  CellField: TField;
+  MultiSelect: Boolean;
+  Bookmark: TBookmark;
+  SavedDelimiter: Char;
+begin
+  Result := '';
+  if not Assigned(FDataset) or not FDataset.Active then Exit;
+
+  Columns := GetExportColumns;
+  Lines := TStringList.Create;
+  try
+    // The copy is TSV: EscapeCSV quotes any value containing the delimiter,
+    // quotes or line breaks, so embedded tabs/newlines survive one cell.
+    SavedDelimiter := FOptions.Delimiter;
+    FOptions.Delimiter := #9;
+    try
+      MultiSelect := Assigned(FGrid) and
+        (dgMultiSelect in FGrid.Options) and
+        (FGrid.SelectedRows.Count > 1);
+
+      if not MultiSelect then
+      begin
+        // Single current cell: just the value, formatted like an export.
+        // A grid without selection state yet falls back to the first
+        // visible column of the current record.
+        CellField := nil;
+        if Assigned(FGrid) then
+        begin
+          CellField := FGrid.SelectedField;
+          if not Assigned(CellField) and (Columns.Count > 0) then
+            CellField := Columns[0].Field;
+        end;
+        if Assigned(CellField) then
+          Result := EscapeCSV(FormatFieldValue(CellField, True));
+        Exit;
+      end;
+
+      FDataset.DisableControls;
+      Bookmark := nil;
+      try
+        if AIncludeHeaders then
+        begin
+          Line := '';
+          for I := 0 to Columns.Count - 1 do
+          begin
+            if I > 0 then
+              Line := Line + #9;
+            Line := Line + EscapeCSV(HeaderCaptionFor(Columns[I]));
+          end;
+          Lines.Add(Line);
+        end;
+
+        // Preserve the cursor across the selection walk.
+        Bookmark := FDataset.GetBookmark;
+        for RowIndex := 0 to FGrid.SelectedRows.Count - 1 do
+        begin
+          FDataset.GotoBookmark(FGrid.SelectedRows.Items[RowIndex]);
+          Line := '';
+          for I := 0 to Columns.Count - 1 do
+          begin
+            if I > 0 then
+              Line := Line + #9;
+            Col := Columns[I];
+            if Assigned(Col.Field) then
+              Line := Line + EscapeCSV(FormatFieldValue(Col.Field, True));
+          end;
+          Lines.Add(Line);
+        end;
+      finally
+        if Bookmark <> nil then
+        begin
+          try
+            if FDataset.BookmarkValid(Bookmark) then
+              FDataset.GotoBookmark(Bookmark);
+          finally
+            FDataset.FreeBookmark(Bookmark);
+          end;
+        end;
+        FDataset.EnableControls;
+      end;
+
+      Result := Lines.Text;
+    finally
+      FOptions.Delimiter := SavedDelimiter;
+    end;
+  finally
+    Lines.Free;
+    Columns.Free;
+  end;
+end;
+
+procedure TVittixDBGridExporter.CopySelectionToClipboard(
+  AIncludeHeaders: Boolean);
+begin
+  VittixSetClipboardText(BuildCopyText(AIncludeHeaders));
+end;
+
 { TVittixExcelExporter }
+
+const
+  // Integer-family values are written straight from AsString: the digits are
+  // locale-independent and no Double round-trip can lose precision for
+  // Int64 magnitudes beyond 2^53.
+  XLSX_INTEGER_FIELD_TYPES = [ftSmallint, ftInteger, ftWord, ftLongWord,
+    ftAutoInc, ftLargeint, ftShortint, ftByte];
+  XLSX_DATE_FIELD_TYPES = [ftDate, ftTime, ftDateTime, ftTimeStamp];
+
+function ExcelSerialFromDateTime(const ADateTime: TDateTime): Double;
+var
+  DayPart: Double;
+begin
+  // Excel 1900 date system. Serials match Delphi's day numbers from
+  // 1900-03-01 on; earlier real dates shift by one because Excel (wrongly)
+  // treats 1900 as a leap year and reserves serial 60 for the non-existent
+  // 29 February. Day part 0 (and below) carries time-only values (TField on
+  // ftTime reports 0.xx) and must not be shifted.
+  DayPart := Trunc(ADateTime);
+  if (DayPart >= 1) and (DayPart < 61) then
+    DayPart := DayPart - 1;
+  Result := DayPart + Frac(ADateTime);
+end;
 
 constructor TVittixExcelExporter.Create(AExporter: TVittixDBGridExporter);
 begin
@@ -1510,139 +1772,299 @@ begin
   end;
 end;
 
-function TVittixExcelExporter.BuildSheetXML: string;
-  var
-    XML: TStringList;
-    Columns: TList<TColumn>;
-    I, Row, RowCount: Integer;
-    Col: TColumn;
-    Value: string;
-    FooterRow: TArray<string>;
-    Bookmark: TBookmark;
-    FilteredToggledOff: Boolean;
+procedure TVittixExcelExporter.ResolveColumnWidths(Columns: TList<TColumn>);
+var
+  I: Integer;
+  Pixels: Integer;
+begin
+  SetLength(FTextWidths, Columns.Count);
+  SetLength(FHeuristicMax, Columns.Count);
+  for I := 0 to Columns.Count - 1 do
   begin
-    if not Assigned(FExporter.Dataset) or not FExporter.Dataset.Active then
-      raise EVittixExportError.Create('Dataset is not active');
+    // Heuristic seed: header caption plus breathing room; data cells can
+    // only grow it while the grid width is unavailable.
+    FHeuristicMax[I] := Length(FExporter.HeaderCaptionFor(Columns[I])) + 2;
 
-    XML := TStringList.Create;
+    Pixels := Columns[I].Width;
+    if Pixels > 6 then
+      // Excel's width unit counts maximum-width digits; Calibri 11 at 96 DPI
+      // has a 7 px digit and cells pad 5 px in total. The value is stored
+      // quantized to 1/256 like Excel itself does.
+      FTextWidths[I] := Round((Pixels - 5) / 7 * 256) / 256
+    else
+      FTextWidths[I] := -1;
+  end;
+end;
+
+procedure TVittixExcelExporter.TrackHeuristicLength(
+  AColumnIndex, ATextLength: Integer);
+begin
+  if (AColumnIndex < 0) or (AColumnIndex > High(FHeuristicMax)) then
+    Exit;
+  if (FTextWidths[AColumnIndex] < 0) and
+     (ATextLength > FHeuristicMax[AColumnIndex]) then
+    FHeuristicMax[AColumnIndex] := ATextLength;
+end;
+
+function TVittixExcelExporter.BuildColsXML(ColumnCount: Integer): string;
+var
+  SB: TStringBuilder;
+  I: Integer;
+  Width: Double;
+  FS: TFormatSettings;
+begin
+  if ColumnCount = 0 then
+    Exit('');
+
+  FS := TFormatSettings.Invariant;
+  SB := TStringBuilder.Create;
+  try
+    SB.Append('<cols>');
+    for I := 0 to ColumnCount - 1 do
+    begin
+      if (I <= High(FTextWidths)) and (FTextWidths[I] >= 0) then
+        Width := FTextWidths[I]
+      else if I <= High(FHeuristicMax) then
+        Width := FHeuristicMax[I]
+      else
+        Continue;
+      if Width < 5 then
+        Width := 5;
+      // The width must use an invariant decimal point; a locale comma would
+      // make Excel reject the whole worksheet. Two decimals match the
+      // precision Excel displays.
+      SB.Append(Format('<col min="%d" max="%d" width="%s" customWidth="1"/>',
+        [I + 1, I + 1, FormatFloat('0.##', Width, FS)]));
+    end;
+    SB.Append('</cols>');
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
+
+function TVittixExcelExporter.CellStyleForField(AField: TField): Integer;
+begin
+  case AField.DataType of
+    ftDate: Result := 1;
+    ftTime: Result := 2;
+    ftDateTime, ftTimeStamp: Result := 3;
+  else
+    Result := 0;
+  end;
+end;
+
+function TVittixExcelExporter.BuildStylesXML: string;
+begin
+  // The cellXfs indexes are the ones CellStyleForField hands out (s="1..3").
+  // numFmtIds 164..166 carry ISO formats because the built-in date formats
+  // (14/22) render differently per viewer locale.
+  Result :=
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+    '<numFmts count="3">' +
+    '<numFmt numFmtId="164" formatCode="yyyy\-mm\-dd"/>' +
+    '<numFmt numFmtId="165" formatCode="hh:mm:ss"/>' +
+    '<numFmt numFmtId="166" formatCode="yyyy\-mm\-dd\ hh:mm:ss"/>' +
+    '</numFmts>' +
+    '<fonts count="1"><font><sz val="11"/><color rgb="FF000000"/>' +
+    '<name val="Calibri"/><family val="2"/></font></fonts>' +
+    '<fills count="2"><fill><patternFill patternType="none"/></fill>' +
+    '<fill><patternFill patternType="gray125"/></fill></fills>' +
+    '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>' +
+    '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
+    '<cellXfs count="4">' +
+    '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
+    '<xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>' +
+    '<xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>' +
+    '<xf numFmtId="166" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>' +
+    '</cellXfs>' +
+    '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>' +
+    '<dxfs count="0"/>' +
+    '<tableStyles count="0" defaultTableStyle="TableStyleMedium9" defaultPivotStyle="PivotStyleLight16"/>' +
+    '</styleSheet>';
+end;
+
+procedure TVittixExcelExporter.AddInlineTextCell(Rows: TStrings;
+  AColumnIndex, ARow: Integer; const Text: string);
+begin
+  Rows.Add(Format('<c r="%s%d" t="inlineStr">', [ColumnLetter(AColumnIndex), ARow]));
+  Rows.Add('<is><t xml:space="preserve">' + FExporter.EscapeXML(Text) + '</t></is>');
+  Rows.Add('</c>');
+  TrackHeuristicLength(AColumnIndex, Length(Text));
+end;
+
+procedure TVittixExcelExporter.EmitDataCell(Rows: TStrings;
+  AColumnIndex, ARow: Integer; AField: TField);
+var
+  CellRef: string;
+  Value: string;
+begin
+  CellRef := Format('%s%d', [ColumnLetter(AColumnIndex), ARow]);
+
+  // NULL: an empty cell (no <v> and no inline empty string) so Excel never
+  // shows a phantom value and column type inference stays clean.
+  if AField.IsNull then
+  begin
+    Rows.Add(Format('<c r="%s"/>', [CellRef]));
+    Exit;
+  end;
+
+  // Locale opt-out keeps the pre-1.2 wholesale-text behavior: everything is
+  // written as the configured display text so the file matches what the
+  // grid showed.
+  if FExporter.Options.ExportLocaleFormat then
+  begin
+    AddInlineTextCell(Rows, AColumnIndex, ARow,
+      FExporter.FormatFieldValue(AField, True));
+    Exit;
+  end;
+
+  if AField.DataType in XLSX_DATE_FIELD_TYPES then
+  begin
+    // Excel serial number + a date/time/datetime number format style; the
+    // serial uses the invariant '.' so no locale can break the cell.
+    Rows.Add(Format('<c r="%s" t="n" s="%d"><v>%s</v></c>', [
+      CellRef,
+      CellStyleForField(AField),
+      FExporter.FormatNumberInvariant(ExcelSerialFromDateTime(AField.AsDateTime))]));
+    TrackHeuristicLength(AColumnIndex, 10);
+    Exit;
+  end;
+
+  if FExporter.IsNumericFieldType(AField) then
+  begin
+    if AField.DataType in XLSX_INTEGER_FIELD_TYPES then
+      Value := AField.AsString
+    else
+      Value := FExporter.FormatNumberInvariant(AField.AsFloat);
+    // t="n" stated explicitly: the OOXML default happens to be numeric, but
+    // the tests and consumers should not have to rely on a default.
+    Rows.Add(Format('<c r="%s" t="n"><v>%s</v></c>', [CellRef, Value]));
+    TrackHeuristicLength(AColumnIndex, Length(Value));
+    Exit;
+  end;
+
+  if AField.DataType = ftBoolean then
+  begin
+    Rows.Add(Format('<c r="%s" t="b"><v>%d</v></c>',
+      [CellRef, Ord(AField.AsBoolean)]));
+    TrackHeuristicLength(AColumnIndex, 1);
+    Exit;
+  end;
+
+  // Strings (and anything else): inline text with whitespace preserved.
+  AddInlineTextCell(Rows, AColumnIndex, ARow,
+    FExporter.FormatFieldValue(AField, True));
+end;
+
+function TVittixExcelExporter.BuildSheetXML: string;
+var
+  Rows: TStringList;
+  Columns: TList<TColumn>;
+  I, Row, RowCount, ColumnCount: Integer;
+  Col: TColumn;
+  FooterRow: TArray<string>;
+  Bookmark: TBookmark;
+  FilteredToggledOff: Boolean;
+  SB: TStringBuilder;
+begin
+  if not Assigned(FExporter.Dataset) or not FExporter.Dataset.Active then
+    raise EVittixExportError.Create('Dataset is not active');
+
+  Rows := TStringList.Create;
+  try
+    Columns := FExporter.GetExportColumns;
     try
-      XML.Add('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>');
-      XML.Add('<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">');
-      XML.Add('<sheetData>');
+      ResolveColumnWidths(Columns);
+      ColumnCount := Columns.Count;
+      Row := 1;
 
-      Columns := FExporter.GetExportColumns;
-      try
-        Row := 1;
-
-        if FExporter.Options.IncludeHeaders then
-        begin
-          XML.Add(Format('<row r="%d">', [Row]));
-          for I := 0 to Columns.Count - 1 do
-          begin
-            XML.Add(Format('<c r="%s%d" t="inlineStr">', [
-              ColumnLetter(I), Row
-            ]));
-            XML.Add('<is><t xml:space="preserve">' +
-              FExporter.EscapeXML(Columns[I].Title.Caption) + '</t></is>');
-            XML.Add('</c>');
-          end;
-          XML.Add('</row>');
-          Inc(Row);
-        end;
-
-        // Data rows
-        // Prepare iteration: preserve position; when ExportFilteredOnly is False
-        // and the dataset is filtered, export all records.
-        Bookmark := FExporter.BeginExportIteration(FilteredToggledOff);
-
-        FExporter.Dataset.DisableControls;
-        try
-          FExporter.Dataset.First;
-          RowCount := 0;
-
-          while not FExporter.Dataset.Eof do
-          begin
-            if FExporter.FCancelled then
-              Break;
-
-            XML.Add(Format('<row r="%d">', [Row]));
-
-            for I := 0 to Columns.Count - 1 do
-            begin
-              Col := Columns[I];
-              if Assigned(Col.Field) then
-              begin
-                if FExporter.IsNumericFieldType(Col.Field) and not Col.Field.IsNull then
-                begin
-                  // Numbers as real numeric cells so Excel computes on them
-                  // instead of treating every value as text.
-                  XML.Add(Format('<c r="%s%d"><v>%s</v></c>', [
-                    ColumnLetter(I), Row,
-                    FExporter.FormatNumberInvariant(Col.Field.AsFloat)
-                  ]));
-                end
-                else if (Col.Field.DataType = ftBoolean) and not Col.Field.IsNull then
-                begin
-                  XML.Add(Format('<c r="%s%d" t="b"><v>%d</v></c>', [
-                    ColumnLetter(I), Row, Ord(Col.Field.AsBoolean)
-                  ]));
-                end
-                else
-                begin
-                  Value := FExporter.FormatFieldValue(Col.Field, True);
-                  XML.Add(Format('<c r="%s%d" t="inlineStr">', [
-                    ColumnLetter(I), Row
-                  ]));
-                  XML.Add('<is><t xml:space="preserve">' +
-                    FExporter.EscapeXML(Value) + '</t></is>');
-                  XML.Add('</c>');
-                end;
-              end;
-            end;
-
-            XML.Add('</row>');
-
-            Inc(Row);
-            Inc(RowCount);
-            if RowCount mod 100 = 0 then
-              FExporter.CheckProgress(RowCount, FExporter.Dataset.RecordCount);
-
-            FExporter.Dataset.Next;
-          end;
-        finally
-          FExporter.EndExportIteration(Bookmark, FilteredToggledOff);
-          FExporter.Dataset.EnableControls;
-        end;
-
-        // Footer row
-        if FExporter.Options.IncludeFooter then
-        begin
-          FooterRow := FExporter.BuildFooterRow(Columns);
-          XML.Add(Format('<row r="%d">', [Row]));
-          for I := 0 to Columns.Count - 1 do
-          begin
-            XML.Add(Format('<c r="%s%d" t="inlineStr">', [
-              ColumnLetter(I), Row
-            ]));
-            XML.Add('<is><t xml:space="preserve">' +
-              FExporter.EscapeXML(FooterRow[I]) + '</t></is>');
-            XML.Add('</c>');
-          end;
-          XML.Add('</row>');
-        end;
-
-      finally
-        Columns.Free;
+      if FExporter.Options.IncludeHeaders then
+      begin
+        Rows.Add(Format('<row r="%d">', [Row]));
+        for I := 0 to Columns.Count - 1 do
+          AddInlineTextCell(Rows, I, Row, FExporter.HeaderCaptionFor(Columns[I]));
+        Rows.Add('</row>');
+        Inc(Row);
       end;
 
-      XML.Add('</sheetData>');
-      XML.Add('</worksheet>');
+      // Data rows
+      // Prepare iteration: preserve position; when ExportFilteredOnly is False
+      // and the dataset is filtered, export all records.
+      Bookmark := FExporter.BeginExportIteration(FilteredToggledOff);
 
-      Result := XML.Text;
+      FExporter.Dataset.DisableControls;
+      try
+        FExporter.FProgressTotal := FExporter.CaptureProgressTotal;
+        FExporter.Dataset.First;
+        RowCount := 0;
+
+        while not FExporter.Dataset.Eof do
+        begin
+          if (FExporter.Options.MaxRows > 0) and
+            (RowCount >= FExporter.Options.MaxRows) then
+            Break;
+          if FExporter.FCancelled then
+            Break;
+
+          Rows.Add(Format('<row r="%d">', [Row]));
+
+          for I := 0 to Columns.Count - 1 do
+          begin
+            Col := Columns[I];
+            if Assigned(Col.Field) then
+              EmitDataCell(Rows, I, Row, Col.Field);
+          end;
+
+          Rows.Add('</row>');
+
+          Inc(Row);
+          Inc(RowCount);
+          if RowCount mod 100 = 0 then
+            FExporter.CheckProgress(RowCount, FExporter.FProgressTotal);
+
+          FExporter.Dataset.Next;
+        end;
+      finally
+        FExporter.EndExportIteration(Bookmark, FilteredToggledOff);
+        FExporter.Dataset.EnableControls;
+      end;
+
+      // Footer row: display text, so it stays an inline string cell.
+      if FExporter.Options.IncludeFooter then
+      begin
+        FooterRow := FExporter.BuildFooterRow(Columns);
+        Rows.Add(Format('<row r="%d">', [Row]));
+        for I := 0 to Columns.Count - 1 do
+          AddInlineTextCell(Rows, I, Row, FooterRow[I]);
+        Rows.Add('</row>');
+      end;
+
     finally
-      XML.Free;
+      Columns.Free;
     end;
+
+    // <cols> must precede <sheetData> per the schema, so the worksheet is
+    // composed only after every row — and therefore every heuristic column
+    // width — is known.
+    SB := TStringBuilder.Create;
+    try
+      SB.Append('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>');
+      SB.Append('<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">');
+      SB.Append(BuildColsXML(ColumnCount));
+      SB.Append('<sheetData>');
+      SB.Append(Rows.Text);
+      SB.Append('</sheetData>');
+      SB.Append('</worksheet>');
+      Result := SB.ToString;
+    finally
+      SB.Free;
+    end;
+  finally
+    Rows.Free;
   end;
+end;
 
 procedure TVittixExcelExporter.ExportToXLSX(Stream: TStream);
 begin
@@ -1687,6 +2109,7 @@ begin
       '<Default Extension="xml" ContentType="application/xml"/>' +
       '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
       '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' +
+      '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' +
       '</Types>');
     AddEntry('_rels/.rels',
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
@@ -1703,7 +2126,9 @@ begin
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
       '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>' +
+      '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
       '</Relationships>');
+    AddEntry('xl/styles.xml', BuildStylesXML);
     AddEntry('xl/worksheets/sheet1.xml', SheetXML);
     Zip.Close;
 

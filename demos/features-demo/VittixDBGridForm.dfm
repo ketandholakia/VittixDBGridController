@@ -144,6 +144,24 @@ object frmVittixDemo: TfrmVittixDemo
         TabOrder = 2
         OnClick = chkShowFilteredClick
       end
+      object btnSaveFilterSet: TButton
+        Left = 8
+        Top = 92
+        Width = 120
+        Height = 21
+        Caption = 'Save Filter Set...'
+        TabOrder = 3
+        OnClick = btnSaveFilterSetClick
+      end
+      object btnManageFilterSets: TButton
+        Left = 134
+        Top = 92
+        Width = 123
+        Height = 21
+        Caption = 'Manage Filter Sets...'
+        TabOrder = 4
+        OnClick = btnManageFilterSetsClick
+      end
     end
     object grpDisplay: TGroupBox
       AlignWithMargins = True
@@ -197,40 +215,113 @@ object frmVittixDemo: TfrmVittixDemo
       TabOrder = 3
       object btnExportDialog: TButton
         Left = 8
-        Top = 20
-        Width = 169
+        Top = 24
+        Width = 80
         Height = 25
-        Caption = 'Export Data...'
+        Caption = 'Export...'
         TabOrder = 0
         OnClick = btnExportDialogClick
       end
+      object btnExportXlsx: TButton
+        Left = 94
+        Top = 24
+        Width = 84
+        Height = 25
+        Caption = 'XLSX File'
+        TabOrder = 1
+        OnClick = btnExportXlsxClick
+      end
     object btnSaveConfig: TButton
       Left = 8
-      Top = 51
-      Width = 169
+      Top = 55
+      Width = 80
       Height = 25
       Caption = 'Save Layout...'
-      TabOrder = 1
+      TabOrder = 2
       OnClick = btnSaveConfigClick
     end
     object btnLoadConfig: TButton
-      Left = 8
-      Top = 82
-      Width = 169
+      Left = 94
+      Top = 55
+      Width = 84
       Height = 25
       Caption = 'Load Layout...'
-      TabOrder = 2
+      TabOrder = 3
       OnClick = btnLoadConfigClick
     end
+    object btnPrintPreview: TButton
+      Left = 8
+      Top = 84
+      Width = 170
+      Height = 25
+      Caption = 'HTML Print Preview...'
+      TabOrder = 4
+      OnClick = btnPrintPreviewClick
+    end
+    end
+    object grpStyles: TGroupBox
+      Left = 892
+      Top = 3
+      Width = 145
+      Height = 114
+      Caption = ' VCL Style '
+      TabOrder = 4
+      object lblStyle: TLabel
+        Left = 8
+        Top = 24
+        Width = 33
+        Height = 13
+        Caption = 'Theme:'
+      end
+      object cmbStyle: TComboBox
+        Left = 8
+        Top = 43
+        Width = 155
+        Height = 21
+        Style = csDropDownList
+        TabOrder = 0
+        OnChange = cmbStyleChange
+      end
     end
     object btnRefreshData: TButton
-      Left = 892
-      Top = 23
+      Left = 1072
+      Top = 120
       Width = 120
       Height = 25
       Caption = 'Refresh Grid'
-      TabOrder = 4
+      TabOrder = 5
       OnClick = btnRefreshDataClick
+    end
+    object grpServer: TGroupBox
+      Left = 1043
+      Top = 3
+      Width = 200
+      Height = 114
+      Caption = ' Data Mode (SQLite 100k) '
+      TabOrder = 6
+      object lblFilterMode: TLabel
+        Left = 8
+        Top = 24
+        Width = 62
+        Height = 13
+        Caption = 'Filter/Sort:'
+      end
+      object cmbFilterMode: TComboBox
+        Left = 8
+        Top = 43
+        Width = 155
+        Height = 21
+        Style = csDropDownList
+        TabOrder = 0
+        OnChange = cmbFilterModeChange
+      end
+      object lblServerInfo: TLabel
+        Left = 8
+        Top = 72
+        Width = 8
+        Height = 13
+        Caption = '...'
+      end
     end
   end
   object pnlStatus: TPanel
@@ -289,6 +380,22 @@ object frmVittixDemo: TfrmVittixDemo
       ParentFont = False
       ExplicitLeft = 219
     end
+    object lblSearchStatus: TLabel
+      AlignWithMargins = True
+      Left = 226
+      Top = 3
+      Width = 72
+      Height = 15
+      Align = alLeft
+      Caption = 'Search: -'
+      Font.Charset = DEFAULT_CHARSET
+      Font.Color = clWindowText
+      Font.Height = -12
+      Font.Name = 'Segoe UI'
+      Font.Style = []
+      ParentFont = False
+      ExplicitLeft = 281
+    end
   end
   object VittixGrid: TVittixDBGrid
     Left = 0
@@ -302,7 +409,7 @@ object frmVittixDemo: TfrmVittixDemo
     Font.Height = -11
     Font.Name = 'Tahoma'
     Font.Style = []
-    Options = [dgTitles, dgIndicator, dgColumnResize, dgColLines, dgRowLines, dgTabs, dgRowSelect, dgConfirmDelete, dgCancelOnExit, dgTitleClick, dgTitleHotTrack]
+    Options = [dgTitles, dgIndicator, dgColumnResize, dgColLines, dgRowLines, dgTabs, dgRowSelect, dgConfirmDelete, dgCancelOnExit, dgMultiSelect, dgTitleClick, dgTitleHotTrack]
     ParentFont = False
     PopupMenu = PopupMenu1
     TabOrder = 3
@@ -505,6 +612,14 @@ object frmVittixDemo: TfrmVittixDemo
   end
   object OpenDialog1: TOpenDialog
     Left = 840
+    Top = 400
+  end
+  object FDConnection1: TFDConnection
+    Left = 1000
+    Top = 400
+  end
+  object FDQuery1: TFDQuery
+    Left = 1040
     Top = 400
   end
   object tmrSearchDelay: TTimer

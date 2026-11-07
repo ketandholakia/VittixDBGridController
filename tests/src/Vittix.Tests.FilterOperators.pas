@@ -1,4 +1,4 @@
-unit Vittix.Tests.FilterOperators;
+﻿unit Vittix.Tests.FilterOperators;
 
 interface
 

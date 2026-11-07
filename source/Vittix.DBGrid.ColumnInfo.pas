@@ -32,6 +32,8 @@ type
     FValue: string;
     FBackgroundColor: TColor;
     FFontColor: TColor;
+  protected
+    function GetDisplayName: string; override;
   published
     property FieldName: string read FFieldName write FFieldName;
     property Enabled: Boolean read FEnabled write FEnabled default True;
@@ -57,6 +59,14 @@ type
   // Sorting
   // ------------------------------------------------------------
   TVittixSortOrder = (vsoNone, vsoAsc, vsoDesc);
+
+  // ------------------------------------------------------------
+  // Per-column in-place editor configuration
+  // ------------------------------------------------------------
+  /// <summary>Custom popup editor opened by F2/double click. veNone keeps
+  /// the built-in memo/date behavior (and no editor for other field
+  /// types).</summary>
+  TVittixEditorKind = (veNone, vePickList, veLookup, veMaskedNumber);
 
   // ------------------------------------------------------------
   // Footer aggregation types
@@ -106,6 +116,21 @@ type
     FAggregationType: TVittixAggregationType;
     FFooterText: string;
     FCellConditions: TVittixDBGridCellConditions;
+    // Layout schema v2 column settings
+    FPinned: Boolean;
+    FTitleCaption: string;
+    FDisplayFormat: string;
+    FExportInclude: Boolean;
+    FExportCaption: string;
+    // Per-column editor configuration (v2 optional fields)
+    FEditorKind: TVittixEditorKind;
+    FPickItems: string;
+    FHasMin: Boolean;
+    FMinValue: Double;
+    FHasMax: Boolean;
+    FMaxValue: Double;
+    FRequired: Boolean;
+    FDecimalPlaces: Integer;
     // Runtime-only accumulator state (not streamed)
     FAggregation: TVittixAggregation;
   protected
@@ -137,6 +162,68 @@ type
     property FooterText: string
       read FFooterText write FFooterText;
     property CellConditions: TVittixDBGridCellConditions read FCellConditions;
+
+    /// <summary>Column belongs to the frozen (fixed left) region. The grid
+    /// derives its FrozenColumns count from the leading run of pinned
+    /// visible columns.</summary>
+    property Pinned: Boolean
+      read FPinned write FPinned default False;
+
+    /// <summary>Custom title caption applied to the grid column by
+    /// ApplyLayout. Empty leaves the column's own caption untouched.</summary>
+    property TitleCaption: string
+      read FTitleCaption write FTitleCaption;
+
+    /// <summary>Custom DisplayFormat applied to the backing field by
+    /// ApplyLayout (numeric and datetime fields only). Empty leaves the
+    /// field format untouched.</summary>
+    property DisplayFormat: string
+      read FDisplayFormat write FDisplayFormat;
+
+    /// <summary>When False the column is excluded from every export format
+    /// regardless of visibility settings.</summary>
+    property ExportInclude: Boolean
+      read FExportInclude write FExportInclude default True;
+
+    /// <summary>Custom header caption used by the export engine and the
+    /// clipboard copy. Empty falls back to the column title caption.</summary>
+    property ExportCaption: string
+      read FExportCaption write FExportCaption;
+
+    /// <summary>Custom popup editor opened by F2/double click. Default
+    /// veNone keeps the built-in memo/date behavior unchanged.</summary>
+    property EditorKind: TVittixEditorKind
+      read FEditorKind write FEditorKind default veNone;
+
+    /// <summary>Items for vePickList, one per line. "value=caption" pairs
+    /// write the value to integer fields; plain lines write the text to
+    /// string fields.</summary>
+    property PickItems: string
+      read FPickItems write FPickItems;
+
+    /// <summary>Lower bound for veMaskedNumber (and the built-in
+    /// validation); only applied when HasMin is True.</summary>
+    property HasMin: Boolean
+      read FHasMin write FHasMin default False;
+    property MinValue: Double
+      read FMinValue write FMinValue;
+
+    /// <summary>Upper bound for veMaskedNumber (and the built-in
+    /// validation); only applied when HasMax is True.</summary>
+    property HasMax: Boolean
+      read FHasMax write FHasMax default False;
+    property MaxValue: Double
+      read FMaxValue write FMaxValue;
+
+    /// <summary>Built-in validation: the editor rejects an empty/null
+    /// value while Required is True.</summary>
+    property Required: Boolean
+      read FRequired write FRequired default False;
+
+    /// <summary>Decimal places enforced by veMaskedNumber; -1 (default)
+    /// leaves the typed value unchanged.</summary>
+    property DecimalPlaces: Integer
+      read FDecimalPlaces write FDecimalPlaces default -1;
   public
     // Runtime aggregation results (direct field access keeps record member
     // calls like Aggregation.Clear mutating the backing field)
@@ -292,6 +379,19 @@ begin
   FCellConditions := TVittixDBGridCellConditions.Create(Self);
   FSortOrder := vsoNone;
   FSortIndex := -1;
+  FPinned := False;
+  FTitleCaption := '';
+  FDisplayFormat := '';
+  FExportInclude := True;
+  FExportCaption := '';
+  FEditorKind := veNone;
+  FPickItems := '';
+  FHasMin := False;
+  FMinValue := 0;
+  FHasMax := False;
+  FMaxValue := 0;
+  FRequired := False;
+  FDecimalPlaces := -1;
   Aggregation.Clear;
 end;
 
@@ -310,6 +410,19 @@ begin
     FAggregationType := Src.AggregationType;
     FFooterText := Src.FooterText;
     FCellConditions.Assign(Src.CellConditions);
+    FPinned := Src.Pinned;
+    FTitleCaption := Src.TitleCaption;
+    FDisplayFormat := Src.DisplayFormat;
+    FExportInclude := Src.ExportInclude;
+    FExportCaption := Src.ExportCaption;
+    FEditorKind := Src.EditorKind;
+    FPickItems := Src.PickItems;
+    FHasMin := Src.HasMin;
+    FMinValue := Src.MinValue;
+    FHasMax := Src.HasMax;
+    FMaxValue := Src.MaxValue;
+    FRequired := Src.Required;
+    FDecimalPlaces := Src.DecimalPlaces;
     // We do NOT copy the runtime Aggregation results, only metadata
   end
   else
@@ -323,6 +436,25 @@ begin
   FOperator := vccoEquals;
   FBackgroundColor := clNone;
   FFontColor := clNone;
+end;
+
+function TVittixDBGridCellCondition.GetDisplayName: string;
+const
+  OperatorNames: array[TVittixCellConditionOperator] of string = (
+    'equals', 'does not equal', 'contains', 'starts with', 'ends with',
+    'greater than', 'at least', 'less than', 'at most');
+var
+  FieldLabel: string;
+begin
+  FieldLabel := FFieldName;
+  if FieldLabel = '' then
+    FieldLabel := 'Condition ' + IntToStr(Index + 1);
+
+  Result := FieldLabel + ' ' + OperatorNames[FOperator];
+  if FValue <> '' then
+    Result := Result + ' "' + FValue + '"';
+  if not FEnabled then
+    Result := Result + ' (disabled)';
 end;
 
 function TVittixDBGridColumnInfo.GetDisplayName: string;

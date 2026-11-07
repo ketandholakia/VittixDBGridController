@@ -2,11 +2,15 @@ Vittix DBGrid Controller Installer
 ==================================
 
 This folder contains an Inno Setup installer script for the component.
+The current payload and registration target Delphi 12 Athens on Win32, matching
+the supported build target in the main README.
 
 What the installer does
 -----------------------
 
 - Installs the `source` and `packages` folders into `Program Files\Vittix\DBGridController`
+- Installs the palette `.dcr` resource needed to rebuild the design package
+- Excludes local compiler output and demo state from the setup payload
 - Optionally installs documentation and the feature demo
 - Optionally adds `{app}\source` to the Delphi 12 Win32 library path
 - Optionally registers the Delphi 12 design-time package if compiled package files are bundled
@@ -40,14 +44,39 @@ You can also build the package payload and installer with:
 powershell -ExecutionPolicy Bypass -File .\installer\build-installer.ps1
 ```
 
+The script takes optional parameters and environment variables so it does
+not depend on machine-specific paths:
+
+| Parameter | Environment fallback | Default |
+|-----------|---------------------|---------|
+| `-BdsRoot` | `VITTIX_BDS_ROOT` | `C:\Program Files (x86)\Embarcadero\Studio\<DelphiVersion>` |
+| `-BplDir` | `VITTIX_BPL_DIR` | `<PUBLIC>\Documents\Embarcadero\Studio\<DelphiVersion>\Bpl` |
+| `-DcpDir` | `VITTIX_DCP_DIR` | `<PUBLIC>\Documents\Embarcadero\Studio\<DelphiVersion>\Dcp` |
+
+`-PayloadPlatform` defaults to `-Platform`; the helper rejects a mismatch so
+the installer cannot label a Win32 package as another platform. The installer
+uses the selected platform in its library-path registry key and task text.
+Only Delphi 12 Athens/Win32 is currently built and tested; other combinations
+need their own package build and installation verification.
+The helper checks the package build result before copying the payload or
+compiling the setup.
+
+Example for a custom installation:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\installer\build-installer.ps1 `
+  -BdsRoot "D:\Embarcadero\Studio\23.0" `
+  -BplDir "D:\Embarcadero\Studio\23.0\Bpl" `
+  -DcpDir "D:\Embarcadero\Studio\23.0\Dcp"
+```
+
 What it does:
 
 - Builds `VittixDBGridControllerR.dproj`
 - Builds `VittixDBGridControllerD.dproj`
-- Copies the resulting `.bpl` and `.dcp` files from
-  `C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl` and
-  `C:\Users\Public\Documents\Embarcadero\Studio\23.0\Dcp`
-  into `installer\payload\Delphi12Athens\Win32`
+- Copies the resulting `.bpl` and `.dcp` files from the configured source
+  directories (the Delphi 12 public-documents output by default) into
+  `installer\payload\Delphi12Athens\Win32`
 - Runs `ISCC.exe` to compile `installer\VittixDBGridController.iss`
 
 Useful options:

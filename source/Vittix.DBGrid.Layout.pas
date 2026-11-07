@@ -10,6 +10,12 @@ interface
   Vcl.Graphics,
   Vittix.DBGrid.ColumnInfo;
 
+const
+  /// <summary>Layout schema version written by this build. v1 files (no
+  /// version key, or version 1) load unchanged; unknown fields from future
+  /// versions are ignored on load.</summary>
+  VITTIX_LAYOUT_SCHEMA_VERSION = 2;
+
 type
   EVittixLayoutError = class(Exception);
 
@@ -23,6 +29,21 @@ type
     AggregationType: TVittixAggregationType;
     FooterText: string;
     CellConditionsJson: string;
+    // Schema v2
+    Pinned: Boolean;
+    TitleCaption: string;
+    DisplayFormat: string;
+    ExportInclude: Boolean;
+    ExportCaption: string;
+    // Schema v2 optional editor configuration (TVittixEditorKind name)
+    EditorKind: string;
+    PickItems: string;
+    HasMin: Boolean;
+    MinValue: Double;
+    HasMax: Boolean;
+    MaxValue: Double;
+    Required: Boolean;
+    DecimalPlaces: Integer;
   end;
 
   TVittixDBGridLayoutState = class
@@ -31,6 +52,9 @@ type
     FFooterVisible: Boolean;
     FAlternatingRowColors: Boolean;
     FAlternateRowColor: TColor;
+    // v2 optional: name of the applied filter set ('' = none). Applying a
+    // layout skips the name silently when the set no longer exists.
+    FActiveFilterSetName: string;
     FColumns: TList<TVittixDBGridLayoutColumnState>;
   public
     constructor Create;
@@ -40,6 +64,7 @@ type
     property FooterVisible: Boolean read FFooterVisible write FFooterVisible;
     property AlternatingRowColors: Boolean read FAlternatingRowColors write FAlternatingRowColors;
     property AlternateRowColor: TColor read FAlternateRowColor write FAlternateRowColor;
+    property ActiveFilterSetName: string read FActiveFilterSetName write FActiveFilterSetName;
     property Columns: TList<TVittixDBGridLayoutColumnState> read FColumns;
   end;
 
@@ -108,7 +133,7 @@ constructor TVittixDBGridLayoutState.Create;
 begin
   inherited Create;
   FColumns := TList<TVittixDBGridLayoutColumnState>.Create;
-  FVersion := 1;
+  FVersion := VITTIX_LAYOUT_SCHEMA_VERSION;
   FFooterVisible := True;
   FAlternatingRowColors := True;
   FAlternateRowColor := $00F7F7F7;
@@ -123,7 +148,7 @@ end;
 procedure TVittixDBGridLayoutState.Clear;
 begin
   FColumns.Clear;
-  FVersion := 1;
+  FVersion := VITTIX_LAYOUT_SCHEMA_VERSION;
   FFooterVisible := True;
   FAlternatingRowColors := True;
   FAlternateRowColor := $00F7F7F7;
@@ -144,6 +169,8 @@ begin
     Root.AddPair('footerVisible', TJSONBool.Create(State.FooterVisible));
     Root.AddPair('alternatingRowColors', TJSONBool.Create(State.AlternatingRowColors));
     Root.AddPair('alternateRowColor', TJSONNumber.Create(State.AlternateRowColor));
+    // v2 optional field; an empty name means no filter set is applied
+    Root.AddPair('activeFilterSet', State.ActiveFilterSetName);
 
     Columns := TJSONArray.Create;
     for Col in State.Columns do
@@ -158,6 +185,21 @@ begin
       ColumnObj.AddPair('aggregationType', AggregationTypeToString(Col.AggregationType));
       ColumnObj.AddPair('footerText', Col.FooterText);
       ColumnObj.AddPair('cellConditionsJson', Col.CellConditionsJson);
+      // Schema v2 column settings
+      ColumnObj.AddPair('pinned', TJSONBool.Create(Col.Pinned));
+      ColumnObj.AddPair('titleCaption', Col.TitleCaption);
+      ColumnObj.AddPair('displayFormat', Col.DisplayFormat);
+      ColumnObj.AddPair('exportInclude', TJSONBool.Create(Col.ExportInclude));
+      ColumnObj.AddPair('exportCaption', Col.ExportCaption);
+      // Optional editor configuration
+      ColumnObj.AddPair('editorKind', Col.EditorKind);
+      ColumnObj.AddPair('pickItems', Col.PickItems);
+      ColumnObj.AddPair('hasMin', TJSONBool.Create(Col.HasMin));
+      ColumnObj.AddPair('minValue', TJSONNumber.Create(Col.MinValue));
+      ColumnObj.AddPair('hasMax', TJSONBool.Create(Col.HasMax));
+      ColumnObj.AddPair('maxValue', TJSONNumber.Create(Col.MaxValue));
+      ColumnObj.AddPair('required', TJSONBool.Create(Col.Required));
+      ColumnObj.AddPair('decimalPlaces', TJSONNumber.Create(Col.DecimalPlaces));
       Columns.AddElement(ColumnObj);
     end;
 
@@ -209,6 +251,7 @@ begin
       Result.FooterVisible := Root.GetValue<Boolean>('footerVisible', True);
       Result.AlternatingRowColors := Root.GetValue<Boolean>('alternatingRowColors', True);
       Result.AlternateRowColor := TColor(Root.GetValue<Integer>('alternateRowColor', $00F7F7F7));
+      Result.ActiveFilterSetName := Root.GetValue<string>('activeFilterSet', '');
 
       Columns := Root.GetValue<TJSONArray>('columns', nil);
       if Assigned(Columns) then
@@ -226,6 +269,25 @@ begin
           Col.AggregationType := StringToAggregationType(ColObj.GetValue<string>('aggregationType', 'None'));
           Col.FooterText := ColObj.GetValue<string>('footerText', '');
           Col.CellConditionsJson := ColObj.GetValue<string>('cellConditionsJson', '');
+          // Schema v2 fields; v1 files (and files from future versions with
+          // the fields removed) fall back to the pre-v2 defaults.
+          Col.Pinned := ColObj.GetValue<Boolean>('pinned', False);
+          Col.TitleCaption := ColObj.GetValue<string>('titleCaption', '');
+          Col.DisplayFormat := ColObj.GetValue<string>('displayFormat', '');
+          Col.ExportInclude := ColObj.GetValue<Boolean>('exportInclude', True);
+          Col.ExportCaption := ColObj.GetValue<string>('exportCaption', '');
+          // Optional editor configuration; older files keep the defaults
+          // (veNone, no items, no bounds).
+          Col.EditorKind := ColObj.GetValue<string>('editorKind', 'veNone');
+          // Files written by 1.4.0 may carry an "editMask" key; unknown
+          // keys are ignored by the GetValue-based reader.
+          Col.PickItems := ColObj.GetValue<string>('pickItems', '');
+          Col.HasMin := ColObj.GetValue<Boolean>('hasMin', False);
+          Col.MinValue := ColObj.GetValue<Double>('minValue', 0);
+          Col.HasMax := ColObj.GetValue<Boolean>('hasMax', False);
+          Col.MaxValue := ColObj.GetValue<Double>('maxValue', 0);
+          Col.Required := ColObj.GetValue<Boolean>('required', False);
+          Col.DecimalPlaces := ColObj.GetValue<Integer>('decimalPlaces', -1);
           Result.Columns.Add(Col);
         end;
     finally

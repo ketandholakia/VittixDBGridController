@@ -33,6 +33,8 @@ type
     procedure EmptyDatasetDoesNotRaise;
     [Test]
     procedure ActiveAggregationSummaryReportsFieldModes;
+    [Test]
+    procedure FullScanCountTracksOnlyDatasetScans;
   end;
 
 implementation
@@ -77,6 +79,28 @@ begin
   FEngine.Recalculate;
 
   Assert.AreEqual(3, FDataSet.FieldByName('ID').AsInteger);
+end;
+
+procedure TVittixAggregationEngineTests.FullScanCountTracksOnlyDatasetScans;
+begin
+  Assert.AreEqual<Int64>(0, FEngine.FullScanCount);
+  FEngine.Recalculate; // No active aggregation: no record traversal.
+  Assert.AreEqual<Int64>(0, FEngine.FullScanCount);
+
+  FColumns.FindByFieldName('Amount').AggregationType := vatSum;
+  FDataSet.Edit;
+  FEngine.Recalculate; // Navigation during an edit must remain deferred.
+  Assert.AreEqual<Int64>(0, FEngine.FullScanCount);
+  FDataSet.Cancel;
+
+  FEngine.Recalculate;
+  Assert.AreEqual<Int64>(1, FEngine.FullScanCount);
+  FEngine.Recalculate;
+  Assert.AreEqual<Int64>(2, FEngine.FullScanCount);
+
+  FDataSet.Close;
+  FEngine.Recalculate;
+  Assert.AreEqual<Int64>(2, FEngine.FullScanCount);
 end;
 
 procedure TVittixAggregationEngineTests.StringMinAndMaxUseExpectedOrdering;

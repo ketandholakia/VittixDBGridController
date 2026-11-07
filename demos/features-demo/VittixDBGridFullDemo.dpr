@@ -5,6 +5,7 @@ uses
   VittixDBGridForm in 'VittixDBGridForm.pas' {frmVittixDemo};
 
 {$R *.res}
+{$R *.dres}
 
 begin
   Application.Initialize;

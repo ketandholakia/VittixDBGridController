@@ -4,6 +4,365 @@ All notable changes to Vittix.DBGrid are documented here. Releases older than
 v1.0.3 were published before this file existed; their notes live in the GitHub
 releases only.
 
+## [2.0.0] - 2026-10-28
+
+### Added
+
+- **Server-side filter/sort provider (opt-in).** Large datasets can now
+  push filtering and sorting into the database as parameterized
+  WHERE / ORDER BY instead of evaluating OnFilterRecord per row on the
+  client. **Client-side behavior is unchanged and remains the default and
+  the correctness baseline: applications that never set the new
+  `FilterMode` property see exactly the 1.4 behavior.**
+  - New `Vittix.DBGrid.Provider` unit: `TVittixSQLBuilder` (pure,
+    dataset-free SQL generation) and `IVittixDataProvider` (the interface
+    the controller calls). New published grid property `FilterMode`
+    (vcmClient default / vcmServer / vcmAuto — one property governs filter
+    AND sort, since a hybrid split would mean two re-queries per change
+    and two disagreeing row orders). New controller `Provider` property
+    accepts application-supplied providers; events
+    `OnProviderFallback(Sender, Reason)` and
+    `OnProviderError(Sender, E, var Handled)` surface declines and failing
+    queries.
+  - SQL generation per dialect (ANSI, Firebird, SQLite, MySQL/MariaDB,
+    PostgreSQL, SQL Server): quoted and validated identifiers (unknown
+    field names are rejected, never passed through), UPPER-LIKE
+    case-insensitive matching with `ESCAPE`, `NULL`/blank/Between/comparison
+    operators, typed date/number/boolean parameters (user values never
+    appear in the SQL text — injection payloads stay in parameters by
+    construction), explicit `NULLS FIRST/LAST` on PostgreSQL/Firebird and
+    documented defaults elsewhere, AND-within/OR-between group semantics
+    with parenthesization, and a capped global search OR across text
+    columns (20-column limit) that keeps its "replaces column filters"
+    semantics. Operators that depend on client display text (formatted
+    numbers, OnValidateFilter hooks) are reported "not expressible" so
+    vcmAuto falls back.
+  - New `Vittix.DBGrid.Provider.FireDAC` unit (separate
+    `VittixDBGridControllerFD` runtime package so the core does not
+    hard-depend on FireDAC): wraps the application's TFDQuery SQL as
+    `SELECT * FROM (original) VITTIX_SUB WHERE ... ORDER BY ...`, restores
+    the original SQL and parameter values on clear/mode switch/controller
+    teardown and after a failing query, preserves the current record
+    best-effort by field values, and computes footer aggregates with one
+    `SELECT COUNT/SUM/AVG/MIN/MAX` against the same WHERE (client scan
+    remains the fallback). Unwrappable shapes (UNION, top-level ORDER BY,
+    semicolons, EXEC/CALL commands) are declined with a reason.
+  - Integration: the filter popup, global search, saved filter sets,
+    layout restore and header-click sort all route through the provider
+    when a server mode is active; edits defer the re-query like the
+    aggregation deferral; a failing query restores the previous state and
+    fires `OnProviderError` (re-raises when unhandled); the footer shows
+    "Server filter (dialect)" / "Client filter (fallback)" in the hint
+    area; exports see the already-filtered dataset so `ExportFilteredOnly`
+    is a no-op there; incremental search uses Locate on the loaded rows
+    (type-ahead covers fetched rows only when FetchOptions limits the
+    fetch).
+
+- **Repository hygiene.** UTF-8 BOMs added to 11 sources containing
+  non-ASCII text (previously compiled as ANSI mojibake); `*.dres`/`*.vrc`
+  build artifacts ignored; one mixed-line-ending file normalized.
+
+- **Demo.** A Data Mode combo (Client/Server/Auto) over an in-memory
+  SQLite table of 100,000 rows with a live status label showing mode
+  switch time.
+
+### Changed (behavior)
+
+- **`SetGlobalFilter` re-applies immediately in server modes too** (the
+  1.4 fix covered client mode; the routing is shared now).
+- **The client sort engine defers to the server** while a server sort is
+  active: `IndexFieldNames` is cleared before the first server ORDER BY so
+  it cannot re-sort the re-opened result client-side, and restored on
+  fallback.
+- **The controller unregisters its dataset FreeNotification on
+  destruction**, so a dataset outliving its grid-owned controller no
+  longer notifies a dead object (found by the new teardown tests).
+
+### Removed
+
+- **`TVittixDBGridColumnInfo.EditMask`** (introduced in 1.4.0, never
+  consumed by any editor) is gone from the column info, the layout JSON
+  writer and the docs. Layout files that carry an `editMask` key still
+  load — unknown keys are ignored by the reader. `TVittixEditorKind` and
+  the masked numeric editor itself are unaffected (they are driven by
+  Min/Max/DecimalPlaces).
+
+### Fixed
+
+- **`SetGlobalFilter` while a filter set's OR-groups were active** did not
+  re-route the conditions (server mode).
+- **An empty OR-group ORed the whole filter away** server-side too
+  (compile-time drop, matching the 1.4 client fix).
+- **Sort-state restore no longer wipes an application's own
+  `IndexFieldNames`** when no client sort had been applied.
+
+### Tests
+
+- 42 new tests: 29 dataset-free SQL-builder tests across all dialects
+  (every operator, groups/parentheses, global search cap, typed
+  parameters, ORDER BY NULL placement, LIKE escaping, injection payloads,
+  unknown fields, not-expressible reasons) and 13 FireDAC/SQLite
+  integration tests (client/server result equivalence, OR-groups, global
+  search, multi-column sort, SQL restore on clear/destroy, vcmAuto
+  fallback with reason, failing-query restore + error event,
+  record preservation by key, server aggregates vs client aggregates,
+  saved filter set and layout round trips in server mode, edit-state
+  deferral, `ExportFilteredOnly` in server mode, and a 200k-row timing
+  comparison) — 382 total.
+
+## [1.4.0] - 2026-10-27
+
+### Added
+
+- **Saved filter sets with OR-groups.** The filter engine gains a group
+  model: a set is an ordered list of groups, conditions inside a group are
+  ANDed and groups are ORed (empty groups are ignored). Conditions reuse
+  the existing operator-prefix syntax and the single operator table; each
+  group is precompiled at apply time (parsed operator, folded needle,
+  typed numeric/date values), so per-record evaluation no longer parses.
+  The classic per-column AND behavior is exactly one implicit group and is
+  unchanged.
+- **New `Vittix.DBGrid.FilterSets` unit** with `TVittixFilterSet`,
+  `TVittixFilterSetGroup`, and `TVittixFilterSetList` (add/replace, delete,
+  rename, move up/down, find by name) with versioned JSON persistence
+  written atomically (staged temp file, missing directories created). A
+  corrupt file raises `EVittixFilterSetError` on every access until it is
+  fixed — saved data is never silently dropped or overwritten.
+- **Controller API:** `SaveCurrentFilterAs`, `ApplyFilterSet`,
+  `DeleteFilterSet`, `FilterSetNames`, `FilterSetList`, `PersistFilterSets`,
+  `ActiveFilterSetName` plus the new published grid property
+  `FilterSetsFileName` (per-grid instance setting; empty resolves to
+  `PersistenceRootPath\filtersets.json`). New events `OnFilterSetApplied`
+  and `OnFilterSetsChanged` (controller and grid share storage).
+- **Layout integration:** the layout JSON stores `activeFilterSet`
+  (optional v2 field, no schema bump). Applying a layout re-applies the set
+  when it exists and skips unknown names silently.
+- **Saved-filters UI:** the filter popup gains a `Saved...` menu (apply a
+  named set, save the current filters as..., open the manager) and a new
+  modal `TVittixDBGridFilterSetManager` dialog (list, rename, delete,
+  reorder, and a group/condition editor driven by the operator table).
+  Both are style-aware. While a set is active its name shows in the
+  footer's hint area; `ClearFilters` clears it.
+- **Richer in-place editors (per-column).** New `TVittixDBGridColumnInfo`
+  options: `EditorKind` (veNone default, vePickList, veLookup,
+  veMaskedNumber), `PickItems` ("value=caption" pairs write the value to
+  integer fields), `EditMask`, `HasMin`/`MinValue`, `HasMax`/`MaxValue`,
+  `Required` and `DecimalPlaces`. The pick list, lookup (searchable list
+  from the field's `LookupDataSet`, single key field) and masked numeric
+  editors are modal popups opened by F2/double click; read-only columns
+  and fields open nothing, and Esc cancels the edit cleanly. All options
+  round-trip through the layout (optional v2 fields).
+- **`OnValidateCell` validation** (controller, re-published on the grid):
+  runs before any Vittix editor commits (memo, date, pick list, lookup,
+  masked numeric) after the built-in Required/Min/Max rules; on
+  `Accept = False` the message is shown and the editor stays open. The
+  event receives `var NewValue` and may rewrite it.
+
+### Changed (behavior)
+
+- **The global search now re-applies immediately.** `SetGlobalFilter` while
+  the filter engine was already active silently did nothing before (the
+  `Active := True` assignment was a no-op), so typing a new global search
+  kept the previous result. It re-filters now. Flagged as a bug fix below.
+- **Non-ASCII type-ahead search takes the fast Locate path on wide string
+  fields.** `ftWideString`/`ftFixedWideChar`/`ftWideMemo` fields compare in
+  UTF-16 (Midas keeps strings wide; FireDAC routes dtWideString through
+  `CompareStringW` with `NORM_IGNORECASE`), so those searches use
+  `Locate` again; ANSI `ftString` fields keep the Unicode scan fallback.
+- **The fallback scan avoids a per-row string allocation.** The search
+  needle is folded once and rows are compared char-wise: a full 50,000-row
+  Unicode prefix sweep measures ~21 ms.
+- The filter popup is slightly wider to fit the Saved button; new editors
+  and dialogs follow the active VCL style.
+
+### Fixed
+
+- **A non-ASCII type-ahead search could locate the wrong record on ANSI
+  fields** (found in 1.2; the Locate fast path is now gated to ASCII
+  buffers and wide fields).
+- **`SetGlobalFilter` was a no-op while the engine was already active**
+  (see above).
+- **An empty OR-group would vacuously match every record** and OR the
+  whole filter away; empty groups are dropped at compile time.
+- **A corrupt filter-set file was loaded as an empty list on the second
+  access**; the list now re-raises on every access and can never overwrite
+  the file until it parses.
+
+### Tests
+
+- 31 new regression tests: wide-string fast path (with Locate-call
+  counting), 50k-row scan performance, group semantics/equivalence, filter
+  set save/apply/persistence/corruption/isolation, layout integration,
+  editor helpers, validation gate ordering, read-only and lookup safety,
+  and editor-option layout round trips — 340 total.
+
+## [1.3.0] - 2026-10-27
+
+### Added
+
+- **Column freezing (fixed left columns).** New published property
+  `FrozenColumns` on the grid (default 0; the setter clamps to
+  0..VisibleColumnCount-1) keeps the leftmost visible columns fixed while
+  the rest scroll horizontally, plus `FreezeUpToColumn(Column)`,
+  `UnfreezeAll` and `RefreshFrozenColumns` and the
+  `OnFrozenColumnsChanged(Sender)` event. Built on `TCustomGrid.FixedCols`
+  (re-applied after every layout change, since TDBGrid resets it); frozen
+  and scrolling regions cannot be crossed by VCL column drags (the move is
+  rolled back) or by column-chooser drags/keyboard moves. The footer keeps
+  aggregates aligned under frozen columns while scrolled. The per-column
+  `Pinned` flag persists in the layout; `ResetLayout` and `UnfreezeAll`
+  clear freezing, and hiding a frozen column in the chooser shrinks the
+  region.
+
+- **Layout schema v2.** The layout JSON gains a `version` field (always
+  written as 2; v1 files without it load unchanged with their previous
+  behavior) and per-column `pinned`, `titleCaption`, `displayFormat`,
+  `exportInclude` and `exportCaption`. Unknown fields from future versions
+  are ignored; malformed input still raises `EVittixLayoutError`. Matching
+  new properties on `TVittixDBGridColumnInfo` (all defaulting to previous
+  behavior) with `Assign` support; `ApplyLayout` pushes `TitleCaption` to
+  the grid column and `DisplayFormat` to the backing numeric/datetime field
+  (empty strings leave the current values untouched).
+
+- **Export column settings.** `ExportInclude = False` excludes a column
+  from every export format and the clipboard copy (even when
+  `ExportVisibleOnly` is off); a non-empty `ExportCaption` replaces the
+  header caption in CSV, TSV, HTML, Text, XLSX and copy headers (XML/JSON
+  keep their field-name keys).
+
+- **Unicode-correct incremental search.** Type-ahead matching now folds
+  case through Unicode simple case mapping (`TCharHelper.ToUpper`):
+  accented Latin, Cyrillic and Greek match case-insensitively, and the
+  caseless Indic scripts (Devanagari, Gujarati) match positionally without
+  corruption.
+
+- **Surrogate-pair-safe search buffer.** Characters outside the BMP enter
+  the buffer as a pair; the search runs once the low surrogate completes
+  the pair, and Backspace removes both halves together (a lone surrogate
+  never survives). Combining marks (Indic matras, virama, nukta) delete one
+  UTF-16 code unit per Backspace, matching the Windows EDIT control's
+  granularity. Characters injected per `WM_CHAR` by keyboard hooks search
+  as before.
+
+- **Clipboard shortcut bypass during edits.** While the in-place editor is
+  open (or a dataset edit/insert is pending), Ctrl+C/X/V/A are no longer
+  consumed by the grid copy; the editor's native text handling wins. The
+  decision is isolated in
+  `TVittixDBGridController.ShouldBypassClipboardShortcut`.
+
+- **Demo.** The feature demo gained a VCL style switcher (Carbon,
+  Windows10 Dark, Windows11 Modern Dark embedded via project resources,
+  with a `styles\` folder fallback and a graceful no-styles path), an
+  incremental-search status label, a one-click XLSX export writing typed
+  numbers/dates and NULL cells (every 5th row has null Notes/Shipping
+  Date), and multi-select enabled for the copy/selection-aggregate tour.
+
+### Changed (behavior)
+
+- **Layout files are written as schema v2.** Old versions reading v2 files
+  ignore the new keys; this version reads v1 files unchanged.
+- **Ctrl+C during an edit goes to the editor.** With an in-place editor
+  open, Ctrl+C/X/V/A reach the editor instead of the grid copy.
+- **Column chooser and footer surface small public helpers**
+  (`SetColumnChecked`, `ApplySelection`, `GetColumnRect`,
+  `GetIndicatorRect`) used by the new features and tests.
+
+### Fixed
+
+- **A non-ASCII type-ahead search could locate the wrong record.**
+  `TClientDataSet.Locate` compares `ftString` values after a codepage
+  conversion that collapses every non-ASCII character to `?`, so a
+  Devanagari buffer matched a Gujarati row. Non-ASCII buffers now take the
+  Unicode-correct fallback scan; ASCII buffers keep the fast Locate path.
+
+### Tests
+
+- 35 new regression tests (Unicode/surrogate search, editor bypass, layout
+  schema v1/v2 round trips, export column settings, frozen columns
+  including drag rules, layout persistence, footer alignment and chooser
+  interaction) — 309 total.
+
+## [1.2.0] - 2026-10-27
+
+### Added
+
+- **Incremental search (type-ahead locate).** Printable characters build a
+  search buffer and the grid locates the first record whose primary sort
+  column (or current column, when unsorted) starts with the buffer,
+  case-insensitive. The buffer resets after `IncrementalSearchTimeout`
+  milliseconds (default 1000) or on Esc; Backspace removes the last
+  character. In-place editing (open editor or edit/insert state) bypasses
+  the search entirely. Datasets without `Locate` support fall back to a
+  cursor-restoring scan. New published properties on the grid:
+  `IncrementalSearch` (default True), `IncrementalSearchTimeout`
+  (default 1000) and the `OnIncrementalSearch(Sender, SearchText, Found)`
+  event (shared storage with the controller, like the other notification
+  events). The current buffer shows as a hint in the footer's left corner
+  and clears on reset.
+
+- **Copy selection to the clipboard.** Ctrl+C copies the current cell, or
+  the selected rows when `dgMultiSelect` holds more than one row, as TSV.
+  The new grid property `CopyIncludeHeaders` (default False) prepends a
+  header row of the visible column captions; Ctrl+Shift+C always includes
+  headers. Values use the export engine's full-precision invariant
+  formatting (`ExportLocaleFormat` switches to display text), respect the
+  visible columns and their order, quote values containing tabs, quotes or
+  line breaks, write NULLs as empty fields, and preserve the dataset
+  cursor. The public `TVittixDBGridExporter.BuildCopyText(AIncludeHeaders)`
+  builds the same text without touching the clipboard.
+
+- **Selection aggregates in the footer.** While a multi-row selection is
+  active, each footer column shows the aggregate of the selected rows only
+  (`Sum: x` for numeric fields, `Count: n` otherwise) without changing the
+  dataset-wide aggregation state; clearing the selection restores the
+  configured footer.
+
+- **VCL Styles support.** New `Vittix.DBGrid.Styles` unit with
+  `TVittixStylePalette`, a style-aware color resolver. The footer panel's
+  background, text and 3D borders, the filter popup's button panel and
+  validation label, and the export dialog's banner follow the active VCL
+  style (per-control style services). When no custom style is active the
+  resolvers return the live system colors, so unstyled rendering is
+  unchanged.
+
+- **XLSX column widths.** The worksheet gains a `<cols>` element derived
+  from the grid column widths (a caption-length heuristic per column where
+  no usable grid width exists).
+
+### Changed (behavior)
+
+- **XLSX dates are real dates now.** Date, time and timestamp fields are
+  written as Excel serial numbers (`t="n"`) with a date/time/datetime
+  number format from the package's new `xl/styles.xml`, instead of display
+  text. Excel can sort and compute on them.
+- **XLSX NULLs are empty cells.** A NULL exports as a cell with no value
+  instead of an empty inline string, so Excel's per-column type inference
+  stays clean.
+- **XLSX honors `ExportLocaleFormat`.** With the opt-out on, every cell is
+  now written as locale display text (the pre-1.2 wholesale-text behavior);
+  previously the XLSX writer ignored the option and always emitted
+  invariant numbers, contradicting the documented contract.
+- Numeric XLSX cells carry an explicit `t="n"` attribute, and integer-family
+  fields are written from their exact digits (an Int64 beyond 2^53 keeps
+  its precision; a Double round trip would round).
+
+### Fixed
+
+- `vefPDF` is documented as not implemented and hidden from the export
+  dialog (the enum member is kept so existing compiled code keeps loading);
+  `ExportToStream(vefPDF)` still raises `EVittixExportError`.
+
+### Tests
+
+- 43 new regression tests covering the typed XLSX cells (null, negative,
+  currency, date/datetime/time, large integers, styles part, column
+  widths, whitespace preservation, locale opt-out), the style palette,
+  incremental search (match, no-match, backspace, timeout, sorted vs
+  unsorted column, edit-mode bypass, filtered and closed datasets, the
+  no-Locate fallback) and the selection copy (single cell, multiselect,
+  headers, hidden columns, nulls, tabs/quotes/newlines, cursor
+  preservation, footer aggregates) — 274 total.
+
 ## [1.1.1] - 2026-10-05
 
 ### Fixed

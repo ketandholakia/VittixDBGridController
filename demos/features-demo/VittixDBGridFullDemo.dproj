@@ -128,6 +128,18 @@
         <DCCReference Include="VittixDBGridForm.pas">
             <Form>frmVittixDemo</Form>
         </DCCReference>
+        <RcItem Include="styles\Carbon.vsf">
+            <ResourceId>CARBONSTYLE</ResourceId>
+            <ResourceType>RCDATA</ResourceType>
+        </RcItem>
+        <RcItem Include="styles\Windows10Dark.vsf">
+            <ResourceId>WINDOWS10DARKSTYLE</ResourceId>
+            <ResourceType>RCDATA</ResourceType>
+        </RcItem>
+        <RcItem Include="styles\Windows11_Modern_Dark.vsf">
+            <ResourceId>WINDOWS11MODERNDARKSTYLE</ResourceId>
+            <ResourceType>RCDATA</ResourceType>
+        </RcItem>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

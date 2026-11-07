@@ -38,6 +38,10 @@ type
     FOriginalIndexCaptured: Boolean;
     FTempIndexCreated: Boolean;
     FOnFieldValidation: TFieldValidationEvent;
+    // False while a server provider owns sorting: ApplySorting becomes a
+    // no-op (the sort state on the columns is still maintained) and the
+    // controller routes the ORDER BY instead.
+    FClientApplyEnabled: Boolean;
 
     function DataSetSupportsIndexFieldNames: Boolean;
     function BuildIndexFieldNames: string;
@@ -55,6 +59,11 @@ type
     function GetSortSummaryText: string;
 
     property OnFieldValidation: TFieldValidationEvent read FOnFieldValidation write FOnFieldValidation;
+
+    /// <summary>When False (server sort active) ApplySorting does nothing
+    /// and the controller generates the ORDER BY; the column sort state is
+    /// still maintained by ToggleSort. Default True.</summary>
+    property ClientApplyEnabled: Boolean read FClientApplyEnabled write FClientApplyEnabled;
   end;
 
 implementation
@@ -77,6 +86,7 @@ begin
   FColumns := AColumns;
   FOriginalIndexCaptured := False;
   FTempIndexCreated := False;
+  FClientApplyEnabled := True;
 end;
 
 function TVittixDBGridSortEngine.DataSetSupportsIndexFieldNames: Boolean;
@@ -182,6 +192,9 @@ var
   IndexFields: string;
   I: Integer;
 begin
+  // Server sort owns the ORDER BY while disabled; the column state is
+  // kept so the UI arrows stay correct and a fallback can re-apply.
+  if not FClientApplyEnabled then Exit;
   if not Assigned(FDataSet) or not FDataSet.Active then Exit;
 
   CaptureOriginalIndexState;
@@ -374,7 +387,11 @@ begin
 
   if not Assigned(FDataSet) or not FDataSet.Active then Exit;
 
-  RestoreOriginalIndexState;
+  // Only restore when a client apply captured something: restoring
+  // uncaptured state would wipe an application's own IndexFieldNames
+  // (the server-sort path never calls ApplySorting).
+  if FOriginalIndexCaptured then
+    RestoreOriginalIndexState;
 
   FTempIndexCreated := False;
 end;

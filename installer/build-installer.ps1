@@ -1,16 +1,31 @@
 param(
+  [ValidateSet("Debug", "Release")]
   [string]$Config = "Release",
+  [ValidateSet("Win32", "Win64")]
   [string]$Platform = "Win32",
   [string]$Version = "1.0.0",
   [string]$DelphiVersion = "23.0",
   [string]$DelphiDisplayName = "RAD Studio 12 Athens",
   [string]$PayloadRootName = "Delphi12Athens",
-  [string]$PayloadPlatform = "Win32",
+  [string]$PayloadPlatform = "",
+  # RAD Studio root (contains bin/rsvars.bat). Falls back to the
+  # VITTIX_BDS_ROOT environment variable, then to the standard location.
+  [string]$BdsRoot = "",
+  # Where the package build left the .bpl/.dcp files. Falls back to the
+  # VITTIX_BPL_DIR / VITTIX_DCP_DIR environment variables, then to the
+  # default public-documents output for the given Delphi version.
+  [string]$BplDir = "",
+  [string]$DcpDir = "",
   [switch]$SkipPackageBuild,
   [switch]$SkipSetupCompile
 )
 
 $ErrorActionPreference = "Stop"
+
+if (-not $PayloadPlatform) { $PayloadPlatform = $Platform }
+if ($PayloadPlatform -ne $Platform) {
+  throw "PayloadPlatform ($PayloadPlatform) must match the package build Platform ($Platform)."
+}
 
 function Resolve-ToolPath {
   param([string[]]$Candidates)
@@ -38,8 +53,17 @@ $installerDir = $PSScriptRoot
 $payloadRoot = Join-Path $installerDir ("payload\" + $PayloadRootName + "\" + $PayloadPlatform)
 $payloadBplDir = Join-Path $payloadRoot "Bpl"
 $payloadDcpDir = Join-Path $payloadRoot "Dcp"
-$studioRoot = "C:\Program Files (x86)\Embarcadero\Studio\$DelphiVersion"
+if ($BdsRoot -eq "") { $BdsRoot = $env:VITTIX_BDS_ROOT }
+if ($BdsRoot -eq "") {
+  $BdsRoot = "C:\Program Files (x86)\Embarcadero\Studio\$DelphiVersion"
+}
+$studioRoot = $BdsRoot
 $publicDocs = Join-Path $env:PUBLIC "Documents\Embarcadero\Studio\$DelphiVersion"
+
+if ($BplDir -eq "") { $BplDir = $env:VITTIX_BPL_DIR }
+if ($BplDir -eq "") { $BplDir = Join-Path $publicDocs "Bpl" }
+if ($DcpDir -eq "") { $DcpDir = $env:VITTIX_DCP_DIR }
+if ($DcpDir -eq "") { $DcpDir = Join-Path $publicDocs "Dcp" }
 
 $rsvars = Resolve-ToolPath @(
   (Join-Path $studioRoot "bin\rsvars.bat")
@@ -69,22 +93,20 @@ if (-not $SkipPackageBuild) {
   $runtimeProj = Join-Path $packagesDir "VittixDBGridControllerR.dproj"
   $designProj = Join-Path $packagesDir "VittixDBGridControllerD.dproj"
 
-  $buildCmd = @"
-call "$rsvars"
-"$msbuild" "$runtimeProj" /t:Build /p:Config=$Config /p:Platform=$Platform
-if errorlevel 1 exit /b 1
-"$msbuild" "$designProj" /t:Build /p:Config=$Config /p:Platform=$Platform
-if errorlevel 1 exit /b 1
-"@
+  $buildCmd = 'call "' + $rsvars + '" >nul && "' + $msbuild +
+    '" "' + $runtimeProj + '" /t:Build /p:Config=' + $Config +
+    ' /p:Platform=' + $Platform + ' /v:minimal /nologo && "' +
+    $msbuild + '" "' + $designProj + '" /t:Build /p:Config=' +
+    $Config + ' /p:Platform=' + $Platform + ' /v:minimal /nologo'
 
-  & cmd.exe /c $buildCmd
+  & cmd.exe /d /c $buildCmd
   if ($LASTEXITCODE -ne 0) {
     throw "Package build failed."
   }
 }
 
-$sourceBplDir = Join-Path $publicDocs "Bpl"
-$sourceDcpDir = Join-Path $publicDocs "Dcp"
+$sourceBplDir = $BplDir
+$sourceDcpDir = $DcpDir
 
 Ensure-Directory -Path $payloadBplDir
 Ensure-Directory -Path $payloadDcpDir

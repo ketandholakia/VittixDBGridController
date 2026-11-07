@@ -1,0 +1,29 @@
+Vittix paged dataset demo - self test
+(source: 1,234 rows, page size 100, virtual scroll on)
+
+1. Global scrollbar on the visible grid
+  PASS  scrollbar range spans all 1,234 source rows
+  PASS  scrollbar position tracks global row 700
+2. Navigation bar page changes
+  PASS  First returns to page 1 of 13
+  PASS  Next advances to page 2 of 13
+  PASS  Last jumps to page 13 of 13
+  PASS  partial final page ends at global row 1,234
+2a. Navigator global endpoints
+  PASS  navigator First reaches global row 1
+  PASS  navigator Last reaches global row 1,234
+3. Selection across page boundaries
+  PASS  fresh selection reports no stale entries
+  PASS  changing pages stales the selection
+  PASS  deleting a stale selection is refused
+  PASS  the refusal leaves the selection untouched
+  PASS  safe API refuses a stale selection
+  PASS  safe API leaves the selection untouched
+  PASS  SelectedRows.Refresh prunes the stale entries
+  PASS  a valid selection deletes exactly its rows
+4. Virtual scroll toggle
+  PASS  virtual scroll off shows the page-local scrollbar
+  PASS  bar caption drops the page total when the count is unknown
+  PASS  virtual scroll on restores the global scrollbar
+
+Result: all checks passed.

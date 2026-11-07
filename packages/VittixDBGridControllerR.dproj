@@ -1,4 +1,4 @@
-﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
     <PropertyGroup>
         <ProjectGuid>{426D31E7-86CE-4063-8267-49AC12C2716A}</ProjectGuid>
         <MainSource>VittixDBGridControllerR.dpk</MainSource>
@@ -119,7 +119,14 @@
         <DCCReference Include="..\source\Vittix.DBGrid.ColumnChooser.pas"/>
         <DCCReference Include="..\source\Vittix.DBGrid.Editors.pas"/>
         <DCCReference Include="..\source\Vittix.DBGrid.Filter.Popup.pas"/>
+        <DCCReference Include="..\source\Vittix.DBGrid.FilterSets.pas"/>
+        <DCCReference Include="..\source\Vittix.DBGrid.Provider.pas"/>
+        <DCCReference Include="..\source\Vittix.DBGrid.Paging.DataSet.pas"/>
+        <DCCReference Include="..\source\Vittix.DBGrid.Paging.Controls.Base.pas"/>
+        <DCCReference Include="..\source\Vittix.DBGrid.Paging.DataSet.Controls.pas"/>
+        <DCCReference Include="..\source\Vittix.DBGrid.FilterSets.Dialog.pas"/>
         <DCCReference Include="..\source\Vittix.DBGrid.Layout.pas"/>
+        <DCCReference Include="..\source\Vittix.DBGrid.Styles.pas"/>
         <DCCReference Include="..\source\Vittix.DBGrid.Export.Engine.pas"/>
         <DCCReference Include="..\source\Vittix.DBGrid.Export.Dialog.pas"/>
         <BuildConfiguration Include="Base">

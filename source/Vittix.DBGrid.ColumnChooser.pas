@@ -68,7 +68,6 @@ type
 
     procedure BuildColumnList;
     procedure ApplySearchFilter;
-    procedure ApplySelection;
     procedure RollbackColumnOrder;
     function GetColumnCaption(AColumn: TColumn): string;
     function GetSearchText: string;
@@ -90,6 +89,8 @@ type
     procedure CheckListDragOver(Sender, Source: TObject; X, Y: Integer;
       State: TDragState; var Accept: Boolean);
     procedure CheckListDragDrop(Sender, Source: TObject; X, Y: Integer);
+    function FrozenColumnCount: Integer;
+    function MoveKeepsFrozenRegion(FromIndex, ToIndex: Integer): Boolean;
     procedure SearchEditChange(Sender: TObject);
     procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure FormResize(Sender: TObject);
@@ -98,12 +99,21 @@ type
     // persistence settings of its own.
     class var StateFileName: string;
     class var RootPath: string;
+    /// <summary>Creates a chooser bound to AGrid.</summary>
     constructor CreateChooser(AOwner: TComponent; AGrid: TDBGrid); reintroduce;
+    /// <summary>Opens the chooser and applies visibility changes on OK.
+    /// Returns False when cancelled or when AGrid is nil.</summary>
     class function Execute(AGrid: TDBGrid): Boolean;
     procedure ResetLayout;
     procedure RevertTransientChanges;
     procedure SelectColumnIndex(AIndex: Integer);
     function CanReorderColumns: Boolean;
+    procedure SetColumnChecked(AIndex: Integer; AChecked: Boolean);
+
+    /// <summary>Applies the checked state to the grid column visibility.
+    /// Execute calls this on OK; public so callers and tests can drive the
+    /// chooser without the modal dialog.</summary>
+    procedure ApplySelection;
     procedure IncreaseSelectedColumnWidth;
     procedure DecreaseSelectedColumnWidth;
     procedure LoadDialogState;
@@ -579,6 +589,28 @@ begin
   Accept := (Source = FCheckList) and FAllowReorder;
 end;
 
+function TVittixDBGridColumnChooserForm.FrozenColumnCount: Integer;
+begin
+  // The chooser works for plain TDBGrids too (no frozen region there).
+  if (FGrid is TVittixDBGrid) then
+    Result := TVittixDBGrid(FGrid).FrozenColumns
+  else
+    Result := 0;
+end;
+
+function TVittixDBGridColumnChooserForm.MoveKeepsFrozenRegion(
+  FromIndex, ToIndex: Integer): Boolean;
+var
+  Frozen: Integer;
+begin
+  // List indexes match the grid's column display order: a move may not
+  // cross the frozen boundary in either direction (the grid enforces the
+  // same rule for VCL-initiated moves).
+  Frozen := FrozenColumnCount;
+  Result := (Frozen = 0) or
+    ((FromIndex < Frozen) = (ToIndex < Frozen));
+end;
+
 procedure TVittixDBGridColumnChooserForm.CheckListDragDrop(Sender, Source: TObject;
   X, Y: Integer);
 var
@@ -596,7 +628,8 @@ begin
   if DropIndex < 0 then
     DropIndex := FCheckList.Items.Count - 1;
 
-  if (DropIndex >= 0) and (DropIndex <> FDraggedIndex) then
+  if (DropIndex >= 0) and (DropIndex <> FDraggedIndex) and
+     MoveKeepsFrozenRegion(FDraggedIndex, DropIndex) then
   begin
     // Resolve the column BEFORE moving the list item: afterwards the list
     // indices no longer describe the pre-move arrangement, so indexing the
@@ -740,6 +773,9 @@ begin
 
   if ToIndex = FromIndex then Exit;
 
+  // Same frozen-region rule as the drag path.
+  if not MoveKeepsFrozenRegion(FromIndex, ToIndex) then Exit;
+
   // Resolve the column before moving the list item (see CheckListDragDrop)
   Col := TColumn(FCheckList.Items.Objects[FromIndex]);
   if Assigned(Col) then
@@ -811,6 +847,15 @@ begin
   end;
 
   FCheckList.ItemIndex := AIndex;
+end;
+
+procedure TVittixDBGridColumnChooserForm.SetColumnChecked(
+  AIndex: Integer; AChecked: Boolean);
+begin
+  // Public counterpart to SelectColumnIndex so callers (and tests) can
+  // drive visibility without simulating mouse clicks.
+  if (AIndex >= 0) and (AIndex < FCheckList.Items.Count) then
+    FCheckList.Checked[AIndex] := AChecked;
 end;
 
 procedure TVittixDBGridColumnChooserForm.ApplySelection;

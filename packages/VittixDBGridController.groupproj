@@ -1,10 +1,15 @@
-﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
     <PropertyGroup>
         <ProjectGuid>{0F8DE765-CABD-41A9-8052-CB6498B2B3D6}</ProjectGuid>
     </PropertyGroup>
     <ItemGroup>
         <Projects Include="VittixDBGridControllerR.dproj">
             <Dependencies/>
+        </Projects>
+        <Projects Include="VittixDBGridControllerFD.dproj">
+            <Dependencies>
+                <Dependency Projects="VittixDBGridControllerR.dproj"/>
+            </Dependencies>
         </Projects>
         <Projects Include="VittixDBGridControllerD.dproj">
             <Dependencies/>
@@ -18,13 +23,13 @@
         </BorlandProject>
     </ProjectExtensions>
     <Target Name="VittixDBGridControllerR">
-        <MSBuild Projects="VittixDBGridControllerR.dproj"/>
+        <MSBuild Projects="VittixDBGridControllerR.dproj;VittixDBGridControllerFD.dproj"/>
     </Target>
     <Target Name="VittixDBGridControllerR:Clean">
-        <MSBuild Projects="VittixDBGridControllerR.dproj" Targets="Clean"/>
+        <MSBuild Projects="VittixDBGridControllerR.dproj;VittixDBGridControllerFD.dproj" Targets="Clean"/>
     </Target>
     <Target Name="VittixDBGridControllerR:Make">
-        <MSBuild Projects="VittixDBGridControllerR.dproj" Targets="Make"/>
+        <MSBuild Projects="VittixDBGridControllerR.dproj;VittixDBGridControllerFD.dproj" Targets="Make"/>
     </Target>
     <Target Name="VittixDBGridControllerD">
         <MSBuild Projects="VittixDBGridControllerD.dproj"/>

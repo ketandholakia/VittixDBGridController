@@ -42,6 +42,7 @@ type
     // Performance: Cache active aggregations so we don't iterate 
     // all columns or call FindField during the loop.
     FCache: TArray<TAggregationFieldMap>;
+    FFullScanCount: Int64;
 
     // Optional callback to decide whether a record participates
     // (filters, selection, etc.)
@@ -77,6 +78,9 @@ type
     ): string;
 
     function GetActiveAggregationSummaryText: string;
+
+    /// <summary>Number of full dataset scans performed by this engine.</summary>
+    property FullScanCount: Int64 read FFullScanCount;
 
     property OnAcceptRecord: TFunc<Boolean>
       read FAcceptRecord write FAcceptRecord;
@@ -285,6 +289,7 @@ begin
 
   FDataSet.DisableControls;
   try
+    Inc(FFullScanCount);
     FDataSet.First;
     while not FDataSet.Eof do
     begin

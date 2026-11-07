@@ -11,7 +11,7 @@ param(
   [string]$DelphiVersion = "23.0",
   [string]$DelphiDisplayName = "RAD Studio 12 Athens",
   [string]$PayloadRootName = "Delphi12Athens",
-  [string]$PayloadPlatform = "Win32",
+  [string]$PayloadPlatform = "",
   [switch]$Draft,
   [switch]$PreRelease,
   [switch]$SkipInstallerBuild,
@@ -20,6 +20,8 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+if (-not $PayloadPlatform) { $PayloadPlatform = $Platform }
 
 function Require-Command {
   param([string]$Name)

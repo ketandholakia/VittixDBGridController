@@ -185,6 +185,9 @@ signatures unchanged for DFM compatibility).
 ### 3.1 [P] Incremental aggregation
 
 **Design reviewed 2026-10-05; implementation deferred (request item 14).**
+The aggregation engine now exposes `FullScanCount` (2026-11-04) to measure
+actual dataset traversals and establish the baseline for a future committed-
+mutation adapter. No delta path is enabled without that adapter.
 The item 1 TClientDataSet guard is green. Full recalculation remains the
 correctness baseline; see the design note below before implementing deltas.
 `DataLinkRecordChanged` marks aggregation dirty on every record change, and
@@ -194,86 +197,72 @@ record changed; fall back to full recalculation on filter/sort changes.
 
 - `source/Vittix.DBGrid.Controller.pas:525-539, 805-828`; `Aggregation.Engine.pas:250-328`
 
-### 3.2 [P] Precompute uppercase in filter matching
-`MatchFilter` re-uppercases both strings per field per record. Cache the
-uppercased needle at `ApplyFilter` time and uppercase the haystack once per
-record across all columns.
+### 3.2 [P] Precompute uppercase in filter matching — ✅ IMPLEMENTED 2026-11-04
+The classic column path now caches each uppercased needle when filters are
+applied, refreshing it after direct metadata edits. Global search text is
+folded when assigned. A column's folded display text is reused between its
+filter and global search, and compiled group substring matches no longer fold
+already-uppercased display text again.
 
 - `source/Vittix.DBGrid.Filter.Engine.pas:311-343, 393-403`
 
-### 3.3 [P] Export dialog preview limits
-The preview builds the ENTIRE export into a string before truncating display to
-50 lines. Add a row cap (e.g. first 100 rows) to `TVittixDBGridExporter` and
-generate the preview from it. Also stop polling `RecordCount` every 100 rows.
+### 3.3 [P] Export dialog preview limits — ✅ IMPLEMENTED 2026-11-04
+The preview caps the exporter at 50 rows instead of building the entire export.
+Each format captures `RecordCount` at most once for progress reporting, after
+the export view is prepared; exports without a progress handler skip the read.
 
-- `source/Vittix.DBGrid.Export.Dialog.pas:446-494`; `Export.Engine.pas:571`
+- `source/Vittix.DBGrid.Export.Dialog.pas`; `source/Vittix.DBGrid.Export.Engine.pas`
 
-### 3.4 [P] `SyncColumnInfo` cross-scan
-Runs on every `LayoutChanged` with an O(columns × info) scan. Maintain the
-collection incrementally or keep a field-name index on `TVittixDBGridColumns`.
+### 3.4 [P] `SyncColumnInfo` cross-scan — ✅ IMPLEMENTED 2026-11-04
+Each layout sync builds a sorted, case-insensitive field-name index once, then
+checks grid columns against it. This preserves the collection's first-match
+behavior and avoids the O(columns × info) scan.
 
-- `source/Vittix.DBGrid.pas:370-393`; `ColumnInfo.pas:151` (`FindByFieldName`)
+- `source/Vittix.DBGrid.pas` (`SyncColumnInfo`)
 
 ---
 
 ## Milestone 4 — Rendering & UX polish
 
-### 4.1 [F] VCL Styles support
-The footer panel hard-codes classic colors (`clBtnHighlight`/`clBtnShadow`,
-`FooterPanel.pas:271-289`) and the filter popup forces `clBtnFace`
-(`Filter.Popup.pas:149`). Use `TStyleManager.Style`/`StyleServices` for
-backgrounds, fonts and edges so styled applications don't get a 1997-looking
-footer. Optionally use theme edges (`DrawThemeEdge`).
-
-### 4.2 [F] XLSX numeric cells
-All cells are written as `inlineStr`, and there is no `xml:space="preserve"`,
-so numbers arrive as text in Excel and leading/trailing spaces can be dropped.
-
-- `source/Vittix.DBGrid.Export.Engine.pas:1038-1068`
-- Fix: emit `<c t="n"><v>` for numeric/boolean field types; add
-  `xml:space="preserve"` to inline strings. (Or document the limitation
-  prominently if deferred.)
-
-### 4.3 [F] Implement or remove the PDF export stub
-`vefPDF` is advertised in the enum and dialog but raises at runtime
-(`Export.Engine.pas:486`). Either implement it or hide it from the dialog until
-ready.
+### 4.1 [F] VCL Styles support — ✅ COMPLETED 2026-10-27 (v1.2.0, see B4)
+### 4.2 [F] XLSX numeric cells — ✅ COMPLETED 2026-10-27 (v1.2.0, see B2)
+### 4.3 [F] Implement or remove the PDF export stub — ✅ COMPLETED 2026-10-27
+(v1.2.0, hidden from the dialog; see B3)
 
 ---
 
 ## Milestone 5 — Design-time experience
 
-### 5.1 [F] Property editors
-- Enum property editor for `TVittixAggregationType` with friendly names.
-- Collection editor niceties for `CellConditions` (display name shows
-  field + operator + value).
+### 5.1 [F] Property editors — ✅ IMPLEMENTED 2026-11-04
+The aggregation enum property editor uses friendly names. `CellConditions`
+items display their field, operator, value, and disabled state.
 
-### 5.2 [F] Published property categories
-Organize new published properties with `RegisterPropertyInCategory` (or
-category attributes) — Layout, Appearance, Persistence groups.
+### 5.2 [F] Published property categories — ✅ IMPLEMENTED 2026-11-04
+Grid and column metadata properties are registered in Layout, Appearance, and
+Behavior; grid storage paths are registered in Persistence.
 
-### 5.3 [F] Palette glyph
-Add a proper `.dcr`/24-bit palette bitmap for `TVittixDBGrid`.
+### 5.3 [F] Palette glyph — ✅ IMPLEMENTED 2026-11-04
+The design package links a 24-bit `TVITTIXDBGRID` bitmap resource from
+`assets/palette/`.
 
-### 5.4 [F] Design-time footer preview
-Currently the footer never appears in the IDE (`SetShowFooter` design-guarded,
-`Controller.pas:381`). A static design-time preview would make `FooterVisible`
-visible to users at design time.
+### 5.4 [F] Design-time footer preview — ✅ IMPLEMENTED 2026-11-04
+The grid paints a static footer band while in design mode and invalidates it
+when `FooterVisible` changes. Visual inspection inside the IDE remains open.
 
 ---
 
 ## Milestone 6 — Docs, hygiene & distribution
 
-### 6.1 [D] Fill in empty docs
-- `docs/README.md` and `docs/ROADMAP.md` (this file) were committed empty —
-  keep them current.
-- CONTRIBUTING.md describes a `source/core|sorting|filtering` layout that does
-  not exist (flat `source/`) — fix the description.
+### 6.1 [D] Fill in empty docs — ✅ UPDATED 2026-11-04
+The docs index links to the main guides, demo, installer, changelog, and
+license. This roadmap records the recently implemented items, and
+CONTRIBUTING.md describes the flat `source/` layout and design-time unit paths.
 
-### 6.2 [D] Reconcile version claims
-README says Delphi 10.3+, CONTRIBUTING says 10.4+, installer ships only a
-Delphi 12/Win32 payload. Decide the real minimum, state it once, and ideally
-verify with CI builds.
+### 6.2 [D] Reconcile version claims — ✅ UPDATED 2026-11-04
+The README states Delphi 12 Athens on Win32 as the supported build target;
+CONTRIBUTING and the installer notes refer to the same target. Multi-version
+and 64-bit support require separate builds and verification. CI remains a
+separate future task.
 
 ### 6.3 [D] Remove the madExcept dependency from the demo — ✅ COMPLETED 2026-09-29 (v1.0.4)
 The madExcept units were removed from `VittixDBGridFullDemo.dpr` and the
@@ -288,9 +277,11 @@ Delphi installation.
 - Changelog-style noise comments ("FIX BUG n", "NEW:", "FIXED VERSION")
   were cleaned out of the source units; why-comments were kept.
 
-### 6.5 [D] API documentation
-Add XML doc comments consistently (engines have them; grid/controller/dialogs
-mostly don't) and consider generating an API reference from them.
+### 6.5 [D] API documentation — ✅ UPDATED 2026-11-04
+The grid, controller, and primary dialog entry points now have XML summaries
+for their application-facing methods and settings. `docs/API.md` maps the
+common entry points and persistence rules. A generated reference can be added
+later if a documentation generator is adopted.
 
 ---
 
@@ -384,12 +375,12 @@ phased plan. Each phase is independently shippable.
   dataset; filter state does not). This also removes most of the engine
   churn called out in C5.
 
-- **A4 [F] Layout schema v2** (versioned JSON): add pinned/fixed flag, title
-  caption, format/DisplayFormat, per-column export settings (include,
-  caption override, mask). Today only fieldName/displayIndex/width/visible/
-  sort/aggregation/footerText/cellConditions round-trip
-  (`Layout.pas:152-160`). Needed by D3 (freezing) and export quality work.
-  Still pending.
+- **A4 [F] Layout schema v2** — ✅ COMPLETED 2026-10-27 (v1.3.0). Versioned
+  JSON: `version` field (v1 files load unchanged; unknown fields ignored),
+  per-column pinned/titleCaption/displayFormat/exportInclude/exportCaption
+  with matching `TVittixDBGridColumnInfo` properties, `Assign` support,
+  ApplyLayout pushing captions/formats and the export engine honoring the
+  export settings. Freezing (D3) builds on the Pinned flag.
 
 ## Phase B — Finish the half-built features (quick wins)
 
@@ -397,13 +388,22 @@ phased plan. Each phase is independently shippable.
   2026-09-29 (v1.0.4). Both options are honored by every format (CSV, TSV,
   HTML, XLSX, XML, JSON, Text) through the shared iteration helpers, with
   cursor restore and regression tests.
-- **B2 [F] XLSX numeric cells** — emit `<c t="n">` for numeric/boolean field
-  types, `xml:space="preserve"` on inline strings, and column widths
-  (`Export.Engine.pas:1050-1203`). Milestone 4.2.
-- **B3 [F] PDF: implement a minimal writer or hide it** from the dialog
-  (`Export.Engine.pas:498` raises). Milestone 4.3.
-- **B4 [F] VCL Styles support** for footer panel + filter popup
-  (Milestone 4.1).
+- **B2 [F] XLSX numeric cells** — ✅ COMPLETED 2026-10-27 (v1.2.0). Explicit
+  `t="n"` numeric cells (integer fields from their exact digits), `t="b"`
+  booleans, Excel serial date/time/timestamp cells with date/time/datetime
+  number formats from a new `xl/styles.xml` (content types and rels kept
+  valid), NULLs as empty cells, `xml:space="preserve"` inline strings, and
+  `<cols>` widths derived from the grid column widths (caption-length
+  heuristic where no usable grid width exists). `ExportLocaleFormat := True`
+  keeps the wholesale display-text behavior.
+- **B3 [F] PDF: implement a minimal writer or hide it** — ✅ COMPLETED
+  2026-10-27 (v1.2.0) with the hide option: the dialog never offers PDF, the
+  enum member is kept for compiled-code compatibility and documented as not
+  implemented, and `ExportToStream(vefPDF)` still raises.
+- **B4 [F] VCL Styles support** — ✅ COMPLETED 2026-10-27 (v1.2.0). New
+  `Vittix.DBGrid.Styles` unit (`TVittixStylePalette`) resolving system
+  colors through per-control style services; footer panel, filter popup and
+  export dialog follow the active style and stay pixel-identical unstyled.
 - **B5 [F] Design-time polish** — Milestone 5 (property categories, palette
   glyph, aggregation property editor, design-time footer preview).
 
@@ -415,46 +415,156 @@ phased plan. Each phase is independently shippable.
   `DataLinkDataSetChanged` frees and recreates sort/filter/aggregation engines
   on each `DataSetChanged` notification (`Controller.pas:470-481`); reuse and
   rebind them instead.
-- **C6 [P] Distinct-value scan and `RecordCount` polling** in the filter
-  popup (`Filter.Popup.pas:535-586`) and export progress
-  (`Export.Engine.pas:571, 583`).
+- **C6 [P] Distinct-value scan and `RecordCount` polling** — ✅ UPDATED
+  2026-11-04. The popup deduplicates with a hash lookup and sorts once,
+  preserves the current record, and skips scanning during an edit or insert.
+  Export progress reads a row total at most once per format when a progress
+  handler is present (see 3.3). Enumerating all distinct values still requires
+  a dataset scan when the popup opens.
 
 ## Phase D — New features (ordered by value/effort)
 
-- **D1 [F] Incremental search (type-ahead locate)** — small: the `KeyDown`
-  override already routes to the controller; add a search buffer + `Locate` +
-  optional status hint.
-- **D2 [F] Clipboard selection operations** — copy cell/row/multi-selection,
-  aggregate the selection in the footer; reuse the existing clipboard
-  exporter. (Backlog: "multi-select-aware operations".)
-- **D3 [F] Column freezing (fixed left columns)** — requires A4 schema plus
-  fixed-region awareness in footer `GetColumnRect` and layout apply
-  (`FooterPanel.pas:193-227`, `Controller.pas:944`). Highest user-visible
-  value after search.
-- **D4 [F] Richer in-place editors** — dropdown/picklist, lookup, masked
-  numeric, per-column validation (`Editors.pas` currently: memo + date only).
-- **D5 [F] Saved filter sets + filter builder** — named filter profiles per
-  grid, OR-groups between column filters, date-aware operators (dates are
-  compared as text/float today).
+- **D1 [F] Incremental search (type-ahead locate)** — ✅ COMPLETED 2026-10-27
+  (v1.2.0). `TVittixDBGrid.KeyPress` override routes printable characters to
+  `Controller.DoKeyPress`; the buffer lives on the controller, locates via
+  the primary sort column (or current column when unsorted) with a
+  cursor-restoring fallback scan, resets on Esc/timeout, and shows as a
+  footer hint. New published `IncrementalSearch`,
+  `IncrementalSearchTimeout` and `OnIncrementalSearch`.
+- **D2 [F] Clipboard selection operations** — ✅ COMPLETED 2026-10-27
+  (v1.2.0). Ctrl+C / Ctrl+Shift+C copy the current cell or the selected rows
+  as TSV through the exporter (`BuildCopyText`), with an optional
+  `CopyIncludeHeaders` header row and per-column selection aggregates
+  (Sum/Count) in the footer while a multi-row selection is active.
+- **D3 [F] Column freezing (fixed left columns)** — ✅ COMPLETED 2026-10-27
+  (v1.3.0). Built on `TCustomGrid.FixedCols` (re-applied after every layout
+  change since TDBGrid resets it to the indicator offset): published
+  `FrozenColumns` with clamping, `FreezeUpToColumn`/`UnfreezeAll`/
+  `RefreshFrozenColumns`, `OnFrozenColumnsChanged`, drag-boundary
+  enforcement with rollback in the ColumnMoved override and the chooser,
+  footer `GetColumnRect`/hit-test alignment under frozen columns, and
+  per-column `Pinned` persistence via the v2 layout schema. There is no
+  header context menu in the grid, so the freeze operations are exposed as
+  API only.
+- **D4 [F] Richer in-place editors** — ✅ COMPLETED 2026-10-27 (v1.4.0).
+  Per-column `EditorKind` (pick list with value=caption pairs, searchable
+  lookup from the field's LookupDataSet, masked numeric with Min/Max and
+  DecimalPlaces), `Required` and the `OnValidateCell` validation gate
+  shared by all Vittix editors; options persist through the layout.
+- **D5 [F] Saved filter sets + filter builder** — ✅ COMPLETED 2026-10-27
+  (v1.4.0, with the date-aware comparisons landed in 1.1.1). Named sets
+  persisted per grid as JSON, OR-groups in the engine with precompiled
+  conditions, popup Saved menu + manager dialog, layout integration.
+  Remaining builder niceties: an OR-group editing surface inside the filter
+  popup itself (today groups are managed in the set manager).
 - **D6 [F] Grouping with group footers** — the largest architectural lift.
   The footer panel is a manually positioned sibling control
   (`FooterPanel.pas:105-168`); grouping needs a proper band model. The
   aggregation engine is already filter-aware and can back group aggregates.
-- **D7 [F] Server-side filter/sort provider** — generate FireDAC/ADO
-  `WHERE`/`ORDER BY` instead of `OnFilterRecord` display-text matching
-  (the key EhLib-parity gap; `Sort.Engine.pas:163-198` already has the
-  FireDAC dialect note).
-- **D8 [F] Printing / print preview** built on the export engine (HTML
-  preview first; shares B3 PDF work).
-- **D9 [F] Pagination / virtual mode** for very large datasets.
+- **D7 [F] Server-side filter/sort provider** — ✅ COMPLETED 2026-10-28
+  (v2.0.0). `Vittix.DBGrid.Provider` (SQL builder for six dialects +
+  `IVittixDataProvider`), `Vittix.DBGrid.Provider.FireDAC` in a separate
+  `VittixDBGridControllerFD` package, opt-in `FilterMode`
+  (client/server/auto) with client fallback and `OnProviderFallback` /
+  `OnProviderError`. Remaining ideas: providers for ADO/dbGo and
+  UniDAC (the provider interface is public), a query-shape parser that
+  could wrap top-level ORDER BY safely, and async re-query.
+- **D8 [F] HTML print preview — implemented 2026-11-04.** The HTML exporter
+  includes print CSS with repeated table headers and row page-break rules.
+  `OpenHTMLPrintPreview` saves to a caller-chosen file and opens the system
+  browser; the feature demo exposes it. Native printer integration and PDF
+  output remain separate future work.
+- **D9 [F] Pagination / virtual mode — FireDAC paging slice implemented
+  2026-11-04.** `TVittixFireDACPager` offers explicit, zero-based query pages
+  with query-state restoration and edit guards. A reusable VCL pager bar
+  now supplies First, Previous, and Next controls. The core package also
+  includes `TVittixPagedDataSet`, an explicit page-backed dataset with a
+  caller-supplied loader for other backends, and a matching VCL navigation
+  bar. Opt-in `AutoPageOnScroll` now crosses page boundaries during normal
+  dataset/grid navigation while keeping one page loaded. Optional
+  `TVittixPagedDataSet.TotalCount` (implemented 2026-11-05) lets the loader
+  or caller supply a total row count: when known, the navigation bar shows
+  "Page X of Y" and a Last button, navigation trusts the counted boundary
+  instead of sending empty-page probes, and count changes refresh the loaded
+  page's has-more state. With the count unknown the probe-based behavior
+  above is unchanged, and the FireDAC pager stays count-free so its bar
+  keeps Last disabled.
+  A bounded global scrollbar slice (implemented 2026-11-05) rides on the
+  known count: opt-in `TVittixPagedDataSet.VirtualScroll` exposes the total
+  as `RecordCount` and the global row as `RecNo` — the two values
+  `TCustomDBGrid` sizes and positions its scrollbar from — so the bound
+  grid's scrollbar covers every source row while one page stays in memory;
+  `RecNo` assignment seeks across pages and `TVittixDBGrid` routes scrollbar
+  endpoints and Ctrl+Home/End through `GlobalFirst`/`GlobalLast` via the
+  `IVittixGlobalPageScroll` interface. Hardening (2026-11-05, verified by
+  tests on a visible grid): a client `Filtered` view suspends the mode
+  (global positions have no truthful meaning for a filtered page);
+  bookmarks in virtual mode are page-scoped — a verified CDS behavior lets
+  native bookmarks silently reposition onto the same local row of a
+  replaced page, so `GetBookmark` now returns a tagged wrapper. Its
+  generation rejects bookmarks after any page reload, including a reload
+  of the same page index, and a second audit (2026-11-05) reproduced and
+  fixed the toggle seams: a wrapper survived `Filtered` or `VirtualScroll`
+  toggles and could reposition onto a different record in the renumbered
+  (filtered) view, so validity now also requires the virtual mode to be
+  active — stale use raises `EDatabaseError`,
+  `BookmarkValid`/`SelectedRows.Refresh` prune stale selections, and an
+  all-stale multi-select delete was verified to refuse before deleting
+  any row; export was verified to emit exactly the loaded
+  page and restore the cursor; count shrink/grow and edit-mode seek
+  refusal were verified at grid level. A third audit (2026-11-05)
+  reproduced the mixed-selection seam: the VCL `TBookmarkList.Delete`
+  iterates its sorted list from the end and raises only when it reaches a
+  stale entry, so a selection mixing valid current-page and stale
+  cross-page bookmarks partially deleted before raising. The grid's
+  Ctrl+Delete path now validates every entry first and refuses the whole
+  delete (`EDatabaseError`, all-or-nothing, verified), and a public
+  `TVittixDBGrid.SelectionHasStaleEntries` lets callers show a stale
+  selection warning. The public `DeleteSelectedRowsSafely` now validates
+  every bookmark before delegating deletion to VCL, including for ordinary
+  datasets. Direct `SelectedRows.Delete` retains the raw VCL behavior.
+  Export progress now reads the loaded-page row count while virtual scroll
+  is active, with `MaxRows` still capping the total; CSV/XLSX progress,
+  cursor preservation, and no extra page load are covered by DUnitX.
+  Runnable demo (`demos/paged-demo`, 2026-11-05): known count +
+  `VirtualScroll` + navigation bar over a simulated 1,234-row source, with
+  a console self test that drives the visible grid (scrollbar range and
+  position, bar page changes, stale-selection refusal and pruning, exact
+  valid-selection deletion, virtual-scroll toggle). Building the demo
+  surfaced and fixed two core defects: the filter engine engaged on
+  condition-less applies during dataset churn and silently set `Filtered`
+  on the bound paged dataset (now scoped: condition-less applies skip the
+  hook only for page-backed datasets), and `OpenPage`'s EmptyDataSet +
+  reload churn displaced MIDAS packet state under a live visible grid —
+  page loads now build into an internal scratch dataset and adopt the
+  packet through one atomic `Data` assignment; virtual-mode bookmarks
+  embed the native CDS bookmark (record identity) behind the page/generation
+  scope so navigation lands exactly regardless of grid window management.
+  The architectural boundary found in
+  the VCL source stands: `TDataSet.First`/`Last` are non-virtual (and their
+  `InternalFirst`/`InternalLast` hooks are also driven by buffer BOF/EOF
+  flags), so they stay page-local. The `TVittixGlobalNavigator` subclass
+  now routes First/Last buttons through global seeks while virtual scroll
+  is active; a stock `TDBNavigator` remains page-local.
 
 ## Phase E — Ecosystem & distribution
 
-- CI builds (the DUnitX console runner already exits non-zero on failure —
-  CI-ready); verify the real minimum Delphi version (README says 10.3+,
-  CONTRIBUTING 10.4+, installer ships Delphi 12/Win32 only) — Milestone 6.2.
-- Multi-version installer payloads (D10.4–12, Win32 + Win64); un-hardcode
-  `build-installer.ps1` BPL source paths.
+- **Delphi 12 Athens/Win32 CI — configured 2026-11-04.** A GitHub Actions
+  workflow builds the runtime, FireDAC, and design packages and runs DUnitX on
+  a labeled Windows self-hosted runner. Package builds and the test command
+  were verified locally; an actual hosted run awaits runner registration and
+  a push. Verify other compiler and platform combinations before expanding
+  the supported target.
+- **Installer path/platform plumbing — updated 2026-11-04.**
+  `build-installer.ps1` already accepts BPL/DCP source directories. It now
+  derives the payload platform from the build platform and rejects mismatches;
+  the Inno Setup task text and library registry path use that platform. The
+  helper now executes and checks both package builds (its former multi-line
+  `cmd /c` skipped them). The setup excludes local build and demo-state
+  artifacts and includes the design palette resource. The default Delphi
+  12/Win32 installer compiled locally.
+  Multi-version payloads
+  (D10.4–12, Win32 + Win64) still need separate builds and verification.
 - Milestone 6.3 (madExcept-free demo) and 6.4 (hygiene: `.pas.bak`, `.dcu`
   artifacts, `.gitignore` for `.drc`/`.mes`), 6.5 (API docs).
 

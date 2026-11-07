@@ -3,6 +3,7 @@ unit Vittix.Tests.TestData;
 interface
 
 uses
+  Winapi.Windows,
   System.Classes,
   System.SysUtils,
   System.Variants,
@@ -20,6 +21,15 @@ function CreateMatchingColumns(ADataSet: TDataSet): TVittixDBGridColumns;
 function CreateHeadlessGrid(ADataSet: TDataSet; out AOwnerForm: TForm): TVittixDBGrid;
 function CountVisibleRecords(ADataSet: TDataSet): Integer;
 
+
+type
+  { Dumps otherwise-blocking AV boxes to stdout (headless runs). }
+  TTestDataCrashReporter = class
+  public
+    class procedure Install; static;
+    procedure HandleException(Sender: TObject; E: Exception);
+  end;
+
 implementation
 
 function CreateSampleDataSet: TClientDataSet;
@@ -31,7 +41,9 @@ begin
     Add('Name', ftString, 50);
     Add('Amount', ftCurrency);
     Add('Score', ftFloat);
-    Add('Notes', ftMemo);
+    // ftWideMemo: an ftMemo blob goes through the ANSI codepage, which
+    // would mangle the Unicode fixture text into '?'.
+    Add('Notes', ftWideMemo);
     Add('Created', ftDateTime);
     Add('IsActive', ftBoolean);
   end;
@@ -178,6 +190,49 @@ begin
     Inc(Result);
     ADataSet.Next;
   end;
+end;
+
+
+{ TTestDataCrashReporter }
+
+var
+  CrashReporterInstance: TTestDataCrashReporter;
+
+class procedure TTestDataCrashReporter.Install;
+begin
+  if CrashReporterInstance <> nil then Exit;
+  CrashReporterInstance := TTestDataCrashReporter.Create;
+  Application.OnException := CrashReporterInstance.HandleException;
+end;
+
+procedure TTestDataCrashReporter.HandleException(Sender: TObject;
+  E: Exception);
+const
+  MaxFrames = 24;
+var
+  Frames: array[0..MaxFrames-1] of Pointer;
+  Count, I: Integer;
+  BackTraceHash: DWORD;
+  Kernel32: THandle;
+  Capture: function(FramesToSkip, FramesToCapture: DWORD;
+    BackTrace: Pointer; BackTraceHash: PDWORD): Word; stdcall;
+begin
+  Writeln('=== UNHANDLED EXCEPTION ===');
+  Writeln(E.ClassName, ': ', E.Message);
+  Writeln('ExceptAddr: 0x', IntToHex(Cardinal(ExceptAddr), 8));
+  Kernel32 := GetModuleHandle('kernel32.dll');
+  @Capture := GetProcAddress(Kernel32, 'RtlCaptureStackBackTrace');
+  if Assigned(@Capture) then
+  begin
+    FillChar(Frames, SizeOf(Frames), 0);
+    Count := Capture(1, MaxFrames, @Frames, @BackTraceHash);
+    for I := 0 to Count - 1 do
+      Writeln('FRAME ', I, ': 0x', IntToHex(Cardinal(Frames[I]), 8));
+  end
+  else
+    Writeln('RtlCaptureStackBackTrace unavailable');
+  Flush(Output);
+  Halt(9);
 end;
 
 end.
