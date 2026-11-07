@@ -13,7 +13,7 @@ grid-owned `Controller`.
 | `ColumnInfo` | Per-field sort, filter, aggregation, display, editor, and export metadata; match entries by `FieldName`. |
 | `FooterVisible`, `AlternatingRowColors`, `AlternateRowColor` | Footer and row appearance. |
 | `FrozenColumns`, `FreezeUpToColumn`, `UnfreezeAll`, `RefreshFrozenColumns` | Keep a leading run of visible columns fixed. |
-| `IncrementalSearch`, `IncrementalSearchTimeout` | Type-ahead locate behavior. |
+| `IncrementalSearch`, `IncrementalSearchMode`, `IncrementalSearchTimeout` | Type-ahead locate behavior. `IncrementalSearchMode` is `ismAuto` (search only when the grid cannot edit; default), `ismAlways`, or `ismOff`. |
 | `CopyIncludeHeaders` | Include headers for plain Ctrl+C; Ctrl+Shift+C includes them regardless. |
 | `FilterMode` | `vcmClient` (default), `vcmServer`, or `vcmAuto` routing. Set `Controller.Provider` before using server routing. |
 | `LayoutStorageFileName`, `ChooserStateFileName`, `FilterHistoryFileName`, `FilterSetsFileName`, `PersistenceRootPath` | Per-grid persistence locations. |

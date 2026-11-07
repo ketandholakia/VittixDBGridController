@@ -6,6 +6,16 @@ releases only.
 
 ## [2.1.0] - 2026-11-07
 
+### Added
+
+- **`IncrementalSearchMode` (default `ismAuto`).** Type-ahead search no
+  longer consumes printable keys on an editable grid, so typing can start
+  in-place editing again. `ismAuto` searches only when the grid cannot edit
+  (no `dgEditing`, or the grid/column/dataset is read-only); `ismAlways`
+  keeps the pre-2.1 always-search behavior; `ismOff` disables search. The
+  existing `IncrementalSearch` Boolean still turns search off when False,
+  so old DFMs load unchanged.
+
 ### Fixed
 
 - **FireDAC provider keyword scan.** `CheckWrappable` now normalizes

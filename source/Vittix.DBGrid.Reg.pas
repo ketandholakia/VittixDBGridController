@@ -74,8 +74,8 @@ begin
   RegisterPropertiesInCategory(sAppearanceCategoryName, TVittixDBGrid,
     ['FooterVisible', 'AlternatingRowColors', 'AlternateRowColor']);
   RegisterPropertiesInCategory(sBehaviorCategoryName, TVittixDBGrid,
-    ['IncrementalSearch', 'IncrementalSearchTimeout',
-     'CopyIncludeHeaders', 'FilterMode']);
+    ['IncrementalSearch', 'IncrementalSearchMode',
+     'IncrementalSearchTimeout', 'CopyIncludeHeaders', 'FilterMode']);
   RegisterPropertiesInCategory('Persistence', TVittixDBGrid,
     ['LayoutStorageFileName', 'ChooserStateFileName',
      'FilterHistoryFileName', 'FilterSetsFileName', 'PersistenceRootPath']);

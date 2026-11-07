@@ -37,6 +37,7 @@ type
     // Incremental search / copy options (grid-owned settings; the controller
     // reads them through VittixGrid() when handling the routed events)
     FIncrementalSearch: Boolean;
+    FIncrementalSearchMode: TVittixIncrementalSearchMode;
     FIncrementalSearchTimeout: Integer;
     FCopyIncludeHeaders: Boolean;
     // Frozen (fixed left) column count over the visible columns; the
@@ -208,6 +209,16 @@ type
     property IncrementalSearchTimeout: Integer
       read FIncrementalSearchTimeout write FIncrementalSearchTimeout default 1000;
 
+    /// <summary>Controls when IncrementalSearch consumes printable keys.
+    /// ismAuto (default) searches only when the grid cannot enter in-place
+    /// editing (no dgEditing, or the grid/column/dataset is read-only), so
+    /// typing starts an edit on a writable grid. ismAlways is the pre-2.1
+    /// behavior (always search while IncrementalSearch is True). ismOff
+    /// disables search. IncrementalSearch = False still turns search off
+    /// regardless of this mode.</summary>
+    property IncrementalSearchMode: TVittixIncrementalSearchMode
+      read FIncrementalSearchMode write FIncrementalSearchMode default ismAuto;
+
     /// <summary>When True, a plain Ctrl+C copies the selection with a TSV
     /// header row of the visible column captions. Ctrl+Shift+C always
     /// includes headers regardless of this setting. Default False.</summary>
@@ -345,6 +356,7 @@ begin
   // Defaults for the grid-owned behavior options; matching `default` clauses
   // in the published section keep existing DFMs streaming the same.
   FIncrementalSearch := True;
+  FIncrementalSearchMode := ismAuto;
   FIncrementalSearchTimeout := 1000;
   FCopyIncludeHeaders := False;
   FFrozenColumns := 0;

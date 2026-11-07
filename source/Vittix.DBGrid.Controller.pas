@@ -77,6 +77,13 @@ type
   TVittixIncrementalSearchEvent = procedure(Sender: TObject;
     const SearchText: string; Found: Boolean) of object;
 
+  /// <summary>When type-ahead search takes over printable keystrokes.
+  /// ismAuto (default) searches only when the grid is not editable, so
+  /// typing can still start in-place editing on a writable grid; ismAlways
+  /// is the pre-2.1 behavior (search whenever IncrementalSearch is True);
+  /// ismOff disables search like IncrementalSearch = False.</summary>
+  TVittixIncrementalSearchMode = (ismAuto, ismAlways, ismOff);
+
   /// <summary>Raised after a saved filter set was applied
   /// (ApplyFilterSet / layout restore). AName is the applied set.</summary>
   TVittixFilterSetAppliedEvent = procedure(Sender: TObject;
@@ -206,6 +213,7 @@ type
     // Incremental search helpers
     function IncrementalSearchFieldName: string;
     function IncrementalSearchTimedOut: Boolean;
+    function GridIsEditable: Boolean;
     procedure RunIncrementalSearch;
     procedure ResetSearchBuffer;
     procedure UpdateSearchHint(const AText: string);
@@ -1296,6 +1304,30 @@ begin
   Result := Assigned(Info) and (Info.EditorKind <> veNone);
 end;
 
+function TVittixDBGridController.GridIsEditable: Boolean;
+var
+  Grid: TVittixDBGrid;
+  Col: TColumn;
+begin
+  // "Editable" mirrors what TDBGrid needs to enter in-place editing: the
+  // editing option, a writable grid/column and a modifiable dataset. Any
+  // one of them being read-only means typing cannot start an edit, so
+  // ismAuto may run the type-ahead search.
+  Result := False;
+  Grid := VittixGrid(FGrid);
+  if not Assigned(Grid) then Exit;
+  if not (dgEditing in Grid.Options) then Exit;
+  if Grid.ReadOnly then Exit;
+  if Assigned(Grid.SelectedField) then
+  begin
+    if Grid.SelectedField.ReadOnly then Exit;
+    Col := FindColumnByField(Grid.SelectedField);
+    if Assigned(Col) and Col.ReadOnly then Exit;
+  end;
+  if not Assigned(FDataset) or not FDataset.CanModify then Exit;
+  Result := True;
+end;
+
 function TVittixDBGridController.DoKeyPress(var Key: Char): Boolean;
 var
   Grid: TVittixDBGrid;
@@ -1303,6 +1335,10 @@ begin
   Result := False;
   Grid := VittixGrid(FGrid);
   if not Assigned(Grid) or not Grid.IncrementalSearch then Exit;
+  if Grid.IncrementalSearchMode = ismOff then Exit;
+  // ismAuto keeps printable keys for in-place editing on an editable grid;
+  // ismAlways keeps the pre-2.1 behavior of always consuming them.
+  if (Grid.IncrementalSearchMode = ismAuto) and GridIsEditable then Exit;
 
   // A closed dataset must never see a search; any pending buffer is stale.
   if not Assigned(FDataset) or not FDataset.Active then

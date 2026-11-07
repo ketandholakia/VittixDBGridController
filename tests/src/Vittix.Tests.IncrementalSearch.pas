@@ -22,6 +22,10 @@ type
   TVittixGridKeyAccess = class(TVittixDBGrid)
   public
     procedure PressKey(var Key: Char);
+    /// <summary>Routes the key through the controller exactly like KeyPress
+    /// does and reports whether it was consumed (True) or left for the grid
+    /// and its in-place editor (False).</summary>
+    function TryPressKey(var Key: Char): Boolean;
   end;
 
   // Simulates a dataset whose Locate is unsupported (raises), forcing the
@@ -148,6 +152,36 @@ type
     procedure BackspaceRemovesSingleCombiningMark;
   end;
 
+  /// <summary>Phase 2: IncrementalSearchMode decides whether a printable
+  /// key is consumed for type-ahead or left to the in-place editor.</summary>
+  [TestFixture]
+  TVittixIncrementalSearchModeTests = class
+  private
+    FDataSet: TClientDataSet;
+    FOwnerForm: TForm;
+    FGrid: TVittixDBGrid;
+    function TypeKey(Ch: Char): Boolean;
+  public
+    [Setup]
+    procedure Setup;
+    [TearDown]
+    procedure TearDown;
+    [Test]
+    procedure EditableGridDoesNotConsumeKeyInAuto;
+    [Test]
+    procedure ReadOnlyGridSearchesInAuto;
+    [Test]
+    procedure NoEditingOptionSearchesInAuto;
+    [Test]
+    procedure ReadOnlyColumnSearchesInAuto;
+    [Test]
+    procedure AlwaysModeConsumesOnEditableGrid;
+    [Test]
+    procedure OffModePassesKeyThrough;
+    [Test]
+    procedure IncrementalSearchFalseStillDisables;
+  end;
+
 implementation
 
 uses
@@ -158,6 +192,11 @@ uses
 procedure TVittixGridKeyAccess.PressKey(var Key: Char);
 begin
   KeyPress(Key);
+end;
+
+function TVittixGridKeyAccess.TryPressKey(var Key: Char): Boolean;
+begin
+  Result := Assigned(Controller) and Controller.DoKeyPress(Key);
 end;
 
 function TNoLocateDataSet.Locate(const KeyFields: string;
@@ -201,6 +240,7 @@ begin
     DataSet.AppendRecord([5, 'નમસ્તે']);
 
     Grid := CreateHeadlessGrid(DataSet, FOwnerForm);
+    Grid.IncrementalSearchMode := ismAlways;
     try
       Grid.Controller.DoTitleClick(Grid.Columns[1]);
 
@@ -238,6 +278,7 @@ begin
     DataSet.AppendRecord([2, 'beta']);
 
     Grid := CreateHeadlessGrid(DataSet, FOwnerForm);
+    Grid.IncrementalSearchMode := ismAlways;
     try
       Grid.Controller.DoTitleClick(Grid.Columns[1]);
 
@@ -270,6 +311,7 @@ begin
     DataSet.AppendRecord([2, 'beta']);
 
     Grid := CreateHeadlessGrid(DataSet, FOwnerForm);
+    Grid.IncrementalSearchMode := ismAlways;
     try
       Grid.Controller.DoTitleClick(Grid.Columns[1]);
 
@@ -313,6 +355,7 @@ begin
     end;
 
     Grid := CreateHeadlessGrid(DataSet, FOwnerForm);
+    Grid.IncrementalSearchMode := ismAlways;
     try
       Watch := TStopwatch.StartNew;
       Key := Chr($00C9); // E-acute
@@ -339,6 +382,9 @@ procedure TVittixIncrementalSearchTests.Setup;
 begin
   FDataSet := CreateSampleDataSet;
   FGrid := CreateHeadlessGrid(FDataSet, FOwnerForm);
+  // These tests exercise the search itself; ismAuto (the new default) would
+  // hand printable keys to the writable grid's in-place editor.
+  FGrid.IncrementalSearchMode := ismAlways;
   FEventCount := 0;
   FEventText := '';
   FEventFound := False;
@@ -636,6 +682,7 @@ begin
   FDataSet.AppendRecord([6, 'નમસ્તે']);
 
   FGrid := CreateHeadlessGrid(FDataSet, FOwnerForm);
+  FGrid.IncrementalSearchMode := ismAlways;
   // Sort by Name so the type-ahead search runs against the text column
   // (an unsorted headless grid falls back to the numeric ID column).
   FGrid.Controller.DoTitleClick(FGrid.Columns[1]);
@@ -819,6 +866,85 @@ begin
     'the base character remains');
 end;
 
-end.
+{ TVittixIncrementalSearchModeTests }
+
+procedure TVittixIncrementalSearchModeTests.Setup;
+begin
+  FDataSet := CreateSampleDataSet;
+  FGrid := CreateHeadlessGrid(FDataSet, FOwnerForm);
+  // Default ismAuto plus the writable client dataset makes the grid editable.
+end;
+
+procedure TVittixIncrementalSearchModeTests.TearDown;
+begin
+  FOwnerForm.Free;
+  FDataSet.Free;
+end;
+
+function TVittixIncrementalSearchModeTests.TypeKey(Ch: Char): Boolean;
+var
+  Key: Char;
+begin
+  Key := Ch;
+  Result := TVittixGridKeyAccess(FGrid).TryPressKey(Key);
+end;
+
+procedure TVittixIncrementalSearchModeTests.EditableGridDoesNotConsumeKeyInAuto;
+begin
+  Assert.AreEqual(ismAuto, FGrid.IncrementalSearchMode, 'default mode');
+  Assert.IsFalse(TypeKey('3'),
+    'a writable grid must keep the printable key for in-place editing');
+  Assert.AreEqual('', FGrid.Controller.IncrementalSearchBuffer,
+    'no search buffer was started');
+  Assert.AreEqual(1, FDataSet.FieldByName('ID').AsInteger,
+    'the cursor did not move');
+end;
+
+procedure TVittixIncrementalSearchModeTests.ReadOnlyGridSearchesInAuto;
+begin
+  FGrid.ReadOnly := True;
+  Assert.IsTrue(TypeKey('3'), 'a read-only grid consumes the key for search');
+  Assert.AreEqual('3', FGrid.Controller.IncrementalSearchBuffer);
+  Assert.AreEqual(3, FDataSet.FieldByName('ID').AsInteger,
+    'the read-only grid located the record');
+end;
+
+procedure TVittixIncrementalSearchModeTests.NoEditingOptionSearchesInAuto;
+begin
+  FGrid.Options := FGrid.Options - [dgEditing];
+  Assert.IsTrue(TypeKey('3'), 'without dgEditing the grid cannot edit');
+  Assert.AreEqual(3, FDataSet.FieldByName('ID').AsInteger);
+end;
+
+procedure TVittixIncrementalSearchModeTests.ReadOnlyColumnSearchesInAuto;
+begin
+  FGrid.Columns[0].ReadOnly := True;
+  Assert.IsTrue(TypeKey('3'), 'a read-only current column cannot edit');
+  Assert.AreEqual(3, FDataSet.FieldByName('ID').AsInteger);
+end;
+
+procedure TVittixIncrementalSearchModeTests.AlwaysModeConsumesOnEditableGrid;
+begin
+  FGrid.IncrementalSearchMode := ismAlways;
+  Assert.IsTrue(TypeKey('3'),
+    'ismAlways keeps the pre-2.1 consume-on-editable behavior');
+  Assert.AreEqual('3', FGrid.Controller.IncrementalSearchBuffer);
+  Assert.AreEqual(3, FDataSet.FieldByName('ID').AsInteger);
+end;
+
+procedure TVittixIncrementalSearchModeTests.OffModePassesKeyThrough;
+begin
+  FGrid.IncrementalSearchMode := ismOff;
+  Assert.IsFalse(TypeKey('3'), 'ismOff never consumes printable keys');
+  Assert.AreEqual('', FGrid.Controller.IncrementalSearchBuffer);
+end;
+
+procedure TVittixIncrementalSearchModeTests.IncrementalSearchFalseStillDisables;
+begin
+  FGrid.IncrementalSearch := False;
+  FGrid.IncrementalSearchMode := ismAlways;
+  Assert.IsFalse(TypeKey('3'),
+    'the legacy Boolean still turns search off regardless of the mode');
+end;
 
 end.

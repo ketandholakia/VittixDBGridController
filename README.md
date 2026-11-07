@@ -219,14 +219,19 @@ Behavior worth knowing:
 
 | Keys | Action |
 |------|--------|
-| printable characters | Incremental search: locate the first record whose primary sort column (or current column when unsorted) starts with the typed buffer; the buffer shows in the footer |
+| printable characters | On a non-editable grid, incremental search: locate the first record whose primary sort column (or current column when unsorted) starts with the typed buffer; the buffer shows in the footer. On an editable grid (`IncrementalSearchMode = ismAuto`) the key starts in-place editing instead |
 | `Esc` | Clear the search buffer |
 | `Backspace` | Remove the last buffer character and re-locate (surrogate pairs go together) |
 | `Ctrl+C` | Copy the current cell (or the selected rows under `dgMultiSelect`) as TSV, with headers when `CopyIncludeHeaders` is True |
 | `Ctrl+Shift+C` | Same, always with a header row |
 
-Incremental search is controlled by `IncrementalSearch` (default True) and
-`IncrementalSearchTimeout` (default 1000 ms); it is suspended while the
+Incremental search is controlled by `IncrementalSearch` (default True),
+`IncrementalSearchMode` (default `ismAuto`) and
+`IncrementalSearchTimeout` (default 1000 ms). `ismAuto` only searches when
+the grid cannot edit (no `dgEditing`, or the grid/column/dataset is
+read-only), so typing on a writable grid starts editing; `ismAlways` keeps
+the older always-search behavior and `ismOff` disables search. It is
+suspended while the
 in-place editor is open, and matches Unicode-correctly (accented Latin,
 Cyrillic, Greek, Indic scripts). `OnIncrementalSearch(Sender, SearchText,
 Found)` fires after every keystroke. While an edit is in progress the
