@@ -6,6 +6,20 @@ releases only.
 
 ## [2.1.0] - 2026-11-07
 
+### Changed
+
+- **Aggregation correctness and scan performance.** Client SUM/AVG/MIN/MAX
+  now cover `ftShortint`, `ftByte`, `ftLongWord`, `ftSingle` and
+  `ftExtended`, matching the server-side aggregates. `ftBCD`/`ftFMTBcd`
+  accumulate in Currency while values and the running sum fit, avoiding
+  Double drift (0.1 summed 1,000,000 times is exactly 100,000); larger
+  values fall back to the Double path. MIN/MAX work for date/time fields
+  and render with the field's `DisplayFormat`. Footer display honors the
+  field `DisplayFormat`, and integer SUM no longer shows decimals. The scan
+  writes each column's accumulator back once instead of copying the
+  record every row, and skips the redundant per-record filter callback
+  when the filter engine's OnFilterRecord hook already filters the dataset.
+
 ### Added
 
 - **`IncrementalSearchMode` (default `ismAuto`).** Type-ahead search no

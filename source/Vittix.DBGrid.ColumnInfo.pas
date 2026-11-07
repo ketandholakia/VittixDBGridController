@@ -96,8 +96,21 @@ type
     HasCurrency: Boolean;
     SumCurrency, MinCurrency, MaxCurrency: Currency;
 
+    // Date/time Min/Max (vatMin/vatMax only)
+    HasDate: Boolean;
+    MinDate, MaxDate: TDateTime;
+
     HasString: Boolean;
     MinString, MaxString: string;
+
+    // BCD accumulated in Currency (exact decimal arithmetic) while every
+    // value and the running sum fit the Currency range. BCDAsFloat switches
+    // the accumulator to the Double path after an overflow; BCDConverted
+    // records that the already-accumulated BCD sum was folded in once.
+    HasBCD: Boolean;
+    SumBCD, MinBCD, MaxBCD: Currency;
+    BCDAsFloat: Boolean;
+    BCDConverted: Boolean;
 
     procedure Clear;
     function GetValue(AType: TVittixAggregationType): Variant;
@@ -327,9 +340,20 @@ begin
   MinCurrency := MAX_CURRENCY; 
   MaxCurrency := -MAX_CURRENCY;
   
+  HasDate := False;
+  MinDate := 0;
+  MaxDate := 0;
+
   HasString := False; 
   MinString := ''; 
   MaxString := '';
+
+  HasBCD := False;
+  SumBCD := 0;
+  MinBCD := MAX_CURRENCY;
+  MaxBCD := -MAX_CURRENCY;
+  BCDAsFloat := False;
+  BCDConverted := False;
 end;
 
 function TVittixAggregation.GetValue(AType: TVittixAggregationType): Variant;
@@ -341,27 +365,33 @@ begin
     
     vatSum:
       if HasFloat then Result := SumFloat
+      else if HasBCD then Result := SumBCD
       else if HasCurrency then Result := SumCurrency
       else if HasInt then Result := SumInt
       else Result := Null;
       
     vatAvg:
       if HasFloat then Result := SumFloat / Count
+      else if HasBCD then Result := SumBCD / Count
       else if HasCurrency then Result := SumCurrency / Count
       else if HasInt then Result := SumInt / Count
       else Result := Null;
       
     vatMin:
       if HasFloat then Result := MinFloat
+      else if HasBCD then Result := MinBCD
       else if HasCurrency then Result := MinCurrency
       else if HasInt then Result := MinInt
+      else if HasDate then Result := MinDate
       else if HasString then Result := MinString
       else Result := Null;
       
     vatMax:
       if HasFloat then Result := MaxFloat
+      else if HasBCD then Result := MaxBCD
       else if HasCurrency then Result := MaxCurrency
       else if HasInt then Result := MaxInt
+      else if HasDate then Result := MaxDate
       else if HasString then Result := MaxString
       else Result := Null;
   else

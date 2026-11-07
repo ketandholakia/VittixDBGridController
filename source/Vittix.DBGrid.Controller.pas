@@ -1011,6 +1011,15 @@ begin
       Result := not Assigned(FFilterEngine) or
                 FFilterEngine.AcceptCurrentRecord;
     end;
+  // When the filter engine owns the dataset's OnFilterRecord hook, the
+  // dataset is already filtered, so the aggregation scan can skip the
+  // per-record callback above.
+  FAggregationEngine.FilterHookActive :=
+    function: Boolean
+    begin
+      Result := Assigned(FFilterEngine) and
+                FFilterEngine.FilterHookInstalled;
+    end;
 
   // Create Footer Panel if requested
   if FShowFooter and not Assigned(FFooterPanel) then

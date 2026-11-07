@@ -47,10 +47,16 @@ type
     // Optional callback to decide whether a record participates
     // (filters, selection, etc.)
     FAcceptRecord: TFunc<Boolean>;
+    // Reports whether the filter engine currently owns the dataset's
+    // OnFilterRecord hook. With FDataSet.Filtered True, iteration already
+    // yields only accepted rows, so the per-record FAcceptRecord callback is
+    // redundant and is skipped during the scan.
+    FFilterHookActive: TFunc<Boolean>;
     FOnFormatAggregation: TFormatAggregationEvent;
 
     function IsNumericField(AField: TField): Boolean;
     function IsStringField(AField: TField): Boolean;
+    function IsDateField(AField: TField): Boolean;
     
     procedure BuildCache;
 
@@ -85,11 +91,24 @@ type
     property OnAcceptRecord: TFunc<Boolean>
       read FAcceptRecord write FAcceptRecord;
 
+    /// <summary>Optional callback telling the engine that the filter
+    /// engine's own OnFilterRecord hook is installed. When it returns True
+    /// and the dataset is Filtered, the per-record OnAcceptRecord callback
+    /// is skipped because dataset iteration already respects the filter.
+    /// </summary>
+    property FilterHookActive: TFunc<Boolean>
+      read FFilterHookActive write FFilterHookActive;
+
     property OnFormatAggregation: TFormatAggregationEvent
       read FOnFormatAggregation write FOnFormatAggregation;
   end;
 
 implementation
+
+const
+  // Largest magnitude representable by Currency; BCD values inside this
+  // range accumulate exactly.
+  MAX_CURRENCY = 922337203685477.5807;
 
 function LocalAggregationTypeToString(Value: TVittixAggregationType): string;
 begin
@@ -159,10 +178,22 @@ end;
 function TVittixDBGridAggregationEngine.IsNumericField(
   AField: TField): Boolean;
 begin
-  // Optimized check
+  // Every numeric field type the server-side SQL aggregates cover, so the
+  // client SUM/AVG/MIN/MAX match ServerAggregateRefresh exactly.
+  // ftSingle/ftExtended take the float path; all integer-like types take
+  // the Int64 path (see AggregateField).
   Result := (AField.DataType in [
-    ftSmallint, ftInteger, ftLargeint,
-    ftFloat, ftCurrency, ftBCD, ftFMTBcd, ftWord, ftAutoInc
+    ftShortint, ftByte, ftSmallint, ftWord,
+    ftInteger, ftLongWord, ftLargeint, ftAutoInc,
+    ftFloat, ftSingle, ftExtended, ftCurrency, ftBCD, ftFMTBcd
+  ]);
+end;
+
+function TVittixDBGridAggregationEngine.IsDateField(
+  AField: TField): Boolean;
+begin
+  Result := (AField.DataType in [
+    ftDate, ftTime, ftDateTime, ftTimeStamp
   ]);
 end;
 
@@ -200,7 +231,8 @@ begin
         if IsNumericField(AField) then
         begin
           case AField.DataType of
-            ftSmallint, ftInteger, ftLargeint, ftWord, ftAutoInc:
+            ftShortint, ftByte, ftSmallint, ftWord,
+            ftInteger, ftLongWord, ftLargeint, ftAutoInc:
               begin
                 IntVal := AField.AsLargeInt;
                 Agg.HasInt := True;
@@ -221,7 +253,7 @@ begin
                 if CurrVal > Agg.MaxCurrency then Agg.MaxCurrency := CurrVal;
               end;
 
-            ftFloat, ftBCD, ftFMTBcd:
+            ftFloat, ftSingle, ftExtended:
               begin
                 FloatVal := AField.AsFloat;
                 Agg.HasFloat := True;
@@ -229,8 +261,81 @@ begin
                 if FloatVal < Agg.MinFloat then Agg.MinFloat := FloatVal;
                 if FloatVal > Agg.MaxFloat then Agg.MaxFloat := FloatVal;
               end;
+
+            ftBCD, ftFMTBcd:
+              begin
+                FloatVal := AField.AsFloat;
+                if not Agg.BCDAsFloat then
+                begin
+                  // Currency is a scaled Int64: 0.1 stays 0.1, so repeated
+                  // sums do not drift the way Double does. Fall back to the
+                  // Double accumulator only when a value or the running sum
+                  // leaves the Currency range.
+                  if (FloatVal <= MAX_CURRENCY) and
+                     (FloatVal >= -MAX_CURRENCY) and
+                     (Abs(Double(Agg.SumBCD) + FloatVal) <= MAX_CURRENCY) then
+                  begin
+                    CurrVal := AField.AsCurrency;
+                    if not Agg.HasBCD then
+                    begin
+                      Agg.HasBCD := True;
+                      Agg.SumBCD := CurrVal;
+                      Agg.MinBCD := CurrVal;
+                      Agg.MaxBCD := CurrVal;
+                    end
+                    else
+                    begin
+                      Agg.SumBCD := Agg.SumBCD + CurrVal;
+                      if CurrVal < Agg.MinBCD then Agg.MinBCD := CurrVal;
+                      if CurrVal > Agg.MaxBCD then Agg.MaxBCD := CurrVal;
+                    end;
+                  end
+                  else
+                    Agg.BCDAsFloat := True;
+                end;
+
+                if Agg.BCDAsFloat then
+                begin
+                  if not Agg.BCDConverted then
+                  begin
+                    // Fold the exact BCD sum in exactly once.
+                    if Agg.HasBCD then
+                    begin
+                      Agg.HasFloat := True;
+                      Agg.SumFloat := Agg.SumFloat + Agg.SumBCD;
+                      if Agg.MinBCD < Agg.MinFloat then
+                        Agg.MinFloat := Agg.MinBCD;
+                      if Agg.MaxBCD > Agg.MaxFloat then
+                        Agg.MaxFloat := Agg.MaxBCD;
+                    end;
+                    Agg.BCDConverted := True;
+                  end;
+                  Agg.HasFloat := True;
+                  Agg.SumFloat := Agg.SumFloat + FloatVal;
+                  if FloatVal < Agg.MinFloat then Agg.MinFloat := FloatVal;
+                  if FloatVal > Agg.MaxFloat then Agg.MaxFloat := FloatVal;
+                end;
+              end;
           end;
 
+          Exit;
+        end;
+
+        // ---------- Date / time (Min / Max only) ----------
+        if IsDateField(AField) and (AggType in [vatMin, vatMax]) then
+        begin
+          FloatVal := AField.AsDateTime;
+          if not Agg.HasDate then
+          begin
+            Agg.HasDate := True;
+            Agg.MinDate := FloatVal;
+            Agg.MaxDate := FloatVal;
+          end
+          else
+          begin
+            if FloatVal < Agg.MinDate then Agg.MinDate := FloatVal;
+            if FloatVal > Agg.MaxDate then Agg.MaxDate := FloatVal;
+          end;
           Exit;
         end;
 
@@ -260,7 +365,10 @@ procedure TVittixDBGridAggregationEngine.Recalculate;
 var
   Bookmark: TBookmark;
   I: Integer;
-  Agg: TVittixAggregation;
+  // One local accumulator per cached column: the property-backed record is
+  // copied in once and written back once, instead of on every row.
+  Accums: TArray<TVittixAggregation>;
+  SkipAccept: Boolean;
 {$IFDEF DEBUG}
   Stopwatch: TStopwatch;
 {$ENDIF}
@@ -281,6 +389,16 @@ begin
   BuildCache;
   if Length(FCache) = 0 then Exit; // Nothing to calculate
 
+  SetLength(Accums, Length(FCache));
+  for I := 0 to High(Accums) do
+    Accums[I].Clear;
+
+  // When the filter engine's own OnFilterRecord hook is installed and the
+  // dataset is Filtered, iteration already yields only accepted rows, so the
+  // per-record callback is redundant. Otherwise it still runs.
+  SkipAccept := Assigned(FFilterHookActive) and FFilterHookActive() and
+    FDataSet.Filtered;
+
   // 3. Disable controls and save position
   Bookmark := nil;
   // Safety: If dataset is empty, GetBookmark might fail on some DB components
@@ -295,7 +413,8 @@ begin
     begin
       // Filter / selection awareness
       // (This callback checks the FilterEngine)
-      if Assigned(FAcceptRecord) and not FAcceptRecord() then
+      if (not SkipAccept) and Assigned(FAcceptRecord) and
+         not FAcceptRecord() then
       begin
         FDataSet.Next;
         Continue;
@@ -306,21 +425,15 @@ begin
       begin
         if FCache[I].Field.IsNull then
         begin
-          Agg := FCache[I].Info.Aggregation;
-          Inc(Agg.NullCount);
-          FCache[I].Info.Aggregation := Agg;
+          Inc(Accums[I].NullCount);
           Continue;
         end;
 
-        // AggregateField takes the accumulator by var, so shuttle the
-        // property-backed record through a local copy
-        Agg := FCache[I].Info.Aggregation;
         AggregateField(
           FCache[I].Field,
-          Agg,
+          Accums[I],
           FCache[I].Info.AggregationType
         );
-        FCache[I].Info.Aggregation := Agg;
       end;
 
       FDataSet.Next;
@@ -337,6 +450,10 @@ begin
     end;
     FDataSet.EnableControls;
   end;
+
+  // Write the finished accumulators back once per column.
+  for I := 0 to High(FCache) do
+    FCache[I].Info.Aggregation := Accums[I];
 
 {$IFDEF DEBUG}
   OutputDebugString(PChar(Format(
@@ -355,10 +472,36 @@ begin
     Result := Null;
 end;
 
+function IsIntegerDataType(AType: TFieldType): Boolean;
+begin
+  Result := AType in [
+    ftShortint, ftByte, ftSmallint, ftWord,
+    ftInteger, ftLongWord, ftLargeint, ftAutoInc
+  ];
+end;
+
+/// <summary>Returns the field's custom display format when it has one.
+/// DisplayFormat lives on the concrete numeric and date field classes, not
+/// on TField, so this checks the relevant ones.</summary>
+function TryFieldDisplayFormat(AField: TField; out AFormat: string): Boolean;
+begin
+  AFormat := '';
+  if AField is TNumericField then
+    AFormat := TNumericField(AField).DisplayFormat
+  else if AField is TDateTimeField then
+    AFormat := TDateTimeField(AField).DisplayFormat
+  else if AField is TSQLTimeStampField then
+    AFormat := TSQLTimeStampField(AField).DisplayFormat;
+  Result := AFormat <> '';
+end;
+
 function TVittixDBGridAggregationEngine.GetAggregationDisplayText(
   Info: TVittixDBGridColumnInfo): string;
 var
   V: Variant;
+  Field: TField;
+  Fmt: string;
+  HasFmt: Boolean;
 begin
   Result := '';
   if not Assigned(Info) then Exit;
@@ -373,14 +516,45 @@ begin
     Exit;
   end;
 
-  // You might want to respect TField.DisplayFormat here if possible,
-  // but standard formatting is usually fine for footers.
+  Field := nil;
+  if Assigned(FDataSet) then
+    Field := FDataSet.FindField(Info.FieldName);
+  HasFmt := Assigned(Field) and TryFieldDisplayFormat(Field, Fmt);
+
   case Info.AggregationType of
-    vatCount: Result := IntToStr(V);
-    vatSum:   Result := FormatFloat('#,##0.00', V);
-    vatAvg:   Result := FormatFloat('#,##0.00', V);
-    vatMin,
-    vatMax:   Result := VarToStr(V);
+    vatCount:
+      Result := IntToStr(V);
+
+    vatSum, vatAvg:
+      begin
+        if HasFmt then
+          Result := FormatFloat(Fmt, V)
+        else if Assigned(Field) and IsIntegerDataType(Field.DataType) then
+        begin
+          // Integers carry no fractional part; SUM must not add ".00".
+          if Info.AggregationType = vatSum then
+            Result := FormatFloat('#,##0', V)
+          else
+            Result := FormatFloat('#,##0.00', V);
+        end
+        else
+          Result := FormatFloat('#,##0.00', V);
+      end;
+
+    vatMin, vatMax:
+      begin
+        if VarType(V) = varDate then
+        begin
+          if HasFmt then
+            Result := FormatDateTime(Fmt, V)
+          else
+            Result := DateTimeToStr(V);
+        end
+        else if HasFmt and IsNumericField(Field) then
+          Result := FormatFloat(Fmt, V)
+        else
+          Result := VarToStr(V);
+      end;
   end;
 end;
 

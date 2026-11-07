@@ -178,6 +178,12 @@ type
     /// </summary>
     function AcceptCurrentRecord: Boolean;
 
+    /// <summary>True while this engine's DoFilterRecord is installed as the
+    /// dataset's OnFilterRecord hook. When it is (and the dataset is
+    /// Filtered), iterating the dataset already yields only accepted rows.
+    /// </summary>
+    function FilterHookInstalled: Boolean;
+
     /// <summary>
     /// Drops the cached TField references and (while active on an open
     /// dataset) rebuilds them. Call after dataset close/reopen cycles that do
@@ -870,6 +876,11 @@ begin
     Exit(True);
 
   Result := InternalAcceptRecord(FDataSet);
+end;
+
+function TVittixDBGridFilterEngine.FilterHookInstalled: Boolean;
+begin
+  Result := FFilterInstalled;
 end;
 
 function TVittixDBGridFilterEngine.InternalAcceptRecord(
