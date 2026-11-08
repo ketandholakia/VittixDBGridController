@@ -8,10 +8,13 @@ param(
   [string]$TargetBranch = "main",
   [string]$Config = "Release",
   [string]$Platform = "Win32",
-  [string]$DelphiVersion = "23.0",
-  [string]$DelphiDisplayName = "RAD Studio 12 Athens",
-  [string]$PayloadRootName = "Delphi12Athens",
-  [string]$PayloadPlatform = "",
+  [string[]]$Versions = @("10.3", "12"),
+  [string]$BdsRoot = "",
+  [string]$BplDir = "",
+  [string]$DcpDir = "",
+  [switch]$SkipMissing,
+  [switch]$SkipPackageBuild,
+  [switch]$SkipSetupCompile,
   [switch]$Draft,
   [switch]$PreRelease,
   [switch]$SkipInstallerBuild,
@@ -20,8 +23,6 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-
-if (-not $PayloadPlatform) { $PayloadPlatform = $Platform }
 
 function Require-Command {
   param([string]$Name)
@@ -238,7 +239,15 @@ if (-not $SkipTagPush) {
 }
 
 if (-not $SkipInstallerBuild) {
-  & powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "build-installer.ps1") -Config $Config -Platform $Platform -Version $Version -DelphiVersion $DelphiVersion -DelphiDisplayName $DelphiDisplayName -PayloadRootName $PayloadRootName -PayloadPlatform $PayloadPlatform
+  $buildArgs = @("-Config", $Config, "-Platform", $Platform, "-Version", $Version)
+  foreach ($v in $Versions) { $buildArgs += @("-Versions", $v) }
+  if ($BdsRoot) { $buildArgs += @("-BdsRoot", $BdsRoot) }
+  if ($BplDir) { $buildArgs += @("-BplDir", $BplDir) }
+  if ($DcpDir) { $buildArgs += @("-DcpDir", $DcpDir) }
+  if ($SkipMissing) { $buildArgs += "-SkipMissing" }
+  if ($SkipPackageBuild) { $buildArgs += "-SkipPackageBuild" }
+  if ($SkipSetupCompile) { $buildArgs += "-SkipSetupCompile" }
+  & powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "build-installer.ps1") @buildArgs
   if ($LASTEXITCODE -ne 0) {
     throw "Installer build failed."
   }

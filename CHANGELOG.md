@@ -4,6 +4,18 @@ All notable changes to Vittix.DBGrid are documented here. Releases older than
 v1.0.3 were published before this file existed; their notes live in the GitHub
 releases only.
 
+## [Unreleased]
+
+### Added
+
+- **Delphi 10.3 Rio support.** New `source\Vittix.DBGrid.Defines.inc` holds
+  compiler-version feature flags and stops older compilers with a clear
+  message. `Vittix.DBGrid.Styles` falls back to the application-wide
+  `StyleServices` on 10.3 (per-control `StyleServices(AControl)` is used on
+  10.4+). New `packages\D10_3` contains the runtime, FireDAC and design-time
+  packages for 10.3; sources are shared with the Delphi 12 packages. Not yet
+  built or tested on 10.3 by CI.
+
 ## [2.1.0] - 2026-11-07
 
 ### Added
