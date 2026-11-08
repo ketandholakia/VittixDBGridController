@@ -98,6 +98,13 @@ releases only.
   trigger a false fallback. The intentionally over-rejective handling of
   `ORDER BY` (including subqueries) is unchanged.
 
+- **Featured demo startup.** `CreateStatusLookup` now runs before the
+  dataset is created so its persistent fields are added while
+  `ClientDataSet1` is still closed (fixes "Cannot perform this operation
+  on an open dataset"), and the FireDAC SQLite vendor library
+  (`sqlite3.dll`) is copied next to the demo executable via a post-build
+  step so the server-side demo loads without a manual DLL install.
+
 ## [2.0.0] - 2026-10-28
 
 ### Added
