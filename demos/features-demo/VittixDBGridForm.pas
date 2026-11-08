@@ -231,6 +231,11 @@ begin
 
   ConfigurePersistence;
 
+  // Create the StatusId/StatusName lookup fields while the dataset is still
+  // closed; adding fields to an open dataset raises "Cannot perform this
+  // operation on an open dataset".
+  CreateStatusLookup;
+
   // Initialize dataset
   InitializeDataset;
   LoadSampleData;
@@ -254,7 +259,6 @@ begin
   InitStyleCombo;
 
   // Per-column editors and saved filter sets
-  CreateStatusLookup;
   ConfigureColumnEditors;
   VittixGrid.Controller.FilterSetsFileName :=
     TPath.Combine(GetDemoStatePath, 'filtersets.json');

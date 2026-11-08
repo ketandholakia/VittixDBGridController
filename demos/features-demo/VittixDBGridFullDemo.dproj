@@ -10,6 +10,7 @@
         <ProjectVersion>20.2</ProjectVersion>
         <Platform Condition="'$(Platform)'==''">Win32</Platform>
         <ProjectName Condition="'$(ProjectName)'==''">VittixDBGridFullDemo</ProjectName>
+        <PostBuildEvent>copy /Y "$(BDS)\bin\sqlite3.dll" "$(PROJECTDIR)sqlite3.dll"</PostBuildEvent>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Base' or '$(Base)'!=''">
         <Base>true</Base>
