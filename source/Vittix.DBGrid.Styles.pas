@@ -1,5 +1,7 @@
 unit Vittix.DBGrid.Styles;
 
+{$I Vittix.DBGrid.Defines.inc}
+
 interface
 
 uses
@@ -90,10 +92,15 @@ end;
 class function TVittixStylePalette.ServicesFor(
   AControl: TWinControl): TCustomStyleServices;
 begin
+{$IFDEF VX_STYLESERVICES_CONTROL}
   if Assigned(AControl) then
     Result := StyleServices(AControl)
   else
     Result := StyleServices;
+{$ELSE}
+  // Delphi 10.3: styles are application-wide; no per-control lookup exists.
+  Result := StyleServices;
+{$ENDIF}
 end;
 
 class function TVittixStylePalette.IsCustomStyleActive(

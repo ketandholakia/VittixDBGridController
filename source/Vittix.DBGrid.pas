@@ -1,5 +1,7 @@
 unit Vittix.DBGrid;
 
+{$I Vittix.DBGrid.Defines.inc}
+
 interface
 
 uses
